@@ -15,20 +15,20 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
 const WINDOW_DAYS = 30;
 const API_URL = '/api/launches';
 
-export const ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID = 'rocket-missions';
-export const ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID = 'rocket-mission-selected';
-export const ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT = 48;
-export const ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY = 24;
-export const ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+export const ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID = 'rocket-missions';
+export const ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID = 'rocket-mission-selected';
+export const ROCKET_МИССИЯ_AMBIENT_OVERLAY_COHORT_LIMIT = 48;
+export const ROCKET_МИССИЯ_AMBIENT_OVERLAY_COLLISION_CAPACITY = 24;
+export const ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   cohortLimit: 12,
   collisionCapacity: 0,
   moving: true,
   solveIntervalMs: 0,
 });
 
-const ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_OPTIONS = Object.freeze({
-  cohortLimit: ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-  collisionCapacity: ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
+const ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+  cohortLimit: ROCKET_МИССИЯ_AMBIENT_OVERLAY_COHORT_LIMIT,
+  collisionCapacity: ROCKET_МИССИЯ_AMBIENT_OVERLAY_COLLISION_CAPACITY,
   moving: false,
 });
 const DEFAULT_OVERLAY_HOST = Object.freeze({
@@ -590,10 +590,10 @@ export function createRocketMissionElementOverlayEntry({
 /** Keep the newest ambient mission markers with stable identity tie-breaking. */
 export function selectRocketMissionMarkerOverlayCohort(
   entries,
-  limit = ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
+  limit = ROCKET_МИССИЯ_AMBIENT_OVERLAY_COHORT_LIMIT,
 ) {
   const cap = Math.max(0, Math.min(
-    ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
+    ROCKET_МИССИЯ_AMBIENT_OVERLAY_COHORT_LIMIT,
     Math.floor(Number(limit) || 0),
   ));
   if (!Array.isArray(entries) || cap === 0) return [];
@@ -1006,10 +1006,10 @@ function entityLaunchId(entity) {
 
 function clearMissionOverlaySources() {
   _selectedMissionOverlayTimeText = null;
-  _missionOverlayHost.clearSource(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID);
-  _missionOverlayHost.setVisible(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false);
-  _missionOverlayHost.clearSource(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID);
-  _missionOverlayHost.setVisible(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false);
+  _missionOverlayHost.clearSource(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID);
+  _missionOverlayHost.setVisible(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID, false);
+  _missionOverlayHost.clearSource(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID);
+  _missionOverlayHost.setVisible(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID, false);
 }
 
 function syncMissionOverlayEntries() {
@@ -1021,8 +1021,8 @@ function syncMissionOverlayEntries() {
     ? _missionOverlayRecords.get(_selectedLaunchId)
     : null;
   if (selectedRecord) {
-    _missionOverlayHost.clearSource(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID);
-    _missionOverlayHost.setVisible(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false);
+    _missionOverlayHost.clearSource(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID);
+    _missionOverlayHost.setVisible(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID, false);
     const entries = selectedRecord.elementEntryFactories.map((createEntry) => createEntry());
     if (_replayCameraLaunchId !== selectedRecord.launch.id) {
       entries.unshift(createRocketMissionMarkerOverlayEntry(
@@ -1032,19 +1032,19 @@ function syncMissionOverlayEntries() {
       ));
     }
     _missionOverlayHost.setEntries(
-      ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
+      ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID,
       entries,
-      ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS,
+      ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_OPTIONS,
     );
-    _missionOverlayHost.setVisible(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, true);
+    _missionOverlayHost.setVisible(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID, true);
     _selectedMissionOverlayTimeText = selectedRecord.liveEventTime
       ? formatMissionEventTime(selectedRecord.liveEventTime())
       : null;
     return;
   }
 
-  _missionOverlayHost.clearSource(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID);
-  _missionOverlayHost.setVisible(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false);
+  _missionOverlayHost.clearSource(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID);
+  _missionOverlayHost.setVisible(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID, false);
   _selectedMissionOverlayTimeText = null;
   const entries = selectRocketMissionMarkerOverlayCohort(
     Array.from(_missionOverlayRecords.values(), (record) => {
@@ -1060,11 +1060,11 @@ function syncMissionOverlayEntries() {
     }),
   );
   _missionOverlayHost.setEntries(
-    ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
+    ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID,
     entries,
-    ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_OPTIONS,
+    ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_OPTIONS,
   );
-  _missionOverlayHost.setVisible(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, true);
+  _missionOverlayHost.setVisible(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID, true);
 }
 
 function refreshSelectedMissionOverlayText() {
