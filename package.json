@@ -1,35 +1,18 @@
 {
-  "name": "gods-eye-view",
+  "name": "nuclear-gods-eye",
   "private": true,
   "version": "0.1.0",
-  "description": "Браузерный симулятор спутника с интерактивной 3D-Землёй в реальном времени.",
+  "description": "Nuclear God's Eye — стратегическая игровая симуляция на 3D-глобусе.",
   "type": "module",
   "license": "MIT",
   "author": "Павел Афанасьев <xongphavietnam@gmail.com>",
-  "homepage": "https://github.com/paulafanasyev/-_-",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/paulafanasyev/-_-.git"
-  },
-  "bugs": {
-    "url": "https://github.com/paulafanasyev/-_-/issues"
-  },
-  "engines": {
-    "node": ">=24.14.0 <25 || >=26 <27"
-  },
-  "keywords": [
-    "cesium",
-    "3d-globe",
-    "geospatial",
-    "satellites",
-    "voice-control",
-    "visualization"
-  ],
+  "engines": { "node": ">=24.14.0 <25 || >=26 <27" },
   "scripts": {
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
+    "start": "node server.js",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
@@ -39,6 +22,7 @@
     "@mapbox/vector-tile": "^3.0.0",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
+    "express": "^5.1.0",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
     "satellite.js": "^6.0.2"
