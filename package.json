@@ -2,10 +2,17 @@
   "name": "nuclear-gods-eye",
   "private": true,
   "version": "0.1.0",
-  "description": "Nuclear God's Eye — стратегическая игровая симуляция на 3D-глобусе.",
+  "description": "Nuclear God's Eye — стратегическая игровая симуляция на 3D-глобусе. Форк God's Eye View (Bilawal Sidhu, MIT).",
   "type": "module",
   "license": "MIT",
   "author": "Павел Афанасьев <xongphavietnam@gmail.com>",
+  "contributors": [
+    "Bilawal Sidhu (original God's Eye View, https://github.com/bilawalsidhu/gods-eye-view)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paulafanasyev/3-.git"
+  },
   "engines": { "node": ">=24.14.0 <25 || >=26 <27" },
   "scripts": {
     "dev": "vite",
@@ -13,6 +20,7 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "start": "node server.js",
+    "smoke": "node scripts/smoke-runtime.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
@@ -25,13 +33,13 @@
     "express": "^5.1.0",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
-  },
-  "devDependencies": {
-    "puppeteer": "^24.37.5",
-    "sharp": "^0.34.5",
+    "satellite.js": "^6.0.2",
     "vite": "^6.0.0",
     "vite-plugin-cesium": "^1.2.23",
     "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "puppeteer": "^24.37.5",
+    "sharp": "^0.34.5"
   }
 }
