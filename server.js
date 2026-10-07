@@ -1,4 +1,7 @@
-import express from 'express';
+// Production server for Nuclear God's Eye.
+// Uses only node:http plus packages already pinned in package-lock.json
+// (ws, vite), so `npm ci && npm run build && npm start` works as-is.
+// NOTE: install with plain `npm ci` (not --omit=dev): ws and vite are needed at runtime.
 import fs from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
@@ -25,34 +28,63 @@ const allowedOrigins = new Set(
     .filter(Boolean),
 );
 
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.geojson': 'application/geo+json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.csv': 'text/csv; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
+  '.wasm': 'application/wasm',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.ktx2': 'image/ktx2',
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
+  '.pbf': 'application/x-protobuf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+};
+
 if (!fs.existsSync(indexHtml)) {
   console.error('[nuclear-gods-eye] dist/index.html not found. Run "npm run build" first.');
   process.exit(1);
 }
 
-const app = express();
-app.disable('x-powered-by');
-const server = createServer(app);
-const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
-
-let vite = null;
-
-// No global body parser on purpose: the API proxies below read the raw request
-// stream themselves, and a parser mounted earlier would consume it.
-app.get('/api/health', (_req, res) => {
-  res.json({
-    ok: true,
-    service: 'nuclear-gods-eye',
-    apiProxies: Boolean(vite),
-    websocket: wss.clients.size,
-    timestamp: new Date().toISOString(),
+const server = createServer((req, res) => {
+  handle(req, res).catch((error) => {
+    console.error('[nuclear-gods-eye] request failed:', error);
+    if (!res.headersSent) {
+      sendJson(res, 500, { ok: false, error: 'INTERNAL_ERROR' });
+    } else {
+      res.destroy();
+    }
   });
 });
+const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
 
 // The backend API proxies (OpenAI Realtime, AIS, FIRMS, TomTom, OpenSky, ...)
 // live as Vite plugins in vite.config.js. Reuse them in production by loading
-// that config in middleware mode and routing only /api/* into it. Static files
-// are still served from dist/ below; no dev transforms reach the browser.
+// that config in middleware mode and routing only /api/* into it. The browser
+// only ever receives the built files from dist/.
+let vite = null;
 if (apiProxiesEnabled) {
   const { createServer: createViteServer } = await import('vite');
   vite = await createViteServer({
@@ -75,29 +107,117 @@ if (apiProxiesEnabled) {
       },
     ],
   });
+}
 
-  app.use('/api', (req, res, next) => {
-    // Express strips the mount path; the plugins are mounted on full /api/... paths.
-    req.url = req.originalUrl;
-    vite.middlewares(req, res, next);
+function sendJson(res, status, payload) {
+  const body = JSON.stringify(payload);
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    'Cache-Control': 'no-store',
+  });
+  res.end(body);
+}
+
+function sendStatus(res, status, headers = {}) {
+  res.writeHead(status, { 'Content-Length': 0, ...headers });
+  res.end();
+}
+
+async function sendFile(req, res, filePath, stat, cacheControl) {
+  res.writeHead(200, {
+    'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+    'Content-Length': stat.size,
+    'Last-Modified': stat.mtime.toUTCString(),
+    'Cache-Control': cacheControl,
+    'X-Content-Type-Options': 'nosniff',
+  });
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  await new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', reject);
+    res.on('close', resolve);
+    stream.pipe(res);
   });
 }
 
-app.use('/api', (_req, res) => {
-  res.status(404).json({ ok: false, error: 'NOT_FOUND' });
-});
+async function statFile(filePath) {
+  try {
+    const stat = await fs.promises.stat(filePath);
+    return stat.isFile() ? stat : null;
+  } catch {
+    return null;
+  }
+}
 
-app.use(express.static(dist, { index: false }));
-
-// Express 5 (path-to-regexp v8) rejects a bare '*'. '/{*splat}' also matches '/'.
-app.get('/{*splat}', (req, res) => {
-  // Missing assets must 404 instead of silently returning HTML.
-  if (path.extname(req.path)) {
-    res.status(404).end();
+async function handle(req, res) {
+  let pathname;
+  try {
+    pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+  } catch {
+    sendStatus(res, 400);
     return;
   }
-  res.sendFile(indexHtml);
-});
+
+  if (pathname === '/api/health') {
+    sendJson(res, 200, {
+      ok: true,
+      service: 'nuclear-gods-eye',
+      apiProxies: Boolean(vite),
+      websocket: wss.clients.size,
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  if (pathname === '/api' || pathname.startsWith('/api/')) {
+    const notFound = () => sendJson(res, 404, { ok: false, error: 'NOT_FOUND' });
+    if (!vite) {
+      notFound();
+      return;
+    }
+    vite.middlewares(req, res, (error) => {
+      if (error) {
+        console.error('[nuclear-gods-eye] api proxy error:', error);
+        if (!res.headersSent) sendJson(res, 502, { ok: false, error: 'PROXY_ERROR' });
+        return;
+      }
+      notFound();
+    });
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    sendStatus(res, 405, { Allow: 'GET, HEAD' });
+    return;
+  }
+
+  // Static files from dist/, with a path traversal guard.
+  const filePath = path.join(dist, path.normalize(pathname));
+  if (filePath !== dist && !filePath.startsWith(dist + path.sep)) {
+    sendStatus(res, 403);
+    return;
+  }
+  const stat = await statFile(filePath);
+  if (stat) {
+    const hashed = pathname.startsWith('/assets/');
+    await sendFile(req, res, filePath, stat, hashed ? 'public, max-age=31536000, immutable' : 'no-cache');
+    return;
+  }
+
+  // Missing assets must 404 instead of silently returning HTML.
+  if (path.extname(pathname)) {
+    sendStatus(res, 404);
+    return;
+  }
+
+  // SPA fallback.
+  const indexStat = await statFile(indexHtml);
+  await sendFile(req, res, indexHtml, indexStat, 'no-cache');
+}
 
 function originAllowed(req) {
   const origin = req.headers.origin;
@@ -206,7 +326,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 server.listen(port, host, () => {
-  console.log(`[nuclear-gods-eye] listening on http://${host}:${port}`);
+  console.log(`[nuclear-gods-eye] open in browser: http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
   console.log(`[nuclear-gods-eye] websocket endpoint: ${WS_PATH}`);
   console.log(`[nuclear-gods-eye] API proxies: ${vite ? 'enabled' : 'disabled'}`);
 });
