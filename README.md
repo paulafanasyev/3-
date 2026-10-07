@@ -18,7 +18,7 @@
 ## 🎮 Что добавляет форк
 
 - Полная русская локализация UI.
-- Production-сервер `server.js` (Express 5 + WebSocket `/ws`) — основа для игрового слоя Nuclear God's Eye.
+- Production-сервер `server.js` (node:http + WebSocket `/ws`, без новых зависимостей) — основа для игрового слоя Nuclear God's Eye.
 - Изолированный модуль игры в `src/nuclear/` (Stage 1: подготовка, см. `NUCLEAR_GODS_EYE_STAGE1.md`).
 
 ## ⚙️ Установка и запуск
@@ -34,7 +34,7 @@
 git clone https://github.com/paulafanasyev/3-
 cd 3-
 npm ci
-cp .env.example .env   # заполните ключи
+cp .env.example .env   # заполните ключи (минимум GOOGLE_MAPS_API_KEY)
 npm run dev -- --host localhost --port 4173
 ```
 
@@ -43,7 +43,7 @@ npm run dev -- --host localhost --port 4173
 ### Production
 
 ```bash
-npm ci
+npm ci             # именно полный npm ci, без --omit=dev: vite и ws нужны серверу
 npm run build      # ключи из .env (GOOGLE_MAPS_API_KEY, CESIUM_ION_TOKEN) вшиваются в сборку здесь
 npm start          # http://127.0.0.1:4173, health: /api/health, websocket: /ws
 npm run smoke      # проверка runtime: health, SPA fallback, /ws
