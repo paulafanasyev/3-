@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { createGameSession } from './src/nuclear/session.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -261,6 +262,9 @@ wss.on('connection', (socket) => {
     console.warn('[nuclear-gods-eye] websocket error:', error.message);
   });
 
+  const session = createGameSession({ send: (payload) => send(socket, payload) });
+  socket.on('close', () => session.dispose());
+
   send(socket, { type: 'runtime:ready', version: 1 });
 
   socket.on('message', (raw, isBinary) => {
@@ -287,7 +291,16 @@ wss.on('connection', (socket) => {
       return;
     }
 
-    // Stage 1 only verifies transport. Gameplay state is added in later stages.
+    if (message.type.startsWith('game:')) {
+      try {
+        if (!session.handle(message)) send(socket, { type: 'error', code: 'UNKNOWN_GAME_MESSAGE' });
+      } catch (error) {
+        console.warn('[nuclear-gods-eye] game session error:', error);
+        send(socket, { type: 'error', code: 'GAME_ERROR' });
+      }
+      return;
+    }
+
     send(socket, { type: 'runtime:ack', messageType: message.type });
   });
 });
