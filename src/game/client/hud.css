@@ -52,3 +52,35 @@ body.kupol > *:not(#kupol-globe):not(#kupol-root):not(#cesium-credits):not(scrip
 .k-nations button:hover { background: rgba(255, 255, 255, .12); }
 .k-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); font-size: 12px; color: var(--dim); padding: 8px 14px; }
 .k-live { position: absolute; right: 16px; bottom: 96px; width: 230px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+
+/* ядерное оружие и разведка */
+#kupol-root .k-chip.nuke b { color: #ffd23a; }
+#kupol-root .k-chip.winter { border-color: rgba(168, 220, 255, .35); }
+#kupol-root .k-chip.winter b { color: #bfe6ff; }
+#kupol-root .k-nuke-hint { margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4;
+  background: rgba(255, 210, 58, .08); border: 1px solid rgba(255, 210, 58, .3); color: #f3e4b0; }
+#kupol-root .k-nuke-hint.sat { background: rgba(90, 209, 255, .07); border-color: rgba(90, 209, 255, .3); color: #cbefff; }
+#kupol-root .k-btn.locked { opacity: .45; cursor: not-allowed; }
+#kupol-root .k-alarm { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 40;
+  background: radial-gradient(circle, rgba(255, 220, 120, .35), rgba(255, 60, 20, .12) 40%, transparent 70%); animation: k-alarm 4.2s ease-out forwards; }
+#kupol-root .k-alarm.blue { background: radial-gradient(circle, rgba(90, 209, 255, .25), transparent 60%); }
+#kupol-root .k-alarm > div { text-align: center; padding: 18px 28px; border-radius: 14px; background: rgba(10, 12, 18, .82); border: 1px solid rgba(255, 210, 58, .5); }
+#kupol-root .k-alarm.blue > div { border-color: rgba(90, 209, 255, .5); }
+#kupol-root .k-alarm b { display: block; font-size: 26px; letter-spacing: .2em; color: #ffd23a; }
+#kupol-root .k-alarm.blue b { color: #5ad1ff; }
+#kupol-root .k-alarm span { display: block; margin-top: 6px; color: #e8e4da; font-size: 14px; max-width: 520px; }
+@keyframes k-alarm { 0% { opacity: 0; } 8% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* окно боя */
+#kupol-root .k-combat { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); width: 540px; padding: 18px 20px; z-index: 30; }
+#kupol-root .k-cb-title { text-align: center; font-size: 13px; letter-spacing: .18em; text-transform: uppercase; font-weight: 800; margin-bottom: 12px; }
+#kupol-root .k-cb-row { display: grid; grid-template-columns: 1fr 150px 1fr; gap: 12px; align-items: start; }
+#kupol-root .k-cb-side { text-align: center; }
+#kupol-root .k-cb-side img { width: 96px; height: 96px; border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+#kupol-root .k-cb-str { font-size: 26px; font-weight: 800; color: #f3ead8; margin: 2px 0 4px; }
+#kupol-root .k-cb-mods { font-size: 11.5px; color: #c6ccd6; line-height: 1.45; }
+#kupol-root .k-cb-mid { text-align: center; padding-top: 22px; }
+#kupol-root .k-cb-odds { font-size: 40px; font-weight: 900; line-height: 1; }
+#kupol-root .k-cb-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 10px 0 4px; background: #222; }
+#kupol-root .k-cb-bar i, #kupol-root .k-cb-bar b { display: block; height: 100%; }
+#kupol-root .k-cb-go { background: linear-gradient(180deg, #e9b14a, #c98a22); color: #1a1206; font-weight: 800; }
