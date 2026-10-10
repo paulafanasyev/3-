@@ -24,6 +24,10 @@
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
+    "test:game": "node --test src/game/*.test.mjs",
+    "game:map": "node scripts/build-game-map.mjs",
+    "game:balance": "node scripts/game-balance.mjs",
+    "game:portraits": "node scripts/game-portraits.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
   },
   "dependencies": {

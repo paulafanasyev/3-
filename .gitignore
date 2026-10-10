@@ -10,3 +10,6 @@ output/
 .DS_Store
 .gstack/
 3d-models/
+data/game/sources/
+public/game/leaders/
+src/game/faces/avatar-svg.js
