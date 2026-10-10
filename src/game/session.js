@@ -80,7 +80,7 @@ export function createGameSession({ send, now = () => Date.now(), map = loadMap(
         const requestId = requestIdOf(message);
         const result = game ? applyCommand(game, game.player, message.command, map) : { ok: false, error: 'NO_GAME' };
         send({ type: 'game:command:result', requestId, ...result, ...(result.ok ? {} : { message: errorText(result.error) }) });
-        if (game && result.ok) broadcast();
+        if (game && result.ok && message.command?.kind !== 'odds') broadcast(); // прогноз боя партию не меняет
         return true;
       }
       case 'game:endTurn': {

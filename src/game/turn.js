@@ -17,6 +17,7 @@ import { memoryTick } from './leaders.js';
 import { threatTick } from './negotiation.js';
 import { maybeDetect, finaleTick, resolveImpact, addShield, addContribution } from './finale.js';
 import { runAi } from './ai.js';
+import { nuclearTick } from './nuclear.js';
 import { isWater } from './data/terrain.js';
 
 export const MAX_TURNS = 230;
@@ -204,6 +205,7 @@ export function endTurn(state, map = loadMap()) {
   diplomacyTick(state, map);
   memoryTick(state);
   threatTick(state);
+  nuclearTick(state);
   maybeDetect(state, map);
   finaleTick(state);
   updateExplored(state, map);
