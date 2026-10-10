@@ -10,12 +10,12 @@ export const DETECTION_FORCED_TURN = 200;
 export const IMPACT_DELAY = 25;
 export const PATH_LOCK = 15; // вступить в пакт можно до 15-го хода отсчёта
 export const SATELLITES_FOR_TRACKING = 3;
-export const SHIELD_TARGET = 47000;
+export const SHIELD_TARGET = 45000;
 export const RARE_POINTS_PER_TILE = 3; // вес редкоземельных ×3 (§10.3)
 export const INTERCEPTOR_POWER = 0.045;
 export const INTERCEPTOR_CAP = 0.5;
 export const SHIELD_CAP = 0.7;
-export const GOLD_RATE = 0.18; // золото переводится в щит хуже, чем производство
+export const GOLD_RATE = 0.13; // золото переводится в щит хуже, чем производство
 
 export function maybeDetect(state, map) {
   const f = state.finale;

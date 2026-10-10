@@ -1,9 +1,9 @@
 // Стартовые нации и доктрины (DESIGN.md §5).
 export const DOCTRINES = Object.freeze({
   resilience: { name: 'Стойкость', tundraFood: 1, cityDefense: 0.25, domeBonus: 0.4 },
-  trade: { name: 'Торговля', goldPct: 0.2, tradeRoutes: 1, domeBonus: 0.3 },
-  diplomacy: { name: 'Дипломатия', treatyDiscount: 0.5, influence: 2, domeBonus: 0.3 },
-  science: { name: 'Наука', sciencePct: 0.15, spaceDiscount: 0.1 },
+  trade: { name: 'Торговля', goldPct: 0.2, tradeRoutes: 1, domeBonus: 0.1 },
+  diplomacy: { name: 'Дипломатия', treatyDiscount: 0.5, influence: 2, domeBonus: 0.2 },
+  science: { name: 'Наука', sciencePct: 0.15, spaceDiscount: 0.1, domeBonus: 0.35 },
   expansion: { name: 'Экспансия', settlerDiscount: 0.25 },
 });
 
