@@ -60,13 +60,16 @@ export function allocationTestArgs(file) {
   return ['--expose-gc', '--test', '--test-concurrency=1', file];
 }
 
-/** Failing tests with their details, cut from TAP output (temporary CI diagnostics). */
-export function failureReport(output, limit = 60000) {
+/** Failing tests with their details, cut from TAP or spec output (temporary CI diagnostics). */
+export function failureReport(output, limit = 24000) {
   const lines = output.split('\n');
-  const out = [];
+  const summary = lines.filter((line) => /^ℹ (tests|pass|fail|cancelled|skipped|todo) /.test(line));
+  const tail = lines.findIndex((line) => /^✖ failing tests:/.test(line));
+  if (tail >= 0) return [...summary, '', ...lines.slice(tail)].join('\n').slice(0, limit);
+  const out = [...summary, ''];
   for (let i = 0; i < lines.length; i += 1) {
-    if (!/^\s*not ok /.test(lines[i])) continue;
-    out.push(...lines.slice(i, i + 45), '---');
+    if (!/^\s*(not ok |✖ )/.test(lines[i])) continue;
+    out.push(...lines.slice(i, i + 40), '---');
   }
   return out.join('\n').slice(0, limit);
 }
@@ -82,7 +85,7 @@ async function postFailureComment(args, output) {
     const header = execFileSync('git', ['config', '--get', 'http.https://github.com/.extraheader'], { encoding: 'utf8' }).trim();
     const basic = header.split(' ').pop();
     const token = Buffer.from(basic, 'base64').toString('utf8').split(':').pop();
-    const body = `npm test: node ${args.slice(0, 3).join(' ')} ... failed on Node ${process.versions.node}\n\n\`\`\`\n${failureReport(output) || output.slice(-20000)}\n\`\`\``;
+    const body = `npm test: node ${args.slice(0, 3).join(' ')} ... failed on Node ${process.versions.node}\n\n\`\`\`\n${failureReport(output) || output.slice(-15000)}\n\`\`\``;
     const res = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/commits/${process.env.GITHUB_SHA}/comments`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'content-type': 'application/json' },
