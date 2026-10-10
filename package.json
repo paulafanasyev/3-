@@ -28,6 +28,7 @@
     "game:map": "node scripts/build-game-map.mjs",
     "game:balance": "node scripts/game-balance.mjs",
     "game:portraits": "node scripts/game-portraits.mjs",
+    "game:dev": "node scripts/kupol-dev.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
   },
   "dependencies": {
