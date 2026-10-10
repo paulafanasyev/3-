@@ -5,11 +5,38 @@ import { applyCommand } from './commands.js';
 import { endTurn } from './turn.js';
 import { loadMap } from './map.js';
 import { errorText } from './i18n/ru.js';
+import { TICK } from './tactical.js';
 
-export function createGameSession({ send, now = () => Date.now(), map = loadMap() } = {}) {
+/** Сервер сам ведёт часы тактического боя и шлёт кадры: клиент не опрашивает, приказ виден сразу. */
+export const BATTLE_FRAME_MS = 100;
+const BATTLE_SPEEDS = [0, 1, 2, 4];
+
+export function createGameSession({ send, now = () => Date.now(), map = loadMap(), timers = { setInterval, clearInterval } } = {}) {
   if (typeof send !== 'function') throw new TypeError('send is required');
   let game = null;
   let lastEventSeq = 0;
+
+  // ---------- часы боя ----------
+  const clock = { timer: null, last: 0, acc: 0, speed: 1 };
+  function stopClock() { if (clock.timer) timers.clearInterval(clock.timer); clock.timer = null; }
+  function startClock() {
+    stopClock();
+    clock.last = now(); clock.acc = 0; clock.speed = 1;
+    clock.timer = timers.setInterval(battleFrame, BATTLE_FRAME_MS);
+  }
+  function battleFrame() {
+    if (!game?.battle) { stopClock(); return; }
+    const t = now(); const dt = Math.min(1000, Math.max(0, t - clock.last)); clock.last = t;
+    clock.acc += (dt / 1000) * clock.speed;
+    const ticks = Math.floor(clock.acc / TICK);
+    if (ticks <= 0) return;
+    clock.acc -= ticks * TICK;
+    pushFrame(applyCommand(game, game.player, { kind: 'battleAdvance', ticks: Math.min(20, ticks) }, map));
+  }
+  function pushFrame(result) {
+    send({ type: 'game:battle', ...result, speed: clock.speed });
+    if (result.finished) { stopClock(); broadcast(); }
+  }
 
   function broadcast() {
     const state = snapshot(game, game.player, { sinceSeq: lastEventSeq, map });
@@ -65,6 +92,7 @@ export function createGameSession({ send, now = () => Date.now(), map = loadMap(
     }
     switch (message.type) {
       case 'game:new': {
+        stopClock();
         const seed = Number.isInteger(message.seed) ? message.seed : now() % 2147483647;
         try {
           game = createGame({ seed, setup: message.setup ?? {}, map });
@@ -80,7 +108,12 @@ export function createGameSession({ send, now = () => Date.now(), map = loadMap(
         const requestId = requestIdOf(message);
         const result = game ? applyCommand(game, game.player, message.command, map) : { ok: false, error: 'NO_GAME' };
         send({ type: 'game:command:result', requestId, ...result, ...(result.ok ? {} : { message: errorText(result.error) }) });
-        if (game && result.ok && message.command?.kind !== 'odds') broadcast(); // прогноз боя партию не меняет
+        // прогноз и тики тактического боя партию на карте не меняют: снимок шлём только по итогу боя
+        const kind = message.command?.kind;
+        const quiet = kind === 'odds' || ((kind === 'battleOrder' || kind === 'battleAdvance' || kind === 'battle') && !result.finished);
+        if (game && result.ok && !quiet) broadcast();
+        if (result.ok && kind === 'battle') startClock();
+        if (result.finished) stopClock();
         return true;
       }
       case 'game:endTurn': {
@@ -93,12 +126,26 @@ export function createGameSession({ send, now = () => Date.now(), map = loadMap(
           send({ type: 'game:command:result', requestId, ok: false, error: 'GAME_OVER', message: errorText('GAME_OVER') });
           return true;
         }
+        if (game.battle) {
+          send({ type: 'game:command:result', requestId, ok: false, error: 'BATTLE_ACTIVE', message: errorText('BATTLE_ACTIVE') });
+          return true;
+        }
         endTurn(game, map);
         send({ type: 'game:command:result', requestId, ok: true, turn: game.turn });
         broadcast();
         return true;
       }
+      case 'game:battleSpeed': {
+        // 0 — пауза, 1/2/4 — скорость; кадр шлётся сразу, чтобы интерфейс не ждал следующего тика
+        const requestId = requestIdOf(message);
+        const speed = BATTLE_SPEEDS.includes(message.speed) ? message.speed : 1;
+        if (!game?.battle) { send({ type: 'game:command:result', requestId, ok: false, error: 'NO_BATTLE', message: errorText('NO_BATTLE') }); return true; }
+        clock.speed = speed; clock.last = now();
+        send({ type: 'game:command:result', requestId, ok: true, speed });
+        return true;
+      }
       case 'game:stop': {
+        stopClock();
         game = null;
         send({ type: 'game:stopped' });
         return true;
@@ -110,7 +157,8 @@ export function createGameSession({ send, now = () => Date.now(), map = loadMap(
 
   return {
     handle,
-    dispose() { game = null; },
+    dispose() { stopClock(); game = null; },
     get game() { return game; },
+    get map() { return map; },
   };
 }
