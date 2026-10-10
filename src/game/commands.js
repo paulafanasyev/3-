@@ -10,8 +10,9 @@ import { addCity, removeUnit, placeUnit, pushEvent, nameOf } from './state.js';
 import { own } from './events.js';
 import {
   availableTechs, itemBlocker, itemCost, canEnter, moveCost, findPath, blockedFor, attackOdds, isEmbarked, defenderStrength,
-  atWar, treatyBetween, relation, isNeutralId, unitsAt,
+  atWar, treatyBetween, relation, isNeutralId, unitsAt, OCCUPATION_TURNS, unitStrength,
 } from './rules.js';
+import { TERRAIN } from './data/terrain.js';
 import {
   declareWar, makePeace, evaluatePeace, evaluateTreaty, addTreaty, removeTreaty,
   treatyInfluenceCost, changeRelation, changeReputation, TREATY_RULES,
@@ -21,6 +22,7 @@ import {
   normalizeDeal, dealBlocker, evaluateDeal, counterOffer, executeDeal, makeDemand, normalizeSide, sideBlocker, isEmptySide, demandBlocker,
 } from './negotiation.js';
 import { runOperation } from './intrigue.js';
+import { launchNuke, dismantle, orbitalRecon } from './nuclear.js';
 import { say, remember } from './leaders.js';
 
 const ok = (extra = {}) => ({ ok: true, ...extra });
@@ -28,7 +30,10 @@ const fail = (error) => ({ ok: false, error });
 
 export const MIN_CITY_DISTANCE = 3; // шагов между городами
 export const ANNEX_RELATION = 60;
-export const annexCost = (cities) => 50 + 30 * cities;
+/** Цена присоединения растёт с размером народа и с размером собственной державы. */
+export const annexCost = (cities, ownCities = 0) => Math.round((50 + 40 * cities) * (1 + ownCities / 12));
+/** Присоединённые города несколько ходов встраиваются в державу (как оккупация, но короче). */
+export const INTEGRATION_TURNS = 5;
 
 // ---------- города ----------
 export function citySiteBlocker(state, map, nationId, cell) {
@@ -79,6 +84,14 @@ export function resolveAttack(state, map, attacker, cell) {
   const attackerName = `${UNITS[attacker.type].name} (${nameOf(state, attacker.owner)})`;
   const defenderName = city ? city.name : nameOf(state, defenderOwner);
   const audience = [attacker.owner, defenderOwner].filter((x) => x && !isNeutralId(x));
+  // кто стоял в обороне: для анимации боя в клиенте
+  const front = unitsAt(state, cell).map((id) => state.units[id]).filter((u) => u.owner !== attacker.owner)
+    .sort((a, b) => defenderStrength(state, map, b) - defenderStrength(state, map, a) || a.id.localeCompare(b.id))[0];
+  const combat = {
+    from: attacker.cell, to: cell, attacker: attacker.type, attackerOwner: attacker.owner, attackerId: attacker.id,
+    defender: front?.type ?? null, defenderOwner: defenderOwner ?? null, city: city?.name ?? null,
+    odds: Math.round(odds * 100), hpBefore: attacker.hp, cityHpBefore: city?.hp ?? null,
+  };
   attacker.moves = 0;
   attacker.fortified = false;
   if (roll < odds) {
@@ -98,14 +111,22 @@ export function resolveAttack(state, map, attacker, cell) {
       const left = unitsAt(state, cell).some((id) => state.units[id].owner !== attacker.owner);
       if (!left && UNITS[attacker.type].domain !== 'air' && canEnter(state, map, attacker, cell)) placeUnit(state, attacker, cell);
     }
-    pushEvent(state, 'battleWon', { attacker: attackerName, defender: defenderName }, audience);
-    return { won: true, odds };
+    combat.won = true;
+    combat.attackerHp = attacker.hp;
+    combat.cityHp = city ? city.hp : null;
+    combat.captured = Boolean(city && city.owner === attacker.owner);
+    combat.killed = front ? !state.units[front.id] : false;
+    pushEvent(state, 'battleWon', { attacker: attackerName, defender: defenderName }, audience, { combat });
+    return { won: true, odds, combat };
   }
   if (UNITS[attacker.type].domain === 'air' || attacker.hp <= 40) removeUnit(state, attacker.id);
   else attacker.hp = Math.max(5, attacker.hp - 45);
-  if (city) city.hp = Math.max(10, city.hp - 10);
-  pushEvent(state, 'battleLost', { attacker: attackerName, defender: defenderName }, audience);
-  return { won: false, odds };
+  combat.won = false;
+  combat.attackerHp = state.units[attacker.id] ? attacker.hp : 0;
+  combat.cityHp = city ? city.hp : null;
+  combat.killed = false;
+  pushEvent(state, 'battleLost', { attacker: attackerName, defender: defenderName }, audience, { combat });
+  return { won: false, odds, combat };
 }
 
 function captureCity(state, map, attacker, city) {
@@ -115,11 +136,24 @@ function captureCity(state, map, attacker, city) {
   city.hp = 40;
   city.queue = [];
   city.pop = Math.max(1, city.pop - 1);
+  // столицей город остаётся только у своей нации: вернувший исходную столицу снова правит из неё
+  const wasCapital = city.capital;
+  const winner = state.nations[attacker.owner];
+  city.capital = Boolean(winner && winner.originalCapital === city.id);
+  if (city.capital) { for (const c of Object.values(state.cities)) if (c.owner === attacker.owner && c !== city) c.capital = false; winner.capital = city.id; }
+  city.occupiedUntil = city.capital ? 0 : state.turn + OCCUPATION_TURNS;
+  if (wasCapital && !isNeutralId(previous) && state.nations[previous]) {
+    // столица переезжает в крупнейший оставшийся город
+    const next = Object.values(state.cities).filter((c) => c.owner === previous).sort((a, b) => b.pop - a.pop || a.id.localeCompare(b.id))[0];
+    state.nations[previous].capital = next ? next.id : null;
+    if (next) next.capital = true;
+  }
   for (const cell of cellsWithin(map, city.cell, 2)) {
     if (state.owner[cell] === previous) state.owner[cell] = attacker.owner;
   }
   placeUnit(state, attacker, city.cell);
   pushEvent(state, 'cityCaptured', { nation: nameOf(state, attacker.owner), city: city.name });
+  if (!isNeutralId(previous)) remember(state, previous, attacker.owner, 'grievance', 15, 'cityLost');
   if (isNeutralId(previous) && !Object.values(state.cities).some((c) => c.owner === previous)) state.neutrals[previous].alive = false;
   if (!isNeutralId(previous)) {
     const n = state.nations[previous];
@@ -129,6 +163,39 @@ function captureCity(state, map, attacker, city) {
       pushEvent(state, 'eliminated', { nation: n.name });
     }
   }
+}
+
+/** Прогноз атаки соседней клетки: силы сторон, модификаторы и шанс. Ничего не меняет. */
+export function combatPreview(state, map, unit, to) {
+  if (typeof to !== 'number' || !Number.isSafeInteger(to) || to < 0 || to >= map.size) return fail('NO_TARGET');
+  if (!map.neighbors[unit.cell].includes(to)) return fail('NO_TARGET');
+  const enemy = enemyOwnerAt(state, unit, to);
+  if (!enemy) return fail('NO_TARGET');
+  if (UNITS[unit.type].str === 0) return fail('NO_TARGET');
+  const cityId = state.cityAt[to];
+  const city = cityId && state.cities[cityId].owner !== unit.owner ? state.cities[cityId] : null;
+  const defenders = unitsAt(state, to).map((id) => state.units[id]).filter((u) => u.owner !== unit.owner)
+    .sort((a, b) => defenderStrength(state, map, b) - defenderStrength(state, map, a) || a.id.localeCompare(b.id));
+  const odds = attackOdds(state, map, unit, to);
+  const attack = unitStrength(state, unit);
+  const defense = odds > 0 && odds < 1 ? attack * (1 - odds) / odds : 0;
+  const mods = [];
+  if (unit.vet) mods.push({ side: 'a', text: `ветеран ×${(1 + 0.1 * unit.vet).toFixed(1)}` });
+  if (unit.hp < 100) mods.push({ side: 'a', text: `ранен: ${unit.hp}%` });
+  const terrain = TERRAIN[map.terrain[to]];
+  if (terrain.defense !== 1) mods.push({ side: 'd', text: `местность ×${terrain.defense}` });
+  if (city?.buildings.includes('walls')) mods.push({ side: 'd', text: 'стены +50%' });
+  if (city) mods.push({ side: 'd', text: `город, прочность ${city.hp}%` });
+  if (defenders[0]?.fortified) mods.push({ side: 'd', text: 'укрепился +25%' });
+  if (defenders.length > 1) mods.push({ side: 'd', text: `поддержка стека: ${defenders.length - 1}` });
+  if (isEmbarked(map, unit)) return fail('EMBARKED');
+  return ok({
+    preview: {
+      odds: Math.round(odds * 100), attack: Math.round(attack * 10) / 10, defense: Math.round(defense * 10) / 10,
+      attacker: unit.type, defender: defenders[0]?.type ?? null, defenderOwner: enemy, city: city?.name ?? null,
+      atWar: atWar(state, unit.owner, enemy), mods,
+    },
+  });
 }
 
 // ---------- движение ----------
@@ -191,10 +258,10 @@ const isPeople = (state, id) => own(state.neutrals, id);
  * (все проверки идут до изменений).
  */
 export function applyCommand(state, nationId, command, map = loadMap()) {
-  if (state.status !== 'running') return fail('GAME_OVER');
-  if (!isMajor(state, nationId) || !state.nations[nationId].alive) return fail('UNKNOWN_NATION');
-  if (command === null || typeof command !== 'object' || Array.isArray(command) || typeof command.kind !== 'string') return fail('BAD_COMMAND');
   try {
+    if (state.status !== 'running') return fail('GAME_OVER');
+    if (!isMajor(state, nationId) || !state.nations[nationId].alive) return fail('UNKNOWN_NATION');
+    if (command === null || typeof command !== 'object' || Array.isArray(command) || typeof command.kind !== 'string') return fail('BAD_COMMAND');
     return dispatch(state, nationId, command, map);
   } catch (error) {
     if (process.env.KUPOL_DEBUG) console.error(error);
@@ -243,8 +310,8 @@ function dispatch(state, nationId, command, map) {
     }
     case 'move': {
       const e = needUnit(); if (e) return e;
-      const to = Number(command.to);
-      if (!Number.isInteger(to) || to < 0 || to >= map.size) return fail('NO_PATH');
+      const to = command.to;
+      if (typeof to !== 'number' || !Number.isSafeInteger(to) || to < 0 || to >= map.size) return fail('NO_PATH');
       if (UNITS[unit.type].domain === 'space') return fail('NO_PATH');
       if (!canEnter(state, map, unit, to)) return fail('NO_PATH');
       unit.goal = to;
@@ -347,8 +414,7 @@ function dispatch(state, nationId, command, map) {
       return ok();
     }
     case 'gift': {
-      const raw = Number(command.gold);
-      const gold = Number.isFinite(raw) ? Math.floor(raw) : 0;
+      const gold = typeof command.gold === 'number' && Number.isFinite(command.gold) ? Math.floor(command.gold) : 0;
       if (!knownTarget || target === nationId) return fail('UNKNOWN_NATION');
       if (gold <= 0 || gold > nation.gold) return fail('NOT_ENOUGH_GOLD');
       nation.gold -= gold;
@@ -361,10 +427,10 @@ function dispatch(state, nationId, command, map) {
       if (!people || !people.alive) return fail('UNKNOWN_NATION');
       if (relation(state, nationId, target) < ANNEX_RELATION) return fail('RELATION_TOO_LOW');
       const cities = Object.values(state.cities).filter((c) => c.owner === target);
-      const cost = annexCost(cities.length);
+      const cost = annexCost(cities.length, Object.values(state.cities).filter((c) => c.owner === nationId).length);
       if (nation.influence < cost) return fail('NOT_ENOUGH_INFLUENCE');
       nation.influence -= cost;
-      for (const c of cities) c.owner = nationId;
+      for (const c of cities) { c.owner = nationId; c.capital = false; c.occupiedUntil = state.turn + INTEGRATION_TURNS; }
       for (let cell = 0; cell < map.size; cell += 1) if (state.owner[cell] === target) state.owner[cell] = nationId;
       people.alive = false;
       pushEvent(state, 'annexed', { nation: nation.name, people: people.name });
@@ -412,6 +478,23 @@ function dispatch(state, nationId, command, map) {
       if (!isMajor(state, target)) return fail('UNKNOWN_NATION');
       const third = typeof command.third === 'string' ? command.third : null;
       return runOperation(state, map, nationId, command.op, target, third);
+    }
+    case 'odds': {
+      // прогноз боя без изменений партии: как окно шансов в Civilization
+      const e = needUnit(); if (e) return e;
+      return combatPreview(state, map, unit, command.to);
+    }
+    case 'nuke': {
+      const e = needUnit(); if (e) return e;
+      return launchNuke(state, map, nationId, unit, command.to);
+    }
+    case 'dismantle': {
+      const e = needUnit(); if (e) return e;
+      return dismantle(state, nationId, unit);
+    }
+    case 'recon': {
+      const e = needUnit(); if (e) return e;
+      return orbitalRecon(state, map, nationId, unit, command.to);
     }
     case 'choosePath':
       return choosePath(state, nationId, command.path);
