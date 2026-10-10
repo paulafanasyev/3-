@@ -1,7 +1,7 @@
 // Тактический бой в реальном времени (как в Shogun: Total War): по желанию игрока атака
 // разыгрывается на поле, где каждый юнит стратегической карты — полк из десятков солдат.
-// Сервер ведёт бой фиксированными тиками (TICK секунд), клиент только шлёт приказы и
-// просит продвинуть время. Всё детерминированно: свой генератор в state.battle.rng.
+// Сервер ведёт бой фиксированными тиками (TICK секунд), часы и кадры — в session.js; клиент шлёт
+// только приказы. Всё детерминированно: свой генератор в state.battle.rng.
 import { UNITS, VETERAN_MAX } from './data/units.js';
 import { TERRAIN } from './data/terrain.js';
 import { BUILDINGS } from './data/buildings.js';
@@ -246,6 +246,7 @@ function stepRegiment(b, r, dt) {
     return;
   }
   // стрельба
+  if (!T.range || r.ammo <= 0) r.aim = null;
   if (T.range && r.ammo > 0) {
     r.reloadLeft = Math.max(0, r.reloadLeft - 1);
     const wanted = o.target ? byId(o.target) : null;
@@ -263,8 +264,10 @@ function stepRegiment(b, r, dt) {
       r.ammo -= 1;
       r.reloadLeft = T.reload;
       b.fx.push({ t: b.tick, kind: T.projectile, from: r.id, to: target.id, x: target.x, y: target.y });
+      r.aim = target.id;
       if (o.kind === 'hold' || (o.kind === 'attack' && o.keep && d <= o.keep)) turnTo(r, Math.atan2(target.y - r.y, target.x - r.x), dt * 3);
     }
+    if (!target) r.aim = null; // цели в зоне нет: башня и статус «огонь» не залипают
     if (target && o.kind === 'attack' && o.keep && dist(target, r) <= o.keep) return;
   }
   if (o.kind === 'move') {
@@ -384,16 +387,18 @@ export function finishBattle(state, map, captureCity) {
 }
 
 /** Снимок боя для клиента: поле, полки, недавние выстрелы. */
-export function battleView(b) {
+export function battleView(b, { terrain = b?.tick === 0 } = {}) {
   if (!b) return null;
   return {
-    id: b.id, tick: b.tick, seconds: Math.round(b.tick * TICK), timeLimit: TIME_LIMIT * TICK, field: FIELD, terrain: b.terrain, city: b.city,
+    // рельеф неизменен весь бой: по умолчанию он уходит только до первого тика (12 КБ → ~3 КБ на кадр)
+    id: b.id, tick: b.tick, seconds: Math.round(b.tick * TICK), timeLimit: TIME_LIMIT * TICK, field: FIELD, terrain: terrain ? b.terrain : null, city: b.city,
     attacker: b.attacker, defender: b.defender, human: b.human, result: b.result, auto: Boolean(b.auto),
     regiments: b.regiments.map((r) => ({
       id: r.id, side: r.side, owner: r.owner, type: r.type, men: r.men, menStart: r.menStart, menMax: r.menMax,
       x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10, facing: Math.round(r.facing * 1000) / 1000,
       formation: r.formation, state: r.state, morale: Math.round(r.morale), fatigue: Math.round(r.fatigue), ammo: r.ammo,
-      engaged: r.engaged, order: r.order?.kind ?? 'hold', target: r.order?.target ?? null, kills: r.kills, ...frontage(r),
+      engaged: r.engaged, order: r.order?.kind ?? 'hold', target: r.order?.target ?? null, aim: r.aim ?? null, range: TROOPS[r.type].range ?? 0, kills: r.kills, ...frontage(r),
+      dest: r.order?.kind === 'move' ? [Math.round(r.order.x), Math.round(r.order.y)] : null, run: Boolean(r.order?.run),
     })),
     fx: b.fx.slice(-40),
   };
