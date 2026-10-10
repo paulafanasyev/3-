@@ -10,7 +10,7 @@ export const DETECTION_FORCED_TURN = 200;
 export const IMPACT_DELAY = 25;
 export const PATH_LOCK = 15; // вступить в пакт можно до 15-го хода отсчёта
 export const SATELLITES_FOR_TRACKING = 3;
-export const SHIELD_TARGET = 52000;
+export const SHIELD_TARGET = 47000;
 export const RARE_POINTS_PER_TILE = 3; // вес редкоземельных ×3 (§10.3)
 export const INTERCEPTOR_POWER = 0.045;
 export const INTERCEPTOR_CAP = 0.5;
@@ -71,8 +71,9 @@ export function contribute(state, nationId, { gold = 0, science = 0 } = {}) {
   const n = state.nations[nationId];
   if (!state.finale.detectedTurn) return { ok: false, error: 'NO_FINALE' };
   if (n.finale.path !== 'pact') return { ok: false, error: 'NOT_IN_PACT' };
-  gold = Math.max(0, Math.floor(Number(gold) || 0));
-  science = Math.max(0, Math.floor(Number(science) || 0));
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  gold = Math.max(0, Math.floor(num(gold)));
+  science = Math.max(0, Math.floor(num(science)));
   if (gold > n.gold) return { ok: false, error: 'NOT_ENOUGH_GOLD' };
   if (science > n.sciencePool) return { ok: false, error: 'NOT_ENOUGH_SCIENCE' };
   n.gold -= gold;
@@ -117,11 +118,19 @@ export function finaleTick(state) {
   f.uncertaintyKm = Math.max(150, f.uncertaintyKm - (f.tracking ? 250 : 80));
 }
 
+export const UNTRACKED_FACTOR = 0.84;
+
+/** Доля населения, которую теряют города в зоне падения обломков: от 50% при защите 0,5 до 5% у самого порога спасения. */
+export function partialLoss(defense) {
+  return Math.max(0.05, Math.min(0.5, (1 - defense)));
+}
+
 export function defenseLevel(state) {
   const f = state.finale;
   const members = pactMembers(state);
   const interceptors = Object.values(state.units).filter((u) => u.type === 'interceptor' && members.includes(u.owner)).length;
-  const tracking = f.tracking ? 1.2 : 0.8;
+  // без точной орбиты оборона слабее, но спасение остаётся возможным: 0,84 × (0,5 + 0,7) ≈ 1,01
+  const tracking = f.tracking ? 1.2 : UNTRACKED_FACTOR;
   const intercept = Math.min(INTERCEPTOR_CAP, interceptors * INTERCEPTOR_POWER);
   const shield = Math.min(SHIELD_CAP, (f.shield / SHIELD_TARGET) * SHIELD_CAP);
   return { defense: tracking * (intercept + shield), tracking, intercept, shield, interceptors };
@@ -153,7 +162,7 @@ export function resolveImpact(state, map) {
       const city = state.cities[id];
       const owner = state.nations[city.owner];
       const saved = owner?.finale.path === 'ark' && Object.values(state.cities).some((c) => c.owner === city.owner && c.buildings.includes('ark'));
-      city.pop = Math.max(1, Math.floor(city.pop * (outcome === 'partial' ? 0.5 : saved ? 0.6 : 0.1)));
+      city.pop = Math.max(1, Math.floor(city.pop * (outcome === 'partial' ? 1 - partialLoss(level.defense) : saved ? 0.6 : 0.1)));
     }
   }
   const player = state.player;

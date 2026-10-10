@@ -6,11 +6,11 @@ import { LEADER_LINES } from './i18n/ru.js';
 import { relation, isNeutralId } from './rules.js';
 
 export const MOODS = Object.freeze([
-  { min: -Infinity, id: 'hostile', name: 'враждебен' },
-  { min: -40, id: 'cold', name: 'холоден' },
-  { min: -10, id: 'neutral', name: 'сдержан' },
-  { min: 15, id: 'warm', name: 'дружелюбен' },
-  { min: 45, id: 'friend', name: 'близкий друг' },
+  { min: -Infinity, id: 'hostile', name: 'враждебность' },
+  { min: -40, id: 'cold', name: 'холодность' },
+  { min: -10, id: 'neutral', name: 'сдержанность' },
+  { min: 15, id: 'warm', name: 'дружелюбие' },
+  { min: 45, id: 'friend', name: 'близкий союзник' },
 ]);
 
 const key = (judge, other) => `${judge}>${other}`;
@@ -61,7 +61,9 @@ export function attitude(state, judge, other) {
   if (isNeutralId(judge) || isNeutralId(other) || !state.nations[judge]) return base;
   const m = memoryOf(state, judge, other);
   const t = traits(state, judge);
-  return base + m.favor * 0.4 - m.grievance * (0.4 + 0.4 * t.memory);
+  // репутация собеседника: честный лидер смотрит на неё внимательнее
+  const rep = ((state.nations[other]?.reputation ?? 50) - 50) * (0.25 + 0.25 * t.honor);
+  return base + rep + m.favor * 0.4 - m.grievance * (0.4 + 0.4 * t.memory);
 }
 
 export function moodOf(value) {

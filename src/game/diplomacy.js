@@ -12,6 +12,8 @@ export const TREATY_RULES = Object.freeze({
   alliance: { minRelation: 40, duration: null, influence: 15, breakReputation: 40 },
 });
 export const TRUCE_TURNS = 10;
+/** Выше этого значения договоры сами по себе отношения не улучшают. */
+export const TREATY_CEILING = 50;
 export const PEACE_MIN_WAR_TURNS = 5;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -43,7 +45,7 @@ export function evaluateTreaty(state, judge, from, type) {
   const f = state.nations[from];
   if (atWar(state, judge, from)) return { accept: false, score: -Infinity };
   const rel = attitude(state, judge, from);
-  let score = rel + (f.reputation - 50) * 0.5;
+  let score = rel; // репутация партнёра уже учтена в attitude()
   const coop = j.ai?.coop ?? 0.6;
   score += (coop - 0.5) * 30;
   if (type === 'alliance') {
@@ -149,13 +151,17 @@ export function diplomacyTick(state, map) {
   for (let i = 0; i < ids.length; i += 1) for (let j = i + 1; j < ids.length; j += 1) {
     const a = ids[i]; const b = ids[j];
     const key = pairKey(a, b);
-    let delta = -(state.relations[key] ?? 0) * 0.01;
+    const rel = state.relations[key] ?? 0;
+    let delta = -rel * 0.01;
     if (borders.has(key)) delta -= 0.3;
     if (atWar(state, a, b)) delta -= 1;
-    if (treatyBetween(state, a, b, 'trade')) delta += 0.5;
-    if (treatyBetween(state, a, b, 'research')) delta += 0.5;
-    if (treatyBetween(state, a, b, 'alliance')) delta += 1;
-    if (state.nations[a].finale.path === 'pact' && state.nations[b].finale.path === 'pact') delta += 1;
+    let bonus = 0;
+    if (treatyBetween(state, a, b, 'trade')) bonus += 0.5;
+    if (treatyBetween(state, a, b, 'research')) bonus += 0.5;
+    if (treatyBetween(state, a, b, 'alliance')) bonus += 1;
+    if (state.nations[a].finale.path === 'pact' && state.nations[b].finale.path === 'pact') bonus += 1;
+    // договоры тянут отношения вверх только до потолка: дальше дружбу надо заслужить делами
+    delta += bonus * Math.max(0, (TREATY_CEILING - rel) / TREATY_CEILING);
     changeRelation(state, a, b, delta);
   }
   for (const id of ids) {
