@@ -57,6 +57,17 @@ jobs:
       - name: Verify clean reproducible install
         run: npm ci
 
+      - name: Export forged game units for Blender
+        run: npm run game:units
+
+      - name: Upload exported GLB models
+        uses: actions/upload-artifact@v4
+        with:
+          name: forged-game-units
+          path: public/game/units/forge/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Run unit and game tests
         run: |
           npm test
