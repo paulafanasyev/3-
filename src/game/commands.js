@@ -23,6 +23,7 @@ import {
 } from './negotiation.js';
 import { runOperation } from './intrigue.js';
 import { launchNuke, dismantle, orbitalRecon } from './nuclear.js';
+import { startBattle, stepBattle, orderRegiment, finishBattle, battleView, isTacticalType } from './tactical.js';
 import { say, remember } from './leaders.js';
 
 const ok = (extra = {}) => ({ ok: true, ...extra });
@@ -129,7 +130,7 @@ export function resolveAttack(state, map, attacker, cell) {
   return { won: false, odds, combat };
 }
 
-function captureCity(state, map, attacker, city) {
+export function captureCity(state, map, attacker, city) {
   const previous = city.owner;
   for (const id of [...unitsAt(state, city.cell)]) if (state.units[id].owner === previous) removeUnit(state, id);
   city.owner = attacker.owner;
@@ -191,6 +192,7 @@ export function combatPreview(state, map, unit, to) {
   if (isEmbarked(map, unit)) return fail('EMBARKED');
   return ok({
     preview: {
+      tactical: Boolean(state.nations[unit.owner]?.human && isTacticalType(unit.type)),
       odds: Math.round(odds * 100), attack: Math.round(attack * 10) / 10, defense: Math.round(defense * 10) / 10,
       attacker: unit.type, defender: defenders[0]?.type ?? null, defenderOwner: enemy, city: city?.name ?? null,
       atWar: atWar(state, unit.owner, enemy), mods,
@@ -278,7 +280,47 @@ function dispatch(state, nationId, command, map) {
   const target = typeof command.target === 'string' ? command.target : null;
   const knownTarget = isMajor(state, target) || isPeople(state, target);
 
+  // во время тактического боя партия стоит: доступны только приказы на поле
+  if (state.battle && !command.kind.startsWith('battle')) return fail('BATTLE_ACTIVE');
   switch (command.kind) {
+    case 'battle': {
+      // атака с ручным управлением боем (как в Shogun: Total War); ИИ и автобой идут через move
+      const e = needUnit(); if (e) return e;
+      if (!nation.human) return fail('BAD_COMMAND');
+      if (!isTacticalType(unit.type) || UNITS[unit.type].str === 0 || unit.moves <= 0) return fail('NO_TARGET');
+      const to = command.to;
+      if (typeof to !== 'number' || !Number.isSafeInteger(to) || to < 0 || to >= map.size || !map.neighbors[unit.cell].includes(to)) return fail('NO_TARGET');
+      const enemy = enemyOwnerAt(state, unit, to);
+      if (!enemy) return fail('NO_TARGET');
+      if (!atWar(state, nationId, enemy)) {
+        if (!isNeutralId(enemy)) return fail('NOT_AT_WAR');
+        declareWar(state, nationId, enemy);
+      }
+      return ok({ battle: battleView(startBattle(state, map, unit, to)) });
+    }
+    case 'battleOrder': {
+      if (!state.battle) return fail('NO_BATTLE');
+      const orders = Array.isArray(command.orders) ? command.orders.slice(0, 40) : [command];
+      for (const o of orders) { const err = orderRegiment(state.battle, state.battle.human, o); if (err) return fail(err); }
+      return ok({ battle: battleView(state.battle) });
+    }
+    case 'battleAdvance': {
+      if (!state.battle) return fail('NO_BATTLE');
+      const ticks = Number.isInteger(command.ticks) ? Math.max(1, Math.min(20, command.ticks)) : 1;
+      if (command.auto === true) state.battle.auto = true;
+      stepBattle(state.battle, state.battle.auto ? 100000 : ticks);
+      const view = battleView(state.battle);
+      const combat = state.battle.result ? finishBattle(state, map, captureCity) : null;
+      return ok({ battle: view, finished: Boolean(combat), combat });
+    }
+    case 'battleRetreat': {
+      if (!state.battle) return fail('NO_BATTLE');
+      // отступление: полки игрока уходят с поля, бой проигран, но выжившие спасены
+      for (const r of state.battle.regiments) if (r.side === state.battle.human && r.men > 0) r.state = 'fled';
+      state.battle.result = { winner: state.battle.human === 'a' ? 'd' : 'a', retreat: true };
+      const view = battleView(state.battle);
+      return ok({ battle: view, finished: true, combat: finishBattle(state, map, captureCity) });
+    }
     case 'research': {
       if (!availableTechs(state, nationId).includes(command.tech)) return fail('TECH_UNAVAILABLE');
       nation.research = command.tech;
