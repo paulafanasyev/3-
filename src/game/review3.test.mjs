@@ -5,7 +5,7 @@ import { loadMap } from './map.js';
 import { buildGrid, nearestCell } from './grid.js';
 import { createGame, addUnit, addCity, snapshot } from './state.js';
 import { applyCommand, resolveAttack } from './commands.js';
-import { cityYield, empirePenalty, pairKey } from './rules.js';
+import { cityYield, empirePenalty, pairKey, EMPIRE_PENALTY_CAP } from './rules.js';
 import { isWater } from './data/terrain.js';
 import { createGameSession } from './session.js';
 import { maybeDetect, outcomeFor, partialLoss, UNTRACKED_FACTOR, INTERCEPTOR_CAP, SHIELD_CAP } from './finale.js';
@@ -46,7 +46,7 @@ test('захваченный город: оккупация режет дохо�
   assert.ok(after.prod < before.prod * 0.6, `доход оккупированного города ${after.prod} vs ${before.prod}`);
 });
 
-test('размер державы: после 12 городов доход падает, но не больше чем на 40%', () => {
+test('размер державы: после 12 городов доход падает, но не больше потолка (−45%)', () => {
   const s = setup();
   assert.equal(empirePenalty(s, 'borea'), 0);
   let k = 0;
@@ -54,7 +54,7 @@ test('размер державы: после 12 городов доход па�
     if (k >= 40) break;
     if (!isWater(map.terrain[c]) && !s.cityAt[c] && c % 7 === 0) { addCity(s, map, 'borea', c, `Г${k}`); k += 1; }
   }
-  assert.ok(empirePenalty(s, 'borea') === 0.4);
+  assert.ok(empirePenalty(s, 'borea') === EMPIRE_PENALTY_CAP);
 });
 
 test('Ковчег: только в столице и только с Тяжёлыми носителями', () => {
