@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -60,13 +60,55 @@ export function allocationTestArgs(file) {
   return ['--expose-gc', '--test', '--test-concurrency=1', file];
 }
 
+/** Failing tests with their details, cut from TAP output (temporary CI diagnostics). */
+export function failureReport(output, limit = 60000) {
+  const lines = output.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/^\s*not ok /.test(lines[i])) continue;
+    out.push(...lines.slice(i, i + 45), '---');
+  }
+  return out.join('\n').slice(0, limit);
+}
+
+/**
+ * Temporary CI diagnostics: Actions logs need a signed-in account, so on GitHub
+ * Actions a failing run also leaves the failing tests as a commit comment.
+ * Uses the token actions/checkout already stored in git config; no-op elsewhere.
+ */
+async function postFailureComment(args, output) {
+  if (process.env.GITHUB_ACTIONS !== 'true' || !process.env.GITHUB_REPOSITORY || !process.env.GITHUB_SHA) return;
+  try {
+    const header = execFileSync('git', ['config', '--get', 'http.https://github.com/.extraheader'], { encoding: 'utf8' }).trim();
+    const basic = header.split(' ').pop();
+    const token = Buffer.from(basic, 'base64').toString('utf8').split(':').pop();
+    const body = `npm test: node ${args.slice(0, 3).join(' ')} ... failed on Node ${process.versions.node}\n\n\`\`\`\n${failureReport(output) || output.slice(-20000)}\n\`\`\``;
+    const res = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/commits/${process.env.GITHUB_SHA}/comments`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'content-type': 'application/json' },
+      body: JSON.stringify({ body }),
+    });
+    console.error(`[unit] failure report comment: HTTP ${res.status}`);
+  } catch (error) {
+    console.error(`[unit] failure report comment skipped: ${error.message}`);
+  }
+}
+
+const pending = [];
 function runTests(args) {
+  const capture = process.env.GITHUB_ACTIONS === 'true';
   const result = spawnSync(process.execPath, args, {
     cwd: process.cwd(),
-    stdio: 'inherit',
+    stdio: capture ? ['inherit', 'pipe', 'pipe'] : 'inherit',
     env: process.env,
+    maxBuffer: 512 * 1024 * 1024,
   });
   if (result.error) throw result.error;
+  if (capture) {
+    process.stdout.write(result.stdout);
+    process.stderr.write(result.stderr);
+    if (result.status !== 0) pending.push(postFailureComment(args, `${result.stdout}\n${result.stderr}`));
+  }
   return result.status ?? 1;
 }
 
@@ -99,4 +141,7 @@ export function runUnitTests() {
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
-if (import.meta.url === invokedPath) process.exitCode = runUnitTests();
+if (import.meta.url === invokedPath) {
+  process.exitCode = runUnitTests();
+  await Promise.all(pending);
+}
