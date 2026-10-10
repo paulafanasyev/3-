@@ -70,3 +70,14 @@
 | `src/game/geo.js` | `src/nuclear/geo.js` из PR #2 (этот же репо) | `toVector`/`fromVector` экспортируются |
 | `src/game/rng.js` | `src/nuclear/rng.js` из PR #2 | Добавлены `randomInt`, `pick`, `shuffle`, `seedToInt` |
 | `src/game/session.js` | `src/nuclear/session.js` из PR #2 | Таймер тиков заменён на пошаговый `game:endTurn` |
+
+## Тактический бой
+
+- **three.js** (MIT, © 2010–2026 three.js authors), https://threejs.org — рендер поля боя.
+- Солдаты, техника, деревья и дома на поле сейчас процедурные, собраны в коде (`src/game/client/battle/view.js`), автор — Pavel Afanasev.
+- Источники моделей для замены (лицензия проверена по страницам паков, в репозиторий ещё не добавлены):
+  - Quaternius, Ultimate Modular Men Pack, RPG Character Pack, Toon Shooter Game Kit, Animated Tank Pack, Universal Animation Library — CC0, https://quaternius.com
+  - Kenney, City Kit и другие 3D-киты — CC0, https://kenney.nl
+  - Legendary Warriors Kit: Samurai Commander — CC0, https://3dassets.dev (автор пометил, что модель сделана с ИИ)
+  - Grab3D, Samurai (rigged) — CC0, https://grab3d.com (тяжёлая модель, 400–800 тыс. треугольников, нужна LOD)
+  - metaworldos, WWII Tank Pack — CC0, https://metaworldos.itch.io
