@@ -13,6 +13,8 @@ import { BUILDINGS } from './data/buildings.js';
 import { makeLeader, attitude, moodOf, memoryOf } from './leaders.js';
 import { credibility } from './leaders.js';
 import { opChances, OPS, hasCasusBelli } from './intrigue.js';
+import { SHIELD_TARGET } from './finale.js';
+import { nuclearView } from './nuclear.js';
 
 export const STATE_VERSION = 1;
 export const START_GOLD = 30;
@@ -161,6 +163,9 @@ export function createGame({ seed = 1, setup = {}, map = loadMap() } = {}) {
     treaties: [],
     offers: [],
     explored: {},
+    nuclear: { strikes: [] },
+    fallout: {},
+    recon: {},
     finale: { detectedTurn: null, impactTurn: null, impactCell: null, uncertaintyKm: null, shield: 0, tracking: false, result: null },
   };
 
@@ -308,9 +313,10 @@ export function snapshot(state, nationId, { sinceSeq = 0, map = loadMap() } = {}
     units,
     resources,
     // точная точка удара остаётся на сервере: клиент видит только эллипс неопределённости
-    finale: state.finale.detectedTurn ? (({ impactCell, ...rest }) => ({ ...rest, impactArea: impactArea(state, map, impactCell, rest.uncertaintyKm) }))(state.finale) : null,
+    finale: state.finale.detectedTurn ? (({ impactCell, ...rest }) => ({ ...rest, shieldTarget: SHIELD_TARGET, impactArea: impactArea(state, map, impactCell, rest.uncertaintyKm) }))(state.finale) : null,
     events: state.events.filter((e) => e.seq > sinceSeq && (e.audience === 'all' || e.audience.includes(nationId))),
     choices: playerChoices(state, map, nationId),
+    nuclear: nuclearView(state, nationId),
   });
 }
 
