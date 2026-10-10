@@ -26,7 +26,7 @@ export const DEMAND_COOLDOWN = 10; // ходов между ультиматум
 export function normalizeSide(raw) {
   const side = raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   return {
-    gold: Math.min(1e6, Math.max(0, Math.floor(Number.isFinite(Number(side.gold)) ? Number(side.gold) : 0))),
+    gold: Math.min(1e6, Math.max(0, Math.floor(typeof side.gold === 'number' && Number.isFinite(side.gold) ? side.gold : 0))),
     techs: Array.isArray(side.techs) ? [...new Set(side.techs.filter((t) => typeof t === 'string'))].slice(0, 6).sort() : [],
     cities: Array.isArray(side.cities) ? [...new Set(side.cities.filter((c) => typeof c === 'string'))].slice(0, 4).sort() : [],
     treaties: Array.isArray(side.treaties) ? [...new Set(side.treaties.filter((t) => own(TREATY_RULES, t)))].sort() : [],
@@ -93,6 +93,8 @@ function techValue(state, nationId, tech) {
   return techCost(state, nationId, tech) * 0.5;
 }
 
+export const TRUST_CAP = 20;
+
 function cityValue(state, id) {
   const c = state.cities[id];
   return 60 + c.pop * 35 + c.buildings.length * 25;
@@ -145,8 +147,14 @@ export function evaluateDeal(state, judge, from, deal) {
   const pays = sideValue(state, judge, from, deal.take, false);
   const att = attitude(state, judge, from);
   const rep = state.nations[from].reputation;
-  const trust = (rep - 50) * 0.8 + att * 0.6;
-  const score = gets - pays + mutualValue(state, judge, from, deal) + trust;
+  // доверие помогает сойтись в цене, но не заменяет оплату: максимум TRUST_CAP
+  const trust = Math.min(TRUST_CAP, (rep - 50) * 0.8 + att * 0.6);
+  const mutual = mutualValue(state, judge, from, deal);
+  let score = gets - pays + mutual + trust;
+  // технологии и города даром не отдают: взамен должно быть что-то ценное
+  if ((deal.take.techs.length || deal.take.cities.length) && gets + Math.max(0, mutual) < pays * 0.5) {
+    score = Math.min(score, -Math.max(1, pays * 0.5 - gets - Math.max(0, mutual)));
+  }
   return { score, accept: score >= 0 };
 }
 
@@ -164,7 +172,7 @@ export function counterOffer(state, judge, from, deal, score) {
     return counter;
   }
   const techs = state.nations[from].techs
-    .filter((x) => !state.nations[judge].techs.includes(x) && !counter.give.techs.includes(x))
+    .filter((x) => !state.nations[judge].techs.includes(x) && !counter.give.techs.includes(x) && techLearnable(state.nations[judge], x))
     .sort((a, b) => techValue(state, judge, b) - techValue(state, judge, a) || a.localeCompare(b));
   let covered = Math.max(0, fromGold) * rate;
   for (const tech of techs) {
