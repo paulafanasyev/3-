@@ -102,7 +102,8 @@ export async function bootKupol() {
     respond: (d) => send({ kind: 'respond', offerId: d.offer, accept: d.accept === '1' }),
     path: (d) => send({ kind: 'choosePath', path: d.path }),
     contribute: () => { const me = state.nations.find((n) => n.id === state.nationId); send({ kind: 'contribute', gold: Math.floor(me.gold / 2) }); },
-    live: (d) => liveLayers.toggle(d.key),
+    live: (d) => { if (hud.unlocked(d.key)) liveLayers.toggle(d.key); else hud.toast('Прибор ещё не изобретён'); },
+    dismantle: (d) => send({ kind: 'dismantle', unitId: d.unit }).then((r) => r.ok && hud.toast(`Боеголовка ушла в щит: +${r.points}`)),
     endTurn: endTurn,
   });
   // настоящие слои GEV (самолёты, спутники, землетрясения, запуски) поверх партии
@@ -110,7 +111,14 @@ export async function bootKupol() {
   const net = connectGame({
     onState(next) {
       state = next;
-      for (const e of next.events) log.push({ turn: e.turn, text: e.text });
+      for (const e of next.events) {
+        log.push({ turn: e.turn, text: e.text });
+        if (!firstState && e.combat) layers.playCombat(e.combat, next);
+        if (!firstState && (e.key === 'nuclearStrike' || e.key === 'nuclearStrikeField' || e.key === 'nuclearIntercepted')) {
+          hud.alarm(e.text, e.key === 'nuclearIntercepted');
+          if (e.cell !== undefined) flyToCell(viewer, geometry, e.cell, 900_000, 2.5);
+        }
+      }
       if (log.length > 200) log.splice(0, log.length - 200);
       // выбранный юнит мог уйти или погибнуть: выделение следует за ним
       const picked = state.units.find((u) => u.id === selection.unitId);
@@ -174,15 +182,33 @@ export async function bootKupol() {
     }
     redraw();
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-  handler.setInputAction((e) => {
+  handler.setInputAction(async (e) => {
     if (!state || !myUnit(selection.unitId)) return;
     const hit = layers.pick(e.position);
     const cell = hit?.kind === 'city' ? state.cities.find((x) => x.id === hit.id)?.cell : hit?.cell;
     if (cell === undefined || cell === null) return;
+    const unit = myUnit(selection.unitId);
+    if (unit.type === 'icbm') {
+      const owner = state.owner[cell];
+      const name = state.nations.find((n) => n.id === owner)?.name ?? state.neutrals.find((n) => n.id === owner)?.name ?? 'ничья земля';
+      if (!confirm(`Ядерный удар по цели (${name})? Репутация рухнет, все нации получат повод к войне против вас.`)) return;
+      send({ kind: 'nuke', unitId: unit.id, to: cell }).then(() => { selection.unitId = null; redraw(); });
+      return;
+    }
+    if (unit.type === 'satellite') {
+      send({ kind: 'recon', unitId: unit.id, to: cell }).then((r) => { if (r.ok) hud.toast('Снимки получены: зона открыта на 5 ходов'); redraw(); });
+      return;
+    }
+    // соседняя клетка с противником: сначала окно шансов, как в Civilization
+    const odds = await net.command({ kind: 'odds', unitId: unit.id, to: cell }).catch(() => null);
+    if (odds?.ok && odds.preview) {
+      const go = await hud.combatPreview(odds.preview, state);
+      if (!go) return;
+    }
     send({ kind: 'move', unitId: selection.unitId, to: cell }).then((r) => {
       const u = myUnit(selection.unitId);
       if (u) selection.cell = u.cell;
-      if (r.ok && r.attacked) hud.toast(r.won ? 'Атака успешна' : 'Атака отбита');
+      if (r.ok && r.attacked) hud.toast(r.won ? 'Победа в бою' : 'Атака отбита');
       redraw();
     });
   }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
