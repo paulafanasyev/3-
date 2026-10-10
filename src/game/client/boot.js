@@ -7,6 +7,7 @@ import { createCellGeometry } from './geometry.js';
 import { createWorldLayers } from './layers.js';
 import { createHud } from './hud.js';
 import { connectGame } from './net.js';
+import { createLiveLayers } from './liveLayers.js';
 
 const START_VIEW = { lon: -98, lat: 22, height: 7_500_000 };
 
@@ -101,8 +102,11 @@ export async function bootKupol() {
     respond: (d) => send({ kind: 'respond', offerId: d.offer, accept: d.accept === '1' }),
     path: (d) => send({ kind: 'choosePath', path: d.path }),
     contribute: () => { const me = state.nations.find((n) => n.id === state.nationId); send({ kind: 'contribute', gold: Math.floor(me.gold / 2) }); },
+    live: (d) => liveLayers.toggle(d.key),
     endTurn: endTurn,
   });
+  // настоящие слои GEV (самолёты, спутники, землетрясения, запуски) поверх партии
+  const liveLayers = createLiveLayers(viewer, (st) => hud.live(st));
   const net = connectGame({
     onState(next) {
       state = next;
