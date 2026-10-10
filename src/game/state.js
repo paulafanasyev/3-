@@ -4,10 +4,12 @@ import { loadMap, cellsWithin } from './map.js';
 import { nextRandom, seedToInt } from './rng.js';
 import { NATIONS, DOCTRINES, CUSTOM_NATION_RULES } from './data/nations.js';
 import { STRATEGIC, RARE_IN_NORTH_AMERICA, isWater } from './data/terrain.js';
-import { pushEvent, nameOf, own } from './events.js';
+import { pushEvent, nameOf } from './events.js';
 import { createRealNameGuard } from './names.js';
 import { loadStopList } from './map.js';
-import { pairKey, visibleCells, isNeutralId } from './rules.js';
+import { pairKey, visibleCells, isNeutralId, availableTechs, itemBlocker, itemCost } from './rules.js';
+import { UNITS } from './data/units.js';
+import { BUILDINGS } from './data/buildings.js';
 import { makeLeader, attitude, moodOf, memoryOf } from './leaders.js';
 import { credibility } from './leaders.js';
 import { opChances, OPS, hasCasusBelli } from './intrigue.js';
@@ -266,16 +268,19 @@ export function snapshot(state, nationId, { sinceSeq = 0, map = loadMap() } = {}
   const nations = Object.values(state.nations).map((n) => (n.id === nationId
     ? n
     : {
-      id: n.id, name: n.name, color: n.color, emblem: n.emblem, doctrine: n.doctrine, alive: n.alive,
+      id: n.id, name: n.name, color: n.color, emblem: n.emblem, alive: n.alive,
+      // доктрина и лидер — разведданные: до встречи о нации известно только имя и флаг
+      doctrine: me.met.includes(n.id) ? n.doctrine : null,
       met: me.met.includes(n.id), era: me.met.includes(n.id) ? n.era : null, reputation: me.met.includes(n.id) ? n.reputation : null,
       // выбор пути в финале объявляется всем; вклад виден только знакомым нациям
       finale: state.finale.detectedTurn
         ? { path: n.finale.path, contribution: me.met.includes(n.id) ? Math.round(n.finale.contribution) : null }
         : { path: null, contribution: null },
-      leader: n.leader,
+      leader: me.met.includes(n.id) ? n.leader : null,
       // как этот лидер относится к игроку и что помнит о нём
       attitude: me.met.includes(n.id) ? Math.round(attitude(state, n.id, nationId)) : null,
       mood: me.met.includes(n.id) ? moodOf(attitude(state, n.id, nationId)).name : null,
+      moodId: me.met.includes(n.id) ? moodOf(attitude(state, n.id, nationId)).id : null,
       remembers: me.met.includes(n.id) ? memoryOf(state, n.id, nationId).log.slice(-5) : [],
       credibility: me.met.includes(n.id) ? Math.round(credibility(state, n.id) * 100) : null,
       intrigue: me.met.includes(n.id) ? Object.fromEntries(Object.keys(OPS).map((op) => {
@@ -303,9 +308,50 @@ export function snapshot(state, nationId, { sinceSeq = 0, map = loadMap() } = {}
     units,
     resources,
     // точная точка удара остаётся на сервере: клиент видит только эллипс неопределённости
-    finale: state.finale.detectedTurn ? (({ impactCell, ...rest }) => ({ ...rest, impactArea: impactCell === null ? null : { center: Math.floor(impactCell / 50) * 50, uncertaintyKm: rest.uncertaintyKm } }))(state.finale) : null,
+    finale: state.finale.detectedTurn ? (({ impactCell, ...rest }) => ({ ...rest, impactArea: impactArea(state, map, impactCell, rest.uncertaintyKm) }))(state.finale) : null,
     events: state.events.filter((e) => e.seq > sinceSeq && (e.audience === 'all' || e.audience.includes(nationId))),
+    choices: playerChoices(state, map, nationId),
   });
+}
+
+/**
+ * Эллипс неопределённости для клиента. Центр смещён от настоящей точки удара на половину
+ * радиуса в постоянном для партии направлении: по центру точку не вычислить, а сам эллипс
+ * всегда её накрывает и сужается вместе с ней.
+ */
+export function impactArea(state, map, impactCell, uncertaintyKm) {
+  if (impactCell === null || impactCell === undefined) return null;
+  const { lat, lon } = map.cells[impactCell];
+  const bearing = ((seedToInt(`${state.seed}:impact`) % 360) * Math.PI) / 180;
+  const d = uncertaintyKm * 0.5;
+  const cLat = Math.max(-89, Math.min(89, lat + (d / 111.2) * Math.cos(bearing)));
+  let cLon = lon + (d / (111.2 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)))) * Math.sin(bearing);
+  cLon = ((cLon + 540) % 360) - 180;
+  return { lat: Math.round(cLat * 10) / 10, lon: Math.round(cLon * 10) / 10, uncertaintyKm };
+}
+
+/**
+ * Что игрок может сделать прямо сейчас: доступные технологии и, для каждого своего города,
+ * что там можно строить и за сколько. Клиент не знает правил и показывает только это.
+ */
+export function playerChoices(state, map, nationId) {
+  if (!state.nations[nationId]?.alive) return { techs: [], production: {} };
+  const production = {};
+  for (const city of Object.values(state.cities)) {
+    if (city.owner !== nationId) continue;
+    const items = [];
+    for (const id of Object.keys(UNITS)) {
+      const item = { kind: 'unit', id };
+      if (!itemBlocker(state, map, city, item)) items.push({ ...item, cost: Math.round(itemCost(state, map, city, item)) });
+    }
+    for (const id of Object.keys(BUILDINGS)) {
+      const item = { kind: 'building', id };
+      if (!itemBlocker(state, map, city, item)) items.push({ ...item, cost: Math.round(itemCost(state, map, city, item)) });
+    }
+    if (!itemBlocker(state, map, city, { kind: 'dome' })) items.push({ kind: 'dome', id: null, cost: null });
+    production[city.id] = items;
+  }
+  return { techs: availableTechs(state, nationId), production };
 }
 
 /** Хеш состояния для проверки детерминизма. */
