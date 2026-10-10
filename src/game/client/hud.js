@@ -6,12 +6,13 @@ import { BUILDINGS } from '../data/buildings.js';
 import { NATIONS } from '../data/nations.js';
 import { LEADERS } from '../data/leaders.js';
 import { TREATY_NAMES } from '../i18n/ru.js';
-import { LIVE_LAYERS } from './liveList.js';
+import { LIVE_LAYERS, liveUnlocked } from './liveList.js';
+import { unitPortrait } from './icons.js';
 
 const MOOD = { hostile: ['враждебность', '#ff6b5e'], cold: ['холодность', '#8fb3ff'], neutral: ['сдержанность', '#c6ccd6'], warm: ['дружелюбие', '#8fe0a6'], friend: ['близкий союзник', '#5ee0b0'] };
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const alpha = (hex, a) => { const h = hex.replace('#', ''); return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`; };
-const itemName = (it) => (it.kind === 'unit' ? UNITS[it.id]?.name : it.kind === 'building' ? BUILDINGS[it.id]?.name : it.kind === 'dome' ? 'Вклад в щит «Купола»' : it.id);
+const itemName = (it) => (it.kind === 'unit' ? UNITS[it.id]?.name : it.kind === 'building' ? BUILDINGS[it.id]?.name : it.kind === 'dome' ? 'Вклад в щит «Купола»' : ({ science: 'Научный проект', gold: 'Торговый проект' }[it.id] ?? it.id));
 const portrait = (nationId, mood) => `/game/leaders/${nationId}${mood && mood !== 'neutral' ? `-${mood}` : ''}.png`;
 
 function img(src, color, fallback) {
@@ -29,10 +30,13 @@ export function createHud(root, actions) {
     <div class="k-toast glass" style="opacity:0"></div>
     <div class="k-offer glass" style="display:none"></div>
     <div class="k-live glass"></div>
-    <div class="k-hint glass">ЛКМ — выбрать · ПКМ — идти/атаковать · двойной щелчок — приблизить · F — основать город · Enter — конец хода</div>`;
+    <div class="k-combat glass" style="display:none"></div>
+    <div class="k-hint glass">ЛКМ — выбрать · ПКМ — идти/атаковать (у ракеты — пуск, у спутника — съёмка) · двойной щелчок — приблизить · F — основать город · Enter — конец хода</div>`;
   const $ = (s) => root.querySelector(s);
   let toastTimer = null;
   let netStatus = 'connecting';
+  let lastSnap = null;
+  let liveState = null;
 
   root.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act]');
@@ -54,6 +58,8 @@ export function createHud(root, actions) {
         <div class="k-chip"><i>влияние</i><b>${Math.floor(me.influence ?? 0)}</b></div>
         <div class="k-chip"><i>технологии</i><b>${me.techs.length}</b></div>
         <div class="k-chip"><i>репутация</i><b>${Math.round(me.reputation)}</b></div>
+        ${s.nuclear?.warheads ? `<div class="k-chip nuke"><i>боеголовки</i><b>${s.nuclear.warheads}</b></div>` : ''}
+        ${s.nuclear?.winter ? `<div class="k-chip winter"><i>ядерная зима</i><b>−${s.nuclear.winter}% еды</b></div>` : ''}
         ${fz ? `<div class="k-chip red"><i>Немезида</i><b>${s.result ? 'удар' : left > 0 ? `через ${left} ход.` : 'удар'}</b></div>` : ''}
       </div>`;
   }
@@ -78,9 +84,27 @@ export function createHud(root, actions) {
     }
     if (sel?.units?.length) {
       html += `<div class="glass k-card"><h4 class="k-h4">Юниты в клетке</h4><div class="k-list">${sel.units.map((u) => `<button class="k-btn ${u.id === sel.unitId ? 'on' : ''}" data-act="selectUnit" data-unit="${u.id}">${esc(UNITS[u.type].name)}<small>${u.owner === me.id ? `ходы ${u.moves} · ${u.hp}%` : 'чужой'}</small></button>`).join('')}</div>
-        ${sel.unitId && sel.units.find((u) => u.id === sel.unitId)?.owner === me.id ? `<div class="k-row">${sel.units.find((u) => u.id === sel.unitId).type === 'settler' ? `<button class="k-btn" data-act="found" data-unit="${sel.unitId}">Основать город (F)</button>` : `<button class="k-btn" data-act="fortify" data-unit="${sel.unitId}">Укрепиться</button>`}<button class="k-btn" data-act="disband" data-unit="${sel.unitId}">Распустить</button></div>` : ''}</div>`;
+        ${unitActions(s, me, sel)}</div>`;
     }
     $('.k-left').innerHTML = html;
+  }
+
+  function unitActions(s, me, sel) {
+    const u = sel.unitId && sel.units.find((x) => x.id === sel.unitId);
+    if (!u || u.owner !== me.id) return '';
+    const disband = `<button class="k-btn" data-act="disband" data-unit="${u.id}">Распустить</button>`;
+    if (u.type === 'settler') return `<div class="k-row"><button class="k-btn" data-act="found" data-unit="${u.id}">Основать город (F)</button>${disband}</div>`;
+    if (u.type === 'icbm') {
+      const pact = me.finale?.path === 'pact' && s.finale;
+      return `<div class="k-nuke-hint">☢ Ракета на боевом дежурстве. <b>ПКМ по вражеской клетке</b> — пуск (нужна война и разведка цели). Перехват: до 70% у противника с ПРО и спутниками. Весь мир запомнит.</div>
+        <div class="k-row">${pact ? `<button class="k-btn" data-act="dismantle" data-unit="${u.id}">Разобрать в щит «Купола» (+250)</button>` : ''}${disband}</div>`;
+    }
+    if (u.type === 'satellite') {
+      const ready = (u.reconReady ?? 0) <= s.turn;
+      return `<div class="k-nuke-hint sat">🛰 ${ready ? '<b>ПКМ по любой точке Земли</b> — спутниковая съёмка: круг в 3 клетки на 5 ходов' : `Спутник перестраивает орбиту, съёмка с хода ${u.reconReady}`}</div><div class="k-row">${disband}</div>`;
+    }
+    if (u.type === 'interceptor') return `<div class="k-nuke-hint sat">Перехватчик на орбите: +12% к шансу сбить летящую в вас ракету и вклад в «Купол».</div><div class="k-row">${disband}</div>`;
+    return `<div class="k-row"><button class="k-btn" data-act="fortify" data-unit="${u.id}">Укрепиться</button>${disband}</div>`;
   }
 
   function right(s, me) {
@@ -131,22 +155,72 @@ export function createHud(root, actions) {
       <div class="k-row"><button class="k-btn" data-act="respond" data-offer="${o.id}" data-accept="1">Принять</button><button class="k-btn" data-act="respond" data-offer="${o.id}" data-accept="0">Отклонить</button></div>`;
   }
 
-  /** Панель «Живая Земля»: настоящие слои GEV, на игру не влияют. */
+  /** Панель «Живая Земля»: настоящие слои GEV. Каждый прибор открывается своей технологией. */
   function live(state) {
-    $('.k-live').innerHTML = '<h4 class="k-h4">Живая Земля</h4>' + LIVE_LAYERS.map((l) => {
-      const st = state?.[l.key] ?? {};
+    if (state) liveState = state;
+    const me = lastSnap?.nations.find((n) => n.id === lastSnap.nationId);
+    $('.k-live').innerHTML = '<h4 class="k-h4">Живая Земля · разведка</h4>' + LIVE_LAYERS.map((l) => {
+      const st = liveState?.[l.key] ?? {};
+      if (lastSnap && !liveUnlocked(l, me, lastSnap.units)) {
+        return `<button class="k-btn locked" disabled title="${esc(l.why)}: нужна технология «${esc(TECHS[l.unlock]?.name)}»">${esc(l.name)}<small>🔒 ${esc(TECHS[l.unlock]?.name)}</small></button>`;
+      }
       const label = st.busy ? '…' : st.on ? (st.count ? String(st.count) : 'вкл') : 'выкл';
-      return `<button class="k-btn ${st.on ? 'on' : ''}" data-act="live" data-key="${l.key}" title="${esc(st.error ?? l.source)}">${esc(l.name)}<small>${esc(st.error && !st.on ? 'нет данных' : label)}</small></button>`;
+      return `<button class="k-btn ${st.on ? 'on' : ''}" data-act="live" data-key="${l.key}" title="${esc(l.why)} · ${esc(st.error ?? l.source)}">${esc(l.name)}<small>${esc(st.error && !st.on ? 'нет данных' : label)}</small></button>`;
     }).join('');
   }
   live(null);
 
   return {
     live,
+    unlocked(key) {
+      const l = LIVE_LAYERS.find((x) => x.key === key);
+      const me = lastSnap?.nations.find((n) => n.id === lastSnap.nationId);
+      return Boolean(l && liveUnlocked(l, me, lastSnap?.units));
+    },
+    /**
+     * Окно боя как в Civilization: две фишки, силы, модификаторы и шанс победы.
+     * Возвращает Promise<boolean>: атаковать или нет.
+     */
+    combatPreview(p, s) {
+      const el = $('.k-combat');
+      const me = s.nations.find((n) => n.id === s.nationId);
+      const foe = s.nations.find((n) => n.id === p.defenderOwner) ?? s.neutrals.find((n) => n.id === p.defenderOwner);
+      const odds = p.odds;
+      const verdict = odds >= 80 ? ['Решительная победа', '#6be38f'] : odds >= 60 ? ['Вероятная победа', '#a8e08f'] : odds >= 40 ? ['Равный бой', '#ffd166'] : odds >= 20 ? ['Вероятное поражение', '#ffa36b'] : ['Почти верная гибель', '#ff6b5e'];
+      const mods = (side) => p.mods.filter((m) => m.side === side).map((m) => `<div>${esc(m.text)}</div>`).join('') || '<div class="k-ld">без бонусов</div>';
+      el.innerHTML = `<div class="k-cb-title" style="color:${verdict[1]}">${verdict[0]}</div>
+        <div class="k-cb-row">
+          <div class="k-cb-side"><img src="${unitPortrait(p.attacker, me.color, 96)}" alt=""><div class="k-nm" style="color:${me.color}">${esc(UNITS[p.attacker]?.name)}</div><div class="k-cb-str">${p.attack}</div><div class="k-cb-mods">${mods('a')}</div></div>
+          <div class="k-cb-mid"><div class="k-cb-odds" style="color:${verdict[1]}">${odds}%</div><div class="k-cb-bar"><i style="width:${odds}%;background:${me.color}"></i><b style="width:${100 - odds}%;background:${foe?.color ?? '#888'}"></b></div><small>шанс победы</small></div>
+          <div class="k-cb-side"><img src="${unitPortrait(p.defender ?? 'warrior', foe?.color ?? '#9a8f7a', 96)}" alt="" ${p.defender ? '' : 'style="opacity:.5"'}><div class="k-nm" style="color:${foe?.color}">${esc(p.city ? `«${p.city}»` : UNITS[p.defender]?.name ?? '')}</div><div class="k-cb-str">${p.defense}</div><div class="k-cb-mods">${mods('d')}</div></div>
+        </div>
+        ${p.atWar ? '' : `<div class="k-nuke-hint">Войны с «${esc(foe?.name)}» нет: атака ${foe && s.neutrals.some((n) => n.id === foe.id) ? 'объявит войну этому народу' : 'невозможна, сначала объявите войну'}.</div>`}
+        <div class="k-row"><button class="k-btn k-cb-go" data-cb="1" ${p.atWar || s.neutrals.some((n) => n.id === p.defenderOwner) ? '' : 'disabled'}>Атаковать</button><button class="k-btn" data-cb="0">Отмена</button></div>`;
+      el.style.display = 'block';
+      return new Promise((resolve) => {
+        const onClick = (e) => {
+          const b = e.target.closest('[data-cb]');
+          if (!b) return;
+          el.removeEventListener('click', onClick);
+          el.style.display = 'none';
+          resolve(b.dataset.cb === '1');
+        };
+        el.addEventListener('click', onClick);
+      });
+    },
+    /** Тревога на весь экран при ядерном ударе. */
+    alarm(text, intercepted) {
+      const el = document.createElement('div');
+      el.className = `k-alarm ${intercepted ? 'blue' : ''}`;
+      el.innerHTML = `<div><b>${intercepted ? 'РАКЕТА ПЕРЕХВАЧЕНА' : 'ЯДЕРНЫЙ УДАР'}</b><span>${esc(String(text ?? '').replace(/^(ЯДЕРНЫЙ УДАР|Ракета перехвачена)\.\s*/, ''))}</span></div>`;
+      root.appendChild(el);
+      setTimeout(() => el.remove(), 4200);
+    },
     setStatus(status) { netStatus = status; },
     render(s, sel, log) {
+      lastSnap = s;
       const me = s.nations.find((n) => n.id === s.nationId);
-      top(s, me); left(s, me, sel); right(s, me); chronicle(s, log); finale(s); offers(s);
+      top(s, me); left(s, me, sel); right(s, me); chronicle(s, log); finale(s); offers(s); live(null);
       $('.k-end').disabled = s.status !== 'running';
     },
     busy(on) { $('.k-end').disabled = on; },
