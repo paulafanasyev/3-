@@ -13,12 +13,15 @@ import {
   treatyBetween, militaryPower, majorIds, isNeutralId, unitsAt, pairKey,
 } from './rules.js';
 import { applyCommand, citySiteBlocker, buyPrice } from './commands.js';
-import { canJoinPact } from './finale.js';
+import { canJoinPact, defenseLevel, SHIELD_TARGET, SHIELD_CAP, PATH_LOCK, INTERCEPTOR_CAP, INTERCEPTOR_POWER } from './finale.js';
+
+const INTERCEPTORS_NEEDED = Math.ceil(INTERCEPTOR_CAP / INTERCEPTOR_POWER);
 import { treatyInfluenceCost } from './diplomacy.js';
-import { attitude, traits, aggressionOf } from './leaders.js';
+import { attitude, traits, aggressionOf, memoryOf } from './leaders.js';
 import { techLearnable } from './events.js';
 import { evaluateDemand, demandBlocker } from './negotiation.js';
 import { OPS, opBlocker, opChances, hasCasusBelli } from './intrigue.js';
+import { warheads, interceptChance } from './nuclear.js';
 
 const FOCUS_TECHS = {
   defense: ['bronze', 'iron', 'steel', 'agriculture', 'massProduction'],
@@ -50,8 +53,10 @@ function chooseResearch(state, id) {
   if (!options.length) return;
   const focus = FOCUS_TECHS[n.ai.focus] ?? [];
   const urgent = state.finale.detectedTurn ? ['heavyLift', 'kinetic', 'shield', 'satellites'] : [];
-  const score = (t) => techCost(state, id, t) * (focus.includes(t) ? 0.6 : 1) * (ALWAYS.includes(t) ? 0.7 : 1) * (urgent.includes(t) ? 0.2 : 1) * (0.9 + nextRandom(state) * 0.2);
-  options.sort((a, b) => score(a) - score(b) || a.localeCompare(b));
+  // случайность тянем по разу на технологию до сортировки: компаратор должен быть чистым
+  options.sort();
+  const scores = new Map(options.map((t) => [t, techCost(state, id, t) * (focus.includes(t) ? 0.6 : 1) * (ALWAYS.includes(t) ? 0.7 : 1) * (urgent.includes(t) ? 0.2 : 1) * (t === 'fission' ? 1.4 - aggressionOf(state, id) : 1) * (0.9 + nextRandom(state) * 0.2)]));
+  options.sort((a, b) => scores.get(a) - scores.get(b) || a.localeCompare(b));
   applyCommand(state, id, { kind: 'research', tech: options[0] });
 }
 
@@ -98,10 +103,11 @@ function chooseProduction(state, map, id, city, ctx) {
   const produce = (item) => applyCommand(state, id, { kind: 'produce', cityId: city.id, item }, map).ok;
   const f = state.finale;
   if (f.detectedTurn && n.finale.path === 'pact') {
+    // космодромов немного, перехватчиков — до потолка пакта; всё остальное производство идёт в щит
     if (city.buildings.includes('spaceport')) {
       if (!f.tracking && ctx.pactSatellites < 3 && produce({ kind: 'unit', id: 'satellite' })) { ctx.pactSatellites += 1; return; }
-      if (produce({ kind: 'unit', id: 'interceptor' })) return;
-    } else if (produce({ kind: 'building', id: 'spaceport' })) return;
+      if (ctx.pactInterceptors < INTERCEPTORS_NEEDED && produce({ kind: 'unit', id: 'interceptor' })) { ctx.pactInterceptors += 1; return; }
+    } else if (ctx.spaceports < ctx.spaceportTarget && produce({ kind: 'building', id: 'spaceport' })) { ctx.spaceports += 1; return; }
     if (!f.tracking && !ctx.observatory && produce({ kind: 'building', id: 'observatory' })) { ctx.observatory = true; return; }
     if (produce({ kind: 'dome' })) return;
   }
@@ -120,6 +126,11 @@ function chooseProduction(state, map, id, city, ctx) {
     const air = nextRandom(state) < 0.2 ? bestUnit(state, map, city, 'air') : null;
     const u = sea ?? air ?? bestUnit(state, map, city);
     if (u && produce({ kind: 'unit', id: u })) { ctx.military += 1; return; }
+  }
+  // ядерный арсенал: шахта в столице и пара ракет, больше у агрессивных и у тех, по кому уже били
+  if (ctx.nukeTarget > ctx.warheads && city.capital && n.finale.path !== 'pact') {
+    if (!city.buildings.includes('silo')) { if (produce({ kind: 'building', id: 'silo' })) return; }
+    else if (produce({ kind: 'unit', id: 'icbm' })) { ctx.warheads += 1; return; }
   }
   if (map.coast[city.cell] && ctx.ships < ctx.shipTarget) {
     const ship = bestUnit(state, map, city, 'sea');
@@ -243,6 +254,7 @@ function diplomacy(state, map, id) {
     if (atWar(state, id, other)) {
       const turns = state.turn - (state.warSince[pairKey(id, other)] ?? state.turn);
       const losing = militaryPower(state, id) < militaryPower(state, other);
+      considerNuke(state, map, id, other);
       if ((turns >= 8 && (losing || rel > -40)) || f.detectedTurn) {
         if (!o.human || state.turn - mem.lastOffer >= 5) {
           const r = applyCommand(state, id, { kind: 'proposePeace', target: other }, map);
@@ -252,10 +264,13 @@ function diplomacy(state, map, id) {
       continue;
     }
     const wants = [];
+    // после свежей обиды (война, раскрытый заговор, разрыв договора) новые договоры не предлагаем
+    const sore = memoryOf(state, id, other).log.some((e) => e.kind === 'grievance' && e.amount >= 10 && state.turn - e.turn < 20);
     if (rel >= -10 && !treatyBetween(state, id, other, 'trade')) wants.push('trade');
     if (rel >= 10 && !treatyBetween(state, id, other, 'nap')) wants.push('nap');
     if (rel >= 25 && !treatyBetween(state, id, other, 'research')) wants.push('research');
     if (rel >= 50 && !treatyBetween(state, id, other, 'alliance')) wants.push('alliance');
+    if (sore) wants.length = 0;
     for (const type of wants) {
       if (n.influence < treatyInfluenceCost(state, id, type)) break;
       if (o.human && state.turn - mem.lastOffer < 6) break;
@@ -265,7 +280,7 @@ function diplomacy(state, map, id) {
     const strong = militaryPower(state, id) > militaryPower(state, other) * 1.4 + 10;
     const justified = hasCasusBelli(state, id, other);
     if (!f.detectedTurn && (rel < -45 || justified) && strong && (justified || !treatyBetween(state, id, other, 'nap'))
-      && nextRandom(state) < aggressionOf(state, id) * (justified ? 0.2 : 0.15)) {
+      && nextRandom(state) < aggressionOf(state, id) * (justified ? 0.2 : 0.15) * (warheads(state, other) > warheads(state, id) ? 0.3 : 1)) {
       applyCommand(state, id, { kind: 'declareWar', target: other }, map);
       continue;
     }
@@ -315,8 +330,8 @@ function tradeTechs(state, map, id, other, mem) {
   if (state.turn % 12 !== (id.length * 3 + other.length) % 12) return false; // редко: обмен знаниями — событие
   if (attitude(state, id, other) < 15) return false;
   if (o.human && state.turn - mem.lastOffer < 6) return false;
-  const mine = n.techs.filter((t) => !o.techs.includes(t) && TECHS[t].era < 3).sort((a, b) => techCost(state, other, a) - techCost(state, other, b) || a.localeCompare(b));
-  const theirs = o.techs.filter((t) => !n.techs.includes(t)).sort((a, b) => techCost(state, id, b) - techCost(state, id, a) || a.localeCompare(b));
+  const mine = n.techs.filter((t) => !o.techs.includes(t) && TECHS[t].era < 3 && techLearnable(o, t)).sort((a, b) => techCost(state, other, a) - techCost(state, other, b) || a.localeCompare(b));
+  const theirs = o.techs.filter((t) => !n.techs.includes(t) && techLearnable(n, t)).sort((a, b) => techCost(state, id, b) - techCost(state, id, a) || a.localeCompare(b));
   if (!mine.length || !theirs.length) return false;
   const deal = { give: { techs: [mine[0]] }, take: { techs: [theirs[0]] } };
   const r = applyCommand(state, id, { kind: 'negotiate', target: other, deal }, map);
@@ -362,7 +377,10 @@ function plot(state, map, id) {
   const n = state.nations[id];
   const t = traits(state, id);
   if (nextRandom(state) >= t.cunning * 0.04) return;
-  const rivals = n.met.filter((x) => state.nations[x].alive).sort((a, b) => {
+  // против союзников и научных партнёров не шпионим; против пакта о ненападении — только очень хитрый
+  const rivals = n.met.filter((x) => state.nations[x].alive
+    && !treatyBetween(state, id, x, 'alliance') && !treatyBetween(state, id, x, 'research')
+    && (t.cunning > 0.7 || !treatyBetween(state, id, x, 'nap'))).sort((a, b) => {
     const score = (x) => state.nations[x].techs.length * 10 + state.nations[x].finale.contribution / 100 - attitude(state, id, x);
     return score(b) - score(a) || a.localeCompare(b);
   });
@@ -387,6 +405,30 @@ function plot(state, map, id) {
   applyCommand(state, id, { kind: 'spy', op, target, third: extra }, map);
 }
 
+// ---------- ядерное оружие ----------
+/**
+ * Решение о пуске. Возмездие бьёт почти наверняка; первый удар — только у агрессивного
+ * лидера, который проигрывает войну всерьёз, и не по противнику с сильной ПРО.
+ */
+function considerNuke(state, map, id, other) {
+  const mine = sorted(state.units).filter((u) => u.owner === id && u.type === 'icbm');
+  if (!mine.length) return;
+  const strikes = state.nuclear?.strikes ?? [];
+  const revenge = strikes.some((x) => x.from === other && x.to === id && state.turn - x.turn <= 3); // мстят и за сбитую ракету
+  const turns = state.turn - (state.warSince[pairKey(id, other)] ?? state.turn);
+  // проигрывает: армия в полтора раза слабее и за последние 15 ходов противник отнял город
+  const desperate = militaryPower(state, id) * 1.5 < militaryPower(state, other) && turns >= 6
+    && memoryOf(state, id, other).log.some((e) => e.reason === 'cityLost' && state.turn - e.turn <= 15);
+  const aggr = aggressionOf(state, id);
+  const firstStrike = desperate && aggr > 0.4 && interceptChance(state, other) < 0.3 && nextRandom(state) < 0.4 * aggr;
+  if (!revenge && !firstStrike) return;
+  const target = Object.values(state.cities)
+    .filter((c) => c.owner === other && state.explored[id][c.cell])
+    .sort((a, b) => b.pop - a.pop || a.id.localeCompare(b.id))[0];
+  if (!target) return;
+  applyCommand(state, id, { kind: 'nuke', unitId: mine[0].id, to: target.cell }, map);
+}
+
 // ---------- финал ----------
 function finaleDecisions(state, map, id) {
   const n = state.nations[id];
@@ -401,10 +443,35 @@ function finaleDecisions(state, map, id) {
     const score = n.ai.coop + avg / 400 + (n.reputation - 50) / 400 + traits(state, id).honor * 0.1 + spacePower;
     applyCommand(state, id, { kind: 'choosePath', path: score >= 0.45 && canJoinPact(state) ? 'pact' : 'ark' }, map);
   }
-  if (n.finale.path === 'pact') {
-    if (n.gold > 80) applyCommand(state, id, { kind: 'contribute', gold: Math.floor((n.gold - 40) * 0.6) }, map);
-    if (!n.research && n.sciencePool > 50) applyCommand(state, id, { kind: 'contribute', science: Math.floor(n.sciencePool * 0.8) }, map);
+  if (n.finale.path !== 'pact') return;
+  // участник «Купола» сдаёт боеголовки в щит: это и вклад, и знак доверия
+  for (const u of sorted(state.units)) if (u.owner === id && u.type === 'icbm') applyCommand(state, id, { kind: 'dismantle', unitId: u.id }, map);
+  const projected = projectedDefense(state, id);
+  const t = traits(state, id);
+  const capital = Object.values(state.cities).some((c) => c.owner === id && c.capital);
+  // за пару ходов до закрытия пакта эгоист с шансом на Ковчег бросает обречённый «Купол»
+  if (state.turn === f.detectedTurn + PATH_LOCK - 1 && projected < 0.4 && capital
+    && n.techs.includes('heavyLift') && (n.ai.coop < 0.5 || t.pride > 0.75)) {
+    applyCommand(state, id, { kind: 'choosePath', path: 'ark' }, map);
+    return;
   }
+  // вкладываемся, пока щит не обеспечивает спасение с запасом; золото оставляем на перехватчики
+  if (projected >= 1.1) return;
+  const reserve = 60 + 5 * Object.values(state.cities).filter((c) => c.owner === id).length;
+  if (n.gold > reserve + 20) applyCommand(state, id, { kind: 'contribute', gold: Math.floor((n.gold - reserve) * 0.6) }, map);
+  if (!n.research && n.sciencePool > 50) applyCommand(state, id, { kind: 'contribute', science: Math.floor(n.sciencePool * 0.8) }, map);
+}
+
+/** Оценка защиты к ходу удара: текущий темп прироста щита, перехватчики как есть. */
+function projectedDefense(state, id) {
+  const f = state.finale;
+  const mem = memory(state.nations[id]);
+  if (!mem.shieldMark || mem.shieldMark.since !== f.detectedTurn) mem.shieldMark = { since: f.detectedTurn, turn: state.turn, shield: f.shield };
+  const elapsed = Math.max(1, state.turn - mem.shieldMark.turn);
+  const rate = Math.max(0, (f.shield - mem.shieldMark.shield) / elapsed);
+  const shield = f.shield + rate * Math.max(0, f.impactTurn - state.turn);
+  const level = defenseLevel(state);
+  return level.tracking * (level.intercept + Math.min(SHIELD_CAP, (shield / SHIELD_TARGET) * SHIELD_CAP));
 }
 
 export function runAi(state, map, id) {
@@ -427,10 +494,20 @@ export function runAi(state, map, id) {
     garrisonQueued: new Set(),
     ships: units.filter((u) => UNITS[u.type].domain === 'sea').length + cities.filter((c) => c.queue[0] && UNITS[c.queue[0].id]?.domain === 'sea').length,
     shipTarget: Math.ceil(cities.filter((c) => map.coast[c.cell]).length / 4) + (atWarAny ? 1 : 0),
+    spaceports: cities.filter((c) => c.buildings.includes('spaceport') || c.queue[0]?.id === 'spaceport').length,
+    spaceportTarget: 2 + Math.floor(cities.length / 5),
+    pactInterceptors: Object.values(state.units).filter((u) => u.type === 'interceptor' && members.includes(u.owner)).length
+      + Object.values(state.cities).filter((c) => members.includes(c.owner) && c.queue[0]?.id === 'interceptor').length,
     hasSpaceport: cities.some((c) => c.buildings.includes('spaceport') || c.queue[0]?.id === 'spaceport'),
     pactSatellites: Object.values(state.units).filter((u) => u.type === 'satellite' && members.includes(u.owner)).length,
     observatory: Object.values(state.cities).some((c) => members.includes(c.owner) && (c.buildings.includes('observatory') || c.queue[0]?.id === 'observatory')),
   };
+  ctx.warheads = warheads(state, id) + cities.filter((c) => c.queue[0]?.id === 'icbm').length;
+  const nuked = (state.nuclear?.strikes ?? []).some((x) => x.to === id);
+  const rivalNukes = n.met.some((o) => state.nations[o].alive && warheads(state, o) > 0 && (atWar(state, id, o) || relation(state, id, o) < -30));
+  const aggr = aggressionOf(state, id);
+  ctx.nukeTarget = !n.techs.includes('fission') || state.finale.detectedTurn ? 0
+    : (aggr >= 0.45 ? 2 : 0) + (aggr >= 0.6 ? 1 : 0) + (nuked || rivalNukes ? 1 : 0);
   ctx.wantSouth = n.era >= 1 && !cities.some((c) => Math.abs(map.cells[c.cell].lat) <= 35);
   for (const city of cities) chooseProduction(state, map, id, city, ctx);
   // лишнее золото тратим на ускорение строительства (оставляем запас)
@@ -441,4 +518,19 @@ export function runAi(state, map, id) {
     if (Number.isFinite(price) && price > 0 && n.gold - price >= reserve) applyCommand(state, id, { kind: 'buy', cityId: city.id }, map);
   }
   moveUnits(state, map, id, ctx);
+  orbitalScouting(state, map, id);
+}
+
+/** Спутники на войне фотографируют крупнейший город противника: так находят цели. */
+function orbitalScouting(state, map, id) {
+  const enemies = state.nations[id].met.filter((o) => state.nations[o].alive && atWar(state, id, o)).sort();
+  if (!enemies.length) return;
+  const targets = Object.values(state.cities).filter((c) => enemies.includes(c.owner))
+    .sort((a, b) => Number(Boolean(state.explored[id][a.cell])) - Number(Boolean(state.explored[id][b.cell])) || b.pop - a.pop || a.id.localeCompare(b.id));
+  let i = 0;
+  for (const u of sorted(state.units)) {
+    if (u.owner !== id || u.type !== 'satellite' || (u.reconReady ?? 0) > state.turn || i >= targets.length) continue;
+    applyCommand(state, id, { kind: 'recon', unitId: u.id, to: targets[i].cell }, map);
+    i += 1;
+  }
 }
