@@ -90,6 +90,7 @@ function makeRegiment(b, unit, side, slot, count, extra = {}) {
     men, menStart: men, menMax, morale: 70 + 8 * (unit?.vet ?? 0), fatigue: 0, ammo: T.ammo ?? 0, reloadLeft: 0,
     x, y: dir * (FIELD.deploy + backRow), facing: side === 'a' ? Math.PI / 2 : -Math.PI / 2,
     formation: 'line', state: 'ready', order: { kind: 'hold' }, engaged: null, dmg: 0, kills: 0,
+    era: extra.era ?? 0, // эпоха владельца: по ней клиент выбирает облик полка
   };
   b.regiments.push(r);
   return r;
@@ -105,12 +106,13 @@ export function startBattle(state, map, attacker, cell) {
     .filter((u) => u.id !== attacker.id && u.owner === attacker.owner && isTacticalType(u.type) && u.moves > 0)];
   const theirs = unitsAt(state, cell).map((id) => state.units[id]).filter((u) => u.owner !== attacker.owner && isTacticalType(u.type));
   const defOwner = city?.owner ?? theirs[0]?.owner;
-  mine.forEach((u, i) => makeRegiment(b, u, 'a', i, mine.length));
+  const eraOf = (id) => (isNeutralId(id) ? Math.min(3, Math.floor(state.turn / 50)) : state.nations[id]?.era ?? 0);
+  mine.forEach((u, i) => makeRegiment(b, u, 'a', i, mine.length, { era: eraOf(u.owner) }));
   const dCount = theirs.length + (city ? 1 : 0);
-  theirs.forEach((u, i) => makeRegiment(b, u, 'd', i, dCount));
+  theirs.forEach((u, i) => makeRegiment(b, u, 'd', i, dCount, { era: eraOf(u.owner) }));
   if (city) {
     const era = isNeutralId(city.owner) ? Math.min(3, Math.floor(state.turn / 50)) : state.nations[city.owner].era;
-    const militia = makeRegiment(b, null, 'd', theirs.length, dCount, { type: 'militia', owner: city.owner, str: 6 + era * 8 + city.pop });
+    const militia = makeRegiment(b, null, 'd', theirs.length, dCount, { type: 'militia', owner: city.owner, str: 6 + era * 8 + city.pop, era });
     militia.men = militia.menStart = Math.max(8, Math.round(militia.menMax * Math.max(0.35, city.hp / 100)));
   }
   b.city = city ? { id: city.id, name: city.name, x: 0, y: FIELD.deploy + 40, r: 95, walls: city.buildings.includes('walls') } : null;
@@ -394,7 +396,7 @@ export function battleView(b, { terrain = b?.tick === 0 } = {}) {
     id: b.id, tick: b.tick, seconds: Math.round(b.tick * TICK), timeLimit: TIME_LIMIT * TICK, field: FIELD, terrain: terrain ? b.terrain : null, city: b.city,
     attacker: b.attacker, defender: b.defender, human: b.human, result: b.result, auto: Boolean(b.auto),
     regiments: b.regiments.map((r) => ({
-      id: r.id, side: r.side, owner: r.owner, type: r.type, men: r.men, menStart: r.menStart, menMax: r.menMax,
+      id: r.id, side: r.side, owner: r.owner, type: r.type, era: r.era ?? 0, men: r.men, menStart: r.menStart, menMax: r.menMax,
       x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10, facing: Math.round(r.facing * 1000) / 1000,
       formation: r.formation, state: r.state, morale: Math.round(r.morale), fatigue: Math.round(r.fatigue), ammo: r.ammo,
       engaged: r.engaged, order: r.order?.kind ?? 'hold', target: r.order?.target ?? null, aim: r.aim ?? null, range: TROOPS[r.type].range ?? 0, kills: r.kills, ...frontage(r),
