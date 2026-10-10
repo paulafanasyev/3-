@@ -9,7 +9,7 @@ import { DOCTRINES } from './data/nations.js';
 import { loadMap } from './map.js';
 import { addUnit, pushEvent, updateExplored, claimAround } from './state.js';
 import {
-  cityYield, growthThreshold, itemCost, itemBlocker, techCost, isNeutralId, visibleCells, majorIds, PROJECTS,
+  cityYield, growthThreshold, isOccupied, itemCost, itemBlocker, techCost, isNeutralId, visibleCells, majorIds, PROJECTS,
 } from './rules.js';
 import { advanceUnit } from './commands.js';
 import { diplomacyTick } from './diplomacy.js';
@@ -49,8 +49,9 @@ function processCity(state, map, city, nation, totals) {
   totals.gold += y.gold;
   totals.science += y.science;
   totals.influence += 1;
-  // рост
-  city.food += y.food - y.upkeep;
+  // рост (в оккупированном городе рост стоит)
+  if (isOccupied(state, city)) city.food = Math.min(city.food, growthThreshold(city.pop) - 1);
+  else city.food += y.food - y.upkeep;
   if (city.food >= growthThreshold(city.pop)) {
     city.food -= growthThreshold(city.pop);
     city.pop = Math.min(20, city.pop + 1);

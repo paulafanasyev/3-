@@ -111,13 +111,31 @@ export function cityYield(state, map, city) {
     if (state.treaties.some((t) => t.type === 'research' && (t.a === city.owner || t.b === city.owner))) sciencePct += 0.1;
   }
   gold += city.pop * 0.4;
+  const mult = (isOccupied(state, city) ? OCCUPATION_YIELD : 1) * (1 - empirePenalty(state, city.owner));
   return {
     food,
-    prod: prod * (1 + prodPct),
-    gold,
-    science: science * (1 + sciencePct),
+    prod: prod * (1 + prodPct) * mult,
+    gold: gold * mult,
+    science: science * (1 + sciencePct) * mult,
     upkeep: city.pop * 2,
   };
+}
+
+/** Захваченный город: столько ходов оккупации, доход ×OCCUPATION_YIELD, рост стоит. */
+export const OCCUPATION_TURNS = 8;
+export const OCCUPATION_YIELD = 0.5;
+/** Размер державы: первые EMPIRE_FREE_CITIES городов бесплатно, дальше −2,5% к доходу за город, не больше −40%. */
+export const EMPIRE_FREE_CITIES = 12;
+export const EMPIRE_PENALTY_PER_CITY = 0.025;
+export const EMPIRE_PENALTY_CAP = 0.4;
+
+export const isOccupied = (state, city) => (city.occupiedUntil ?? 0) > state.turn;
+
+export function empirePenalty(state, owner) {
+  if (!own(state.nations, owner)) return 0;
+  let n = 0;
+  for (const c of Object.values(state.cities)) if (c.owner === owner) n += 1;
+  return Math.min(EMPIRE_PENALTY_CAP, Math.max(0, n - EMPIRE_FREE_CITIES) * EMPIRE_PENALTY_PER_CITY);
 }
 
 export const growthThreshold = (pop) => 10 + 5 * pop;
@@ -166,7 +184,7 @@ export function itemBlocker(state, map, city, item) {
     if (b.tech && !hasTech(state, nationId, b.tech)) return 'TECH_UNAVAILABLE';
     if (b.coastal && !map.coast[city.cell]) return 'ITEM_UNAVAILABLE';
     if (b.maxLat !== undefined && Math.abs(map.cells[city.cell].lat) > b.maxLat) return 'ITEM_UNAVAILABLE';
-    if (b.finale === 'ark' && state.nations[nationId].finale.path !== 'ark') return 'ITEM_UNAVAILABLE';
+    if (b.finale === 'ark' && (state.nations[nationId].finale.path !== 'ark' || !city.capital)) return 'ITEM_UNAVAILABLE';
     if (b.tech === undefined && b.era > state.nations[nationId].era) return 'TECH_UNAVAILABLE';
     return null;
   }
@@ -254,6 +272,7 @@ export class MinHeap {
 /** Кратчайший путь (по стоимости хода) для юнита. Возвращает массив ячеек без старта. */
 export function findPath(state, map, unit, target, { maxNodes = 3000, allowEnemyAt = null } = {}) {
   if (unit.cell === target) return [];
+  const embarkPathCost = Math.max(2, UNITS[unit.type].moves ?? 2) + 1; // посадка съедает целый ход
   const dist = new Map([[unit.cell, 0]]);
   const prev = new Map();
   const open = new MinHeap();
@@ -267,7 +286,8 @@ export function findPath(state, map, unit, target, { maxNodes = 3000, allowEnemy
     for (const n of map.neighbors[cell]) {
       if (!canEnter(state, map, unit, n)) continue;
       if (n !== target && n !== allowEnemyAt && blockedFor(state, unit, n)) continue;
-      const nd = d + Math.min(4, moveCost(map, n, unit, cell));
+      const step = moveCost(map, n, unit, cell);
+      const nd = d + (step === EMBARK_COST ? embarkPathCost : Math.min(4, step));
       if (nd < (dist.get(n) ?? Infinity)) {
         dist.set(n, nd);
         prev.set(n, cell);
@@ -374,6 +394,3 @@ export function militaryPower(state, nationId) {
   return Object.values(state.units).filter((u) => u.owner === nationId).reduce((s, u) => s + unitStrength(state, u), 0);
 }
 
-export function launchLatDiscount(map, city) {
-  return launchDiscount(map.cells[city.cell].lat);
-}
