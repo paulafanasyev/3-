@@ -6,6 +6,7 @@ import { BUILDINGS } from '../data/buildings.js';
 import { NATIONS } from '../data/nations.js';
 import { LEADERS } from '../data/leaders.js';
 import { TREATY_NAMES } from '../i18n/ru.js';
+import { LIVE_LAYERS } from './liveList.js';
 
 const MOOD = { hostile: ['враждебность', '#ff6b5e'], cold: ['холодность', '#8fb3ff'], neutral: ['сдержанность', '#c6ccd6'], warm: ['дружелюбие', '#8fe0a6'], friend: ['близкий союзник', '#5ee0b0'] };
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -27,6 +28,7 @@ export function createHud(root, actions) {
     <button class="k-end">Конец хода<small>Enter</small></button>
     <div class="k-toast glass" style="opacity:0"></div>
     <div class="k-offer glass" style="display:none"></div>
+    <div class="k-live glass"></div>
     <div class="k-hint glass">ЛКМ — выбрать · ПКМ — идти/атаковать · двойной щелчок — приблизить · F — основать город · Enter — конец хода</div>`;
   const $ = (s) => root.querySelector(s);
   let toastTimer = null;
@@ -112,7 +114,7 @@ export function createHud(root, actions) {
     el.style.display = 'block';
     const r = s.result;
     el.innerHTML = `<h4 class="k-h4">Пакт «Купол»</h4>Щит: <b>${Math.round(fz.shield).toLocaleString('ru')}</b>
-      <div class="k-bar"><i style="width:${Math.min(100, (fz.shield / 47000) * 100)}%"></i></div>
+      <div class="k-bar"><i style="width:${Math.min(100, (fz.shield / (fz.shieldTarget || 45000)) * 100)}%"></i></div>
       ${r ? `Итог: <b>${r.outcome === 'saved' ? 'Земля спасена' : r.outcome === 'partial' ? 'частичный успех' : 'провал'}</b>` : `<div class="k-acts">
         <button data-act="path" data-path="pact">Вступить в «Купол»</button><button data-act="path" data-path="ark">Строить Ковчег</button>
         <button data-act="contribute">Вложить половину золота</button></div>`}`;
@@ -129,7 +131,18 @@ export function createHud(root, actions) {
       <div class="k-row"><button class="k-btn" data-act="respond" data-offer="${o.id}" data-accept="1">Принять</button><button class="k-btn" data-act="respond" data-offer="${o.id}" data-accept="0">Отклонить</button></div>`;
   }
 
+  /** Панель «Живая Земля»: настоящие слои GEV, на игру не влияют. */
+  function live(state) {
+    $('.k-live').innerHTML = '<h4 class="k-h4">Живая Земля</h4>' + LIVE_LAYERS.map((l) => {
+      const st = state?.[l.key] ?? {};
+      const label = st.busy ? '…' : st.on ? (st.count ? String(st.count) : 'вкл') : 'выкл';
+      return `<button class="k-btn ${st.on ? 'on' : ''}" data-act="live" data-key="${l.key}" title="${esc(st.error ?? l.source)}">${esc(l.name)}<small>${esc(st.error && !st.on ? 'нет данных' : label)}</small></button>`;
+    }).join('');
+  }
+  live(null);
+
   return {
+    live,
     setStatus(status) { netStatus = status; },
     render(s, sel, log) {
       const me = s.nations.find((n) => n.id === s.nationId);
