@@ -29,9 +29,9 @@ export const LEADERS = Object.freeze({
   meridian: {
     id: 'meridian-tael',
     name: 'Таэль Ноэрис',
-    title: 'Первый посредник Лиги',
+    title: 'Первая посредница Лиги',
     portrait: 'meridian.png',
-    bio: 'Дипломат, примиривший горные кланы. Предпочитает договор войне, а коалицию одиночке.',
+    bio: 'Дипломат, примирившая горные кланы. Предпочитает договор войне, а коалицию одиночке.',
     traits: { pride: 0.3, greed: 0.35, honor: 0.8, cunning: 0.5, caution: 0.6, memory: 0.6 },
   },
   auris: {

@@ -90,7 +90,7 @@ export function createRealNameGuard(stopList = []) {
   };
 }
 
-const PROVINCE_SUFFIX = ['ия', 'ь', 'ия', 'ея', 'ания', 'ар'];
+const PROVINCE_SUFFIX = ['ия', 'ан', 'ия', 'ея', 'ания', 'ар'];
 
 function capitalize(word) {
   return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();

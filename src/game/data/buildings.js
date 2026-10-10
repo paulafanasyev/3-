@@ -13,7 +13,7 @@ export const BUILDINGS = Object.freeze({
   datacenter: { name: 'Сервер-кластер', era: 2, cost: 150, gold: 6, science: 4, tech: 'networks' },
   spaceport: { name: 'Космодром', era: 3, cost: 240, tech: 'satellites', maxLat: 35 },
   observatory: { name: 'Обсерватория дальнего космоса', era: 3, cost: 200, science: 8, tech: 'deepRadar' },
-  ark: { name: 'Ковчег', era: 3, cost: 260, finale: 'ark' },
+  ark: { name: 'Ковчег', era: 3, tech: 'heavyLift', cost: 260, finale: 'ark' },
 });
 
 /** Скидка на запуск с космодрома ближе к экватору: до −30% на экваторе (§6.2). */

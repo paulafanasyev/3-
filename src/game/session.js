@@ -17,10 +17,16 @@ export function createGameSession({ send, now = () => Date.now(), map = loadMap(
     send({ type: 'game:state', state });
   }
 
+  /** Читает requestId, не доверяя объекту: геттер или Proxy не должны уронить обработчик. */
   function requestIdOf(message) {
-    const id = message.requestId;
-    if (typeof id === 'string') return id.slice(0, 64);
-    return Number.isFinite(id) ? id : null;
+    try {
+      if (message === null || typeof message !== 'object') return null;
+      const id = message.requestId;
+      if (typeof id === 'string') return id.slice(0, 64);
+      return typeof id === 'number' && Number.isFinite(id) ? id : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Обработчик сообщения. Исключения не выходят наружу: клиент получает game:error. */
@@ -29,19 +35,19 @@ export function createGameSession({ send, now = () => Date.now(), map = loadMap(
       return route(message);
     } catch (error) {
       if (process.env.KUPOL_DEBUG) console.error(error);
-      send({ type: 'game:error', requestId: message && typeof message === 'object' ? requestIdOf(message) : null, error: 'INTERNAL', message: errorText('INTERNAL') });
+      send({ type: 'game:error', requestId: requestIdOf(message), error: 'INTERNAL', message: errorText('INTERNAL') });
       return true;
     }
   }
 
   // ограничения на ввод: размер сообщения и частота команд с одного соединения
-  const MAX_MESSAGE_CHARS = 16_384;
+  const MAX_MESSAGE_BYTES = 16_384; // байты UTF-8, а не символы: кириллица весит вдвое больше
   const MAX_COMMANDS_PER_SECOND = 40;
   let windowStart = 0;
   let windowCount = 0;
 
   function tooLarge(message) {
-    try { return JSON.stringify(message).length > MAX_MESSAGE_CHARS; } catch { return true; }
+    try { return Buffer.byteLength(JSON.stringify(message), 'utf8') > MAX_MESSAGE_BYTES; } catch { return true; }
   }
 
   function route(message) {
