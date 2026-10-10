@@ -12,6 +12,7 @@
 //
 //   node scripts/build-game-map.mjs --land data/game/sources/ne_50m_land.geojson \
 //     --imagery data/game/sources/blue-marble.jpg --out data/game/map.json
+import { applyGeoOverrides } from '../src/game/data/geoOverrides.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import sharp from 'sharp';
@@ -111,12 +112,15 @@ export async function buildMap({ land, imagery }) {
   for (let i = 0; i < cells.length; i += 1) {
     if (terrain[i] === 'O' && neighbors[i].some((x) => !isWater(terrain[x]))) terrain[i] = 'S';
   }
+  // 2. Ручные поправки: Великие озёра и Панамский перешеек (src/game/data/geoOverrides.js).
+  applyGeoOverrides(terrain.join(''), grid).split('').forEach((code, i) => { terrain[i] = code; });
   return {
     version: MAP_VERSION,
     gridLevel: GRID_LEVEL,
     sources: {
       land: 'Natural Earth 1:50m land (public domain)',
-      imagery: 'NASA Blue Marble (public domain)',
+      imagery: 'Снимок Blue Marble: укажите фактический файл и его лицензию (NASA visibleearth — public domain)',
+      overrides: 'Великие озёра и Панамский перешеек: src/game/data/geoOverrides.js',
     },
     // строки по 100 ячеек: файл легко читать и сравнивать в диффах
     terrain: Array.from({ length: Math.ceil(terrain.length / 100) }, (_, i) => terrain.slice(i * 100, i * 100 + 100).join('')),
