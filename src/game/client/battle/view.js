@@ -2,7 +2,8 @@
 // стрелы, трассеры, разрывы и павшие. Сервер присылает снимок боя (tactical.js → battleView),
 // сцена плавно интерполирует полки между снимками и сама анимирует солдат.
 // Модели: если в /game/units/manifest.json есть glTF для типа (CC0/CC-BY, см. CREDITS.md),
-// берётся он; иначе — процедурные низкополигональные фигуры, собранные здесь.
+// берётся он; иначе — кованая модель эпохи владельца (forge.js: скелет, скиннинг, клипы);
+// старые процедурные фигуры (models.js) — запасной путь.
 // Производительность: части солдата слиты по типу движения (тело, ноги, руки, оружие) в общие
 // геометрии с цветами в вершинах — 6–8 вызовов отрисовки на полк; эффекты берутся из пулов.
 import * as THREE from 'three';
@@ -13,6 +14,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { partsFor, C, METAL, isFoot, fallenGeometry } from './models.js';
+import { forgeUnit, forgeKey, forgeMaterial, forgeFallen } from './forge.js';
 
 const BIOME = {
   plain: ['#5d7a32', '#7a9142', '#6b5a3a'], forest: ['#435c27', '#5b7231', '#4f4430'], desert: ['#a88d58', '#c4a874', '#8f7148'],
@@ -47,15 +51,52 @@ function canvasTexture(size, draw, srgb = true) {
 // мягкая детальная текстура травы: низкий контраст, без «серого шума»
 const grassTexture = () => {
   const t = canvasTexture(512, (g, s) => {
-    g.fillStyle = '#d8d8d8'; g.fillRect(0, 0, s, s);
-    for (let i = 0; i < 14000; i += 1) {
-      const v = 185 + Math.floor(hash(i, 1) * 70);
-      g.fillStyle = `rgba(${v},${v},${v - 10},0.55)`;
-      g.fillRect(hash(i, 2) * s, hash(i, 3) * s, 1 + hash(i, 4) * 1.5, 2 + hash(i, 5) * 5);
+    g.fillStyle = '#d2d2cc'; g.fillRect(0, 0, s, s);
+    // мягкие пятна разной травы, затем штрихи стеблей и редкие тёмные проплешины
+    for (let i = 0; i < 260; i += 1) {
+      const x = hash(i, 11) * s; const y = hash(i, 12) * s; const r = 10 + hash(i, 13) * 46; const v = 175 + Math.floor(hash(i, 14) * 80);
+      const grd = g.createRadialGradient(x, y, 1, x, y, r); grd.addColorStop(0, `rgba(${v},${v + 4},${v - 18},0.35)`); grd.addColorStop(1, `rgba(${v},${v},${v},0)`);
+      g.fillStyle = grd; g.fillRect(x - r, y - r, r * 2, r * 2);
     }
+    for (let i = 0; i < 22000; i += 1) {
+      const v = 165 + Math.floor(hash(i, 1) * 90);
+      g.strokeStyle = `rgba(${v},${v + 6},${v - 22},0.6)`; g.lineWidth = 0.8 + hash(i, 4);
+      const x = hash(i, 2) * s; const y = hash(i, 3) * s; const l = 2 + hash(i, 5) * 6; const a = -1.57 + (hash(i, 6) - 0.5) * 0.9;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+    }
+    for (let i = 0; i < 400; i += 1) { g.fillStyle = `rgba(90,80,60,${0.12 + hash(i, 21) * 0.15})`; g.fillRect(hash(i, 22) * s, hash(i, 23) * s, 1 + hash(i, 24) * 3, 1 + hash(i, 25) * 3); }
   });
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(28, 21); t.anisotropy = 8; return t;
 };
+/** Мелкий рельеф земли: карта нормалей из шума (кочки, комья), чтобы свет ложился неровно. */
+const groundNormal = () => {
+  const n = 256; const h = new Float32Array(n * n);
+  for (let o = 0; o < 4; o += 1) { const f = 4 << o; for (let j = 0; j < n; j += 1) for (let i = 0; i < n; i += 1) {
+    const x = (i / n) * f; const y = (j / n) * f; const xi = Math.floor(x); const yi = Math.floor(y); const u = x - xi; const v = y - yi;
+    const c = (a, b) => hash(((a % f) + f) % f + o * 977, ((b % f) + f) % f + o * 131);
+    const su = u * u * (3 - 2 * u); const sv = v * v * (3 - 2 * v);
+    h[j * n + i] += ((c(xi, yi) * (1 - su) + c(xi + 1, yi) * su) * (1 - sv) + (c(xi, yi + 1) * (1 - su) + c(xi + 1, yi + 1) * su) * sv) / (1 << o);
+  } }
+  return canvasTexture(n, (g) => {
+    const img = g.createImageData(n, n);
+    for (let j = 0; j < n; j += 1) for (let i = 0; i < n; i += 1) {
+      const dx = (h[j * n + ((i + 1) % n)] - h[j * n + ((i + n - 1) % n)]) * 3; const dy = (h[((j + 1) % n) * n + i] - h[((j + n - 1) % n) * n + i]) * 3;
+      const l = Math.hypot(dx, dy, 1); const k = (j * n + i) * 4;
+      img.data[k] = (-dx / l * 0.5 + 0.5) * 255; img.data[k + 1] = (-dy / l * 0.5 + 0.5) * 255; img.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[k + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }, false);
+};
+/** Две выборки текстуры в разном масштабе: повтор плитки не читается на большом поле. */
+function antiTile(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#ifdef USE_MAP
+      vec4 tA = texture2D( map, vMapUv ); vec4 tB = texture2D( map, vMapUv * 0.31 + vec2( 0.37, 0.11 ) );
+      diffuseColor *= mix( tA, tB, 0.45 ) * 1.08;
+    #endif`);
+  };
+  return mat;
+}
 const puffTexture = (inner, outer) => canvasTexture(128, (g, s) => {
   const r = g.createRadialGradient(s / 2, s / 2, 2, s / 2, s / 2, s / 2);
   r.addColorStop(0, inner); r.addColorStop(1, outer); g.fillStyle = r; g.fillRect(0, 0, s, s);
@@ -82,107 +123,27 @@ function monTexture(color) {
   monCache.set(color, t); return t;
 }
 
-// ---------- процедурные модели ----------
+// ---------- процедурные модели (models.js) ----------
 function box(w, h, d, x = 0, y = 0, z = 0) { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); return g; }
 function cyl(rt, rb, h, x = 0, y = 0, z = 0, seg = 8) { const g = new THREE.CylinderGeometry(rt, rb, h, seg); g.translate(x, y, z); return g; }
-
-const C = {
-  skin: '#c99a74', cloth: '#2c2a27', lacquer: '#221d1d', steel: '#c9ced4', wood: '#6b4a2b', olive: '#4d5634',
-  dark: '#2a2d2e', straw: '#b39b62', gold: '#d4a640', khaki: '#6f6a4a', rubber: '#1b1c1c',
-};
-const METAL = new Set(['steel', 'gold', 'dark']);
-
-/** Части фигуры: geo, c (ключ цвета или 'team'), anim: body|legL|legR|armL|armR|spear|sword|bow|rifle|recoil|turret|rotor|static. */
-function partsFor(type) {
-  const legs = (c = 'cloth') => [
-    { geo: box(0.18, 0.86, 0.21, 0, -0.42, 0), c, anim: 'legL', at: [-0.11, 0.88, 0] },
-    { geo: box(0.18, 0.86, 0.21, 0, -0.42, 0), c, anim: 'legR', at: [0.11, 0.88, 0] },
-  ];
-  const arms = (c) => [
-    { geo: box(0.13, 0.64, 0.14, 0, -0.3, 0), c, anim: 'armL', at: [-0.32, 1.46, 0] },
-    { geo: box(0.13, 0.64, 0.14, 0, -0.3, 0), c, anim: 'armR', at: [0.32, 1.46, 0] },
-  ];
-  const head = { geo: new THREE.SphereGeometry(0.135, 10, 8).translate(0, 1.63, 0), c: 'skin', anim: 'body' };
-  const sashimono = [
-    { geo: cyl(0.015, 0.015, 1.3, 0, 1.75, -0.2, 4), c: 'wood', anim: 'body' },
-    { geo: box(0.02, 0.66, 0.36, 0, 2.07, -0.38), c: 'team', anim: 'body' }, // флажок за спиной, как у асигару
-  ];
-  switch (type) {
-    case 'warrior': return [...legs(), head, ...arms('team'),
-      { geo: box(0.48, 0.64, 0.3, 0, 1.18, 0), c: 'team', anim: 'body' },
-      { geo: box(0.5, 0.1, 0.32, 0, 0.9, 0), c: 'cloth', anim: 'body' },
-      { geo: new THREE.ConeGeometry(0.34, 0.18, 12).translate(0, 1.79, 0), c: 'straw', anim: 'body' }, // дзингаса
-      { geo: cyl(0.022, 0.022, 3.8, 0, 0, 0, 5), c: 'wood', anim: 'spear', at: [0.3, 1.15, 0.12] },
-      { geo: new THREE.ConeGeometry(0.05, 0.42, 5).translate(0, 2.1, 0), c: 'steel', anim: 'spear', at: [0.3, 1.15, 0.12] },
-      ...sashimono];
-    case 'swordsman': return [...legs(), head, ...arms('lacquer'),
-      { geo: box(0.52, 0.68, 0.34, 0, 1.18, 0), c: 'lacquer', anim: 'body' },
-      { geo: box(0.54, 0.2, 0.36, 0, 1.38, 0.01), c: 'team', anim: 'body' },
-      { geo: box(0.72, 0.14, 0.32, 0, 1.47, 0), c: 'lacquer', anim: 'body' }, // наплечники-содэ
-      { geo: box(0.56, 0.32, 0.34, 0, 0.84, 0), c: 'team', anim: 'body' }, // кусадзури
-      { geo: new THREE.SphereGeometry(0.18, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 1.67, 0), c: 'lacquer', anim: 'body' }, // кабуто
-      { geo: box(0.42, 0.03, 0.42, 0, 1.65, -0.02), c: 'lacquer', anim: 'body' },
-      { geo: new THREE.TorusGeometry(0.17, 0.02, 4, 12, Math.PI).translate(0, 1.86, 0.12), c: 'gold', anim: 'body' }, // маэдатэ
-      { geo: box(0.035, 1.1, 0.06, 0, 0.55, 0), c: 'steel', anim: 'sword', at: [0.32, 1.0, 0.22] },
-      { geo: box(0.08, 0.22, 0.08, 0, -0.05, 0), c: 'cloth', anim: 'sword', at: [0.32, 1.0, 0.22] },
-      { geo: box(0.05, 0.9, 0.06, 0, 0, 0).rotateX(1.2).translate(-0.3, 0.98, -0.05), c: 'lacquer', anim: 'body' }, // ножны-сая у бедра
-      { geo: box(0.04, 0.5, 0.05, 0, 0, 0).rotateX(1.0).translate(-0.24, 1.0, 0.12), c: 'gold', anim: 'body' }, // рукоять вакидзаси
-      ...sashimono];
-    case 'archer': return [...legs(), head, ...arms('team'),
-      { geo: box(0.46, 0.62, 0.28, 0, 1.18, 0), c: 'team', anim: 'body' },
-      { geo: new THREE.ConeGeometry(0.34, 0.16, 12).translate(0, 1.78, 0), c: 'straw', anim: 'body' },
-      { geo: new THREE.TorusGeometry(1.0, 0.02, 4, 18, Math.PI * 0.9).rotateZ(Math.PI / 2 - 0.45 * Math.PI).rotateY(Math.PI / 2), c: 'wood', anim: 'bow', at: [-0.32, 1.3, 0.28] },
-      { geo: cyl(0.09, 0.08, 0.6, 0.16, 1.3, -0.22, 6), c: 'wood', anim: 'body' }, // колчан
-      ...sashimono];
-    case 'militia': return [...legs(), head, ...arms('team'),
-      { geo: box(0.46, 0.62, 0.28, 0, 1.18, 0), c: 'team', anim: 'body' },
-      { geo: cyl(0.022, 0.022, 2.4, 0, 0, 0, 5), c: 'wood', anim: 'spear', at: [0.3, 1.1, 0.1] }];
-    case 'infantry': return [...legs('olive'), head, ...arms('olive'),
-      { geo: box(0.5, 0.64, 0.32, 0, 1.18, 0), c: 'olive', anim: 'body' },
-      { geo: box(0.52, 0.12, 0.34, 0, 1.08, 0), c: 'team', anim: 'body' }, // повязка нации
-      { geo: box(0.34, 0.4, 0.18, 0, 1.2, -0.24), c: 'khaki', anim: 'body' }, // ранец
-      { geo: new THREE.SphereGeometry(0.18, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2.2).translate(0, 1.65, 0), c: 'olive', anim: 'body' },
-      { geo: cyl(0.25, 0.25, 0.025, 0, 1.66, 0.02, 12), c: 'olive', anim: 'body' }, // поля каски
-      { geo: box(0.05, 0.07, 1.1, 0, 0, 0.3), c: 'dark', anim: 'rifle', at: [0.18, 1.3, 0.15] },
-      { geo: box(0.02, 0.02, 0.35, 0, 0, 0.98), c: 'steel', anim: 'rifle', at: [0.18, 1.3, 0.15] }];
-    case 'artillery': return [
-      { geo: cyl(0.16, 0.22, 2.8, 0, 0, 0, 10).rotateX(Math.PI / 2 - 0.12).translate(0, 1.0, 0.7), c: 'dark', anim: 'recoil' },
-      { geo: box(1.6, 1.1, 0.08, 0, 1.0, 0.25), c: 'olive', anim: 'static' }, // щит орудия
-      { geo: box(0.9, 0.35, 2.2, 0, 0.6, -0.5), c: 'team', anim: 'static' },
-      { geo: new THREE.TorusGeometry(0.6, 0.1, 6, 14).rotateY(Math.PI / 2).translate(-0.8, 0.6, 0), c: 'wood', anim: 'static' },
-      { geo: new THREE.TorusGeometry(0.6, 0.1, 6, 14).rotateY(Math.PI / 2).translate(0.8, 0.6, 0), c: 'wood', anim: 'static' },
-      { geo: box(0.42, 1.65, 0.32, -1.5, 0.82, -0.9), c: 'olive', anim: 'static' }, // расчёт
-      { geo: box(0.42, 1.65, 0.32, 1.5, 0.82, -1.2), c: 'olive', anim: 'static' }];
-    case 'tank': {
-      const wheels = [];
-      for (let k = 0; k < 5; k += 1) for (const sx of [-1.6, 1.6]) wheels.push({ geo: cyl(0.42, 0.42, 0.5, 0, 0, 0, 10).rotateZ(Math.PI / 2).translate(sx, 0.45, -2.4 + k * 1.2), c: 'rubber', anim: 'static' });
-      return [
-        { geo: box(3.0, 1.0, 6.4, 0, 1.0, 0), c: 'olive', anim: 'static' },
-        { geo: box(3.4, 0.25, 6.6, 0, 1.35, 0), c: 'olive', anim: 'static' }, // надгусеничные полки
-        { geo: box(0.75, 0.9, 6.9, -1.6, 0.48, 0), c: 'dark', anim: 'static' },
-        { geo: box(0.75, 0.9, 6.9, 1.6, 0.48, 0), c: 'dark', anim: 'static' },
-        ...wheels,
-        { geo: box(3.42, 0.28, 1.0, 0, 1.52, -2.4), c: 'team', anim: 'static' },
-        { geo: cyl(1.25, 1.45, 0.85, 0, 1.95, -0.3, 14), c: 'olive', anim: 'turret' },
-        { geo: cyl(0.4, 0.45, 0.3, 0.4, 2.5, -0.7, 10), c: 'olive', anim: 'turret' }, // люк командира
-        { geo: cyl(0.02, 0.02, 2.2, -0.7, 3.4, -1.1, 4), c: 'dark', anim: 'turret' }, // антенна
-        { geo: cyl(0.11, 0.13, 4.4, 0, 0, 0, 8).rotateX(Math.PI / 2).translate(0, 2.0, 2.6), c: 'dark', anim: 'turret' },
-        { geo: cyl(0.17, 0.17, 0.5, 0, 0, 0, 8).rotateX(Math.PI / 2).translate(0, 2.0, 4.7), c: 'dark', anim: 'turret' }];
-    }
-    case 'helicopter': return [
-      { geo: new THREE.CapsuleGeometry(0.95, 3.2, 4, 10).rotateX(Math.PI / 2), c: 'olive', anim: 'static' },
-      { geo: box(1.2, 0.5, 1.2, 0, 0.1, 1.9), c: 'dark', anim: 'static' }, // остекление
-      { geo: box(0.3, 0.5, 5, 0, 0.3, -4), c: 'olive', anim: 'static' },
-      { geo: box(0.1, 1.2, 0.8, 0, 0.8, -6.3), c: 'team', anim: 'static' },
-      { geo: box(3.6, 0.15, 0.5, 0, -0.3, 0.2), c: 'dark', anim: 'static' }, // пилоны с ракетами
-      { geo: box(13, 0.05, 0.38, 0, 1.2, 0), c: 'dark', anim: 'rotor' },
-      { geo: box(0.38, 0.05, 13, 0, 1.2, 0), c: 'dark', anim: 'rotor' }];
-    default: return [ // самолёты и беспилотники
-      { geo: new THREE.CapsuleGeometry(0.6, 6, 4, 10).rotateX(Math.PI / 2), c: 'olive', anim: 'static' },
-      { geo: box(10, 0.12, 1.8, 0, 0, 0.3), c: 'team', anim: 'static' },
-      { geo: box(3.4, 0.1, 1, 0, 0.2, -3.2), c: 'olive', anim: 'static' },
-      { geo: box(0.1, 1.4, 1, 0, 0.8, -3.3), c: 'olive', anim: 'static' }];
+const noUv = (g) => { g.deleteAttribute('uv'); return g; };
+/** Смещает вершины по хешу их положения: крона и хвоя неровные, швы не расходятся. */
+function jitter(g, amt) {
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i += 1) {
+    const x = p.getX(i); const y = p.getY(i); const z = p.getZ(i); const k = Math.round(x * 50) * 7 + Math.round(y * 50) * 131 + Math.round(z * 50) * 977;
+    p.setXYZ(i, x + (hash(k, 1) - 0.5) * amt * 2, y + (hash(k, 2) - 0.5) * amt, z + (hash(k, 3) - 0.5) * amt * 2);
   }
+  g.computeVertexNormals(); return g;
+}
+/** Цвет в вершинах по высоте: тёмный низ, светлый верх, лёгкий шум (имитация света в листве). */
+function shadeY(g, bottom, top, y0, y1) {
+  const p = g.attributes.position; const a = new THREE.Color(bottom); const b = new THREE.Color(top); const c = new THREE.Color(); const arr = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i += 1) {
+    const t = Math.min(1, Math.max(0, (p.getY(i) - y0) / (y1 - y0))); c.copy(a).lerp(b, t ** 0.8).multiplyScalar(0.88 + hash(i, 41) * 0.24);
+    arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(arr, 3)); return g;
 }
 
 /** Сливает части по типу движения (и металлу/нет) в одну геометрию с цветами в вершинах. */
@@ -194,9 +155,15 @@ function mergedParts(type, teamColor) {
     if (!groups.has(key)) groups.set(key, { anim: p.anim, at: p.at ?? null, metal, geos: [] });
     const g = p.geo.index ? p.geo.toNonIndexed() : p.geo.clone();
     g.deleteAttribute('uv');
-    const col = new THREE.Color(p.c === 'team' ? teamColor : C[p.c]);
+    const col = new THREE.Color(p.c === 'team' || p.c === 'teamDark' ? teamColor : C[p.c]); if (p.c === 'teamDark') col.multiplyScalar(0.42);
     const n = g.attributes.position.count; const arr = new Float32Array(n * 3);
-    for (let i = 0; i < n; i += 1) { arr[i * 3] = col.r; arr[i * 3 + 1] = col.g; arr[i * 3 + 2] = col.b; }
+    const foot = isFoot(type); const py = p.at ? p.at[1] : 0;
+    for (let i = 0; i < n; i += 1) {
+      // запечённая окклюзия: пехота темнеет к ногам, техника — к днищу
+      const y = g.attributes.position.getY(i) + py;
+      const ao = foot ? 0.62 + 0.38 * Math.min(1, Math.max(0, y / 1.5)) : 0.7 + 0.3 * Math.min(1, Math.max(0, y / 1.8));
+      arr[i * 3] = col.r * ao; arr[i * 3 + 1] = col.g * ao; arr[i * 3 + 2] = col.b * ao;
+    }
     g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
     groups.get(key).geos.push(g);
   }
@@ -208,7 +175,8 @@ const SHINY = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.
 const WOOD = new THREE.MeshStandardMaterial({ color: C.wood, roughness: 0.9 });
 
 const fieldToWorld = (x, y, h, out = new THREE.Vector3()) => out.set(x, h, -y);
-const SHARED = new Set([MATTE, SHINY, WOOD]); // общие для всех боёв: не освобождаются вместе с одним видом
+const shadowOnly = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }); // меш виден только в карте теней
+const SHARED = new Set([MATTE, SHINY, WOOD, shadowOnly]); // общие для всех боёв: не освобождаются вместе с одним видом
 const aoTex = canvasTexture(128, (g, s) => { const r = g.createRadialGradient(s / 2, s / 2, 4, s / 2, s / 2, s / 2); r.addColorStop(0, 'rgba(0,0,0,0.55)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, s, s); }, false);
 const aoGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 const headGeo = new THREE.ConeGeometry(1.2, 3, 3).rotateX(Math.PI / 2); // наконечник стрелки приказа
@@ -221,7 +189,7 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 1.12;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
@@ -237,25 +205,47 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.5, 0.35, 0.92);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
+  // виньетка и лёгкая цветокоррекция «под плёнку»: тёплые света, чуть приглушённые тени
+  const grade = new ShaderPass({
+    uniforms: { tDiffuse: { value: null } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+      void main(){ vec4 c = texture2D(tDiffuse, vUv); float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+        c.rgb = mix(vec3(l), c.rgb, 1.08); c.rgb *= mix(vec3(0.96, 0.98, 1.04), vec3(1.04, 1.0, 0.94), smoothstep(0.2, 0.8, l));
+        vec2 d = vUv - 0.5; c.rgb *= 1.0 - dot(d, d) * 0.55; gl_FragColor = c; }`,
+  });
+  composer.addPass(grade);
 
   // небо и свет: низкое тёплое солнце и дымка в цвет горизонта
-  const skyGeo = track(new THREE.SphereGeometry(2500, 32, 16));
-  const skyCols = [];
+  const SUN_DIR = new THREE.Vector3(-260, 230, 160).normalize();
+  const skyGeo = track(new THREE.SphereGeometry(2500, 48, 24));
+  const skyCols = []; const sv0 = new THREE.Vector3();
+  const zenith = new THREE.Color('#5d86bd'); const mid = new THREE.Color('#9fbad6'); const haze = new THREE.Color(HAZE); const glow = new THREE.Color('#ffe2b0');
   for (let i = 0; i < skyGeo.attributes.position.count; i += 1) {
-    const y = skyGeo.attributes.position.getY(i) / 2500;
-    const c = new THREE.Color(HAZE).lerp(new THREE.Color('#7f9fc4'), Math.min(1, Math.max(0, y * 1.6)) ** 0.8);
+    sv0.fromBufferAttribute(skyGeo.attributes.position, i).normalize();
+    const y = Math.max(0, sv0.y);
+    const c = haze.clone().lerp(mid, Math.min(1, y * 3.2) ** 0.9).lerp(zenith, Math.min(1, Math.max(0, (y - 0.25) * 1.6)));
+    const sunAmt = Math.max(0, sv0.dot(SUN_DIR)); c.lerp(glow, sunAmt ** 8 * 0.7 + sunAmt ** 120 * 0.3); // ореол вокруг солнца
     skyCols.push(c.r, c.g, c.b);
   }
   skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyCols, 3));
-  scene.add(new THREE.Mesh(skyGeo, track(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false }))));
+  const skyMesh = new THREE.Mesh(skyGeo, track(new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
+  scene.add(skyMesh);
+  // окружение для отражений и рассеянного света: то же небо, свёрнутое в PMREM
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new THREE.Scene(); envScene.add(skyMesh.clone());
+  const ground0 = new THREE.Mesh(new THREE.CircleGeometry(2400, 16).rotateX(-Math.PI / 2).translate(0, -20, 0), new THREE.MeshBasicMaterial({ color: '#4f5a33' })); envScene.add(ground0);
+  const envRT = pmrem.fromScene(envScene, 0.02); scene.environment = envRT.texture; scene.environmentIntensity = 0.55;
+  ground0.geometry.dispose(); ground0.material.dispose(); pmrem.dispose();
   scene.fog = new THREE.Fog(HAZE, 260, 1300);
-  scene.add(new THREE.HemisphereLight('#d6e2f5', '#5a4c34', 1.35));
+  scene.add(new THREE.HemisphereLight('#d6e2f5', '#5a4c34', 0.95));
   const sun = new THREE.DirectionalLight('#ffe0b0', 2.6);
-  sun.position.set(-260, 230, 160);
+  sun.position.copy(SUN_DIR).multiplyScalar(400); scene.add(sun.target);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -340, right: 340, top: 280, bottom: -280, near: 10, far: 900 });
-  sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.5; sun.shadow.radius = 2;
+  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.25; sun.shadow.radius = 3;
+  let shadowHalf = 340;
   scene.add(sun);
 
   let terrainKey = null;
@@ -274,7 +264,10 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
   fetch(`${modelBase}manifest.json`).then((r) => (r.ok ? r.json() : {})).then((manifest) => {
     const loader = new GLTFLoader();
     for (const [type, m] of Object.entries(manifest ?? {})) {
-      loader.load(modelBase + m.file, (gltf) => { models[type] = { ...m, gltf }; for (const r of regs.values()) if (r.type === type) r.rebuild = true; }, undefined, () => {});
+      loader.load(/^https?:/.test(m.file) ? m.file : modelBase + m.file, (gltf) => {
+        // выгрузка кузницы (и её правки в Blender): атрибуты _team/_metal → цвет нации и металл
+        gltf.scene.traverse((o) => { const g = o.geometry; if (o.isMesh && g.attributes._team) { g.setAttribute('team', g.attributes._team); g.setAttribute('metal', g.attributes._metal ?? new THREE.BufferAttribute(new Float32Array(g.attributes.position.count), 1)); o.userData.forge = true; } });
+        models[type] = { ...m, gltf }; for (const r of regs.values()) if (r.type === type.split('@')[0]) r.rebuild = true; }, undefined, () => {});
     }
   }).catch(() => {});
 
@@ -344,7 +337,8 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
     geo.computeVertexNormals();
     const nrm = geo.attributes.normal;
     for (let i = 0; i < pos.count; i += 1) { const slope = 1 - nrm.getY(i); if (slope > 0.12) { c.setRGB(cols[i * 3], cols[i * 3 + 1], cols[i * 3 + 2]).lerp(rock, Math.min(1, (slope - 0.12) * 4)); geo.attributes.color.setXYZ(i, c.r, c.g, c.b); } }
-    const ground = new THREE.Mesh(geo, track(new THREE.MeshStandardMaterial({ vertexColors: true, map: track(grassTexture()), roughness: 0.97 })));
+    const nrm2 = track(groundNormal()); nrm2.wrapS = nrm2.wrapT = THREE.RepeatWrapping; nrm2.repeat.set(60, 45);
+    const ground = new THREE.Mesh(geo, track(antiTile(new THREE.MeshStandardMaterial({ vertexColors: true, map: track(grassTexture()), normalMap: nrm2, normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.96 }))));
     ground.receiveShadow = true; ground.name = 'ground';
     world.add(ground);
     // лес: хвойные в лесу и тундре, лиственные на равнине; кроны из двух ярусов
@@ -352,31 +346,54 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
     const trees = [];
     t.woods.forEach((w, k) => { const n = Math.round((w.r * w.r) / 45); for (let i = 0; i < n; i += 1) { const a = hash(i, k) * 6.283; const rr = Math.sqrt(hash(i, k + 50)) * w.r; trees.push([w.x + Math.cos(a) * rr, w.y + Math.sin(a) * rr, 0.7 + hash(i, k + 99) * 0.7]); } });
     for (let i = 0; i < 300; i += 1) { const x = (hash(i, 7) - 0.5) * W * 0.95; const y = (hash(i, 8) - 0.5) * D * 0.95; if (Math.abs(x) > field.w * 0.55 || Math.abs(y) > field.h * 0.55) trees.push([x, y, 0.8 + hash(i, 9)]); }
-    const trunkGeo = cyl(0.25, 0.4, 4, 0, 2, 0, 6);
+    const trunkGeo = shadeY(mergeGeometries([cyl(0.22, 0.38, 4.4, 0, 2.2, 0, 7), cyl(0.07, 0.12, 2.0, 0, 0, 0, 5).rotateZ(0.8).translate(0.7, 3.6, 0), cyl(0.06, 0.1, 1.8, 0, 0, 0, 5).rotateZ(-0.9).translate(-0.6, 4.0, 0.2)].map(noUv)), '#4a3624', '#6e5238', 0, 5);
     const crownGeo = conifer
-      ? mergeGeometries([new THREE.ConeGeometry(2.3, 5.5, 8).translate(0, 5.6, 0), new THREE.ConeGeometry(1.7, 4.5, 8).translate(0, 8.4, 0)])
-      : mergeGeometries([new THREE.IcosahedronGeometry(2.6, 1).translate(0, 5.6, 0), new THREE.IcosahedronGeometry(1.9, 1).translate(0.9, 7.2, 0.4)]);
+      ? shadeY(jitter(mergeGeometries([[2.6, 3.2, 3.6], [2.1, 3.0, 5.6], [1.6, 2.8, 7.4], [1.0, 2.4, 9.0]].map(([r, h, y]) => new THREE.ConeGeometry(r, h, 10, 2).translate(0, y, 0)).map(noUv)), 0.25), '#1d3418', '#3f6233', 2, 10.5)
+      : shadeY(jitter(mergeGeometries([[2.4, 0, 5.6, 0], [1.9, 1.2, 6.6, 0.5], [1.8, -1.1, 6.4, -0.4], [1.6, 0.2, 7.7, -0.3], [1.5, -0.3, 6.2, 1.2]].map(([r, x, y, z]) => new THREE.IcosahedronGeometry(r, 1).translate(x, y, z)).map(noUv)), 0.35), '#2c4719', '#7a9a45', 4, 9.2);
     const trunks = new THREE.InstancedMesh(trunkGeo, WOOD, trees.length);
-    const crowns = new THREE.InstancedMesh(crownGeo, track(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true })), trees.length);
+    const crowns = new THREE.InstancedMesh(crownGeo, track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, flatShading: true })), trees.length);
+    trunks.material = track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
     const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const leaf = new THREE.Color(); const up = new THREE.Vector3(0, 1, 0); const v = new THREE.Vector3(); const sc = new THREE.Vector3();
     trees.forEach(([x, y, s], i) => {
       q.setFromAxisAngle(up, hash(i, 3) * 6.28);
       m.compose(v.set(x, groundHeight(t, field, x, y) - 0.3, -y), q, sc.set(s, s * (0.85 + hash(i, 4) * 0.4), s));
       trunks.setMatrixAt(i, m); crowns.setMatrixAt(i, m);
-      crowns.setColorAt(i, leaf.set(conifer ? '#2f4a26' : '#4d6a2a').offsetHSL((hash(i, 5) - 0.5) * 0.05, 0, (hash(i, 6) - 0.5) * 0.12));
+      crowns.setColorAt(i, leaf.setRGB(1, 1, 1).offsetHSL((hash(i, 5) - 0.5) * 0.06, 0, -hash(i, 6) * 0.22)); // разброс оттенка и яркости
     });
     for (const mesh of [trunks, crowns]) { mesh.castShadow = true; mesh.receiveShadow = true; world.add(mesh); }
     // трава и камни
-    const tuftGeo = mergeGeometries([0, 1, 2].map((k) => new THREE.PlaneGeometry(0.06, 0.5).translate(0, 0.25, 0).rotateZ((k - 1) * 0.35).rotateY(k * 1.05)));
-    const tufts = new THREE.InstancedMesh(tuftGeo, track(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, side: THREE.DoubleSide })), 9000);
-    for (let i = 0; i < 9000; i += 1) {
+    // пучки травы: 5 сужающихся стеблей, тёмные у корня и светлые на кончике, качаются на ветру
+    const blade = () => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([-0.035, 0, 0, 0.035, 0, 0, 0, 0.55, 0.05], 3)); return g; };
+    const tuftGeo = shadeY(mergeGeometries([0, 1, 2, 3, 4].map((k) => blade().scale(1, 0.75 + hash(k, 3) * 0.6, 1).rotateZ((k - 2) * 0.22).rotateY(k * 1.26))), '#55662e', '#d6dc95', 0, 0.6);
+    { const nr = new Float32Array(tuftGeo.attributes.position.count * 3); for (let i = 1; i < nr.length; i += 3) nr[i] = 1; tuftGeo.setAttribute('normal', new THREE.BufferAttribute(nr, 3)); } // свет как у земли: стебли не чернеют с изнанки
+    const grassMat = track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }));
+    grassMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = windTime;
+      sh.vertexShader = 'uniform float uTime;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+        vec4 wpos = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        float sway = sin(uTime * 1.7 + wpos.x * 0.15 + wpos.z * 0.11) * 0.5 + sin(uTime * 3.1 + wpos.x * 0.6) * 0.2;
+        transformed.x += sway * position.y * 0.35; transformed.z += sway * position.y * 0.12;`);
+      // нормаль стебля смотрит вверх с обеих сторон: изнанка не уходит в черноту
+      sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
+    };
+    const tufts = new THREE.InstancedMesh(tuftGeo, grassMat, 18000);
+    for (let i = 0; i < 18000; i += 1) {
       const x = (hash(i, 61) - 0.5) * field.w * 1.1; const y = (hash(i, 62) - 0.5) * field.h * 1.1;
       q.setFromAxisAngle(up, hash(i, 63) * 6.28);
-      const s = 0.7 + hash(i, 64) * 0.8;
-      m.compose(v.set(x, fieldHeight(t, field, x, y) - 0.05, -y), q, sc.set(s, s * (0.7 + hash(i, 65)), s));
+      const s = 0.6 + hash(i, 64) * 0.5;
+      m.compose(v.set(x, fieldHeight(t, field, x, y) - 0.05, -y), q, sc.set(s, s * (0.6 + hash(i, 65) * 0.5), s));
       tufts.setMatrixAt(i, m); tufts.setColorAt(i, leaf.copy(c1).offsetHSL((hash(i, 66) - 0.5) * 0.05, 0.05, (hash(i, 67) - 0.6) * 0.18));
     }
     tufts.receiveShadow = true; world.add(tufts);
+    // полевые цветы: белые, жёлтые и лиловые точки
+    const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.07, 0).translate(0, 0.32, 0), track(new THREE.MeshStandardMaterial({ roughness: 0.7 })), 2600);
+    const petals = ['#f2efe4', '#f0d35a', '#b58bd6', '#e8a0a8'];
+    for (let i = 0; i < 2600; i += 1) {
+      const cx = (hash(i % 120, 141) - 0.5) * field.w * 1.1; const cy = (hash(i % 120, 142) - 0.5) * field.h * 1.1; // цветы растут куртинами
+      const x = cx + (hash(i, 143) - 0.5) * 26; const y = cy + (hash(i, 144) - 0.5) * 26;
+      m.compose(v.set(x, fieldHeight(t, field, x, y), -y), q.identity(), sc.set(1, 0.6 + hash(i, 145), 1)); flowers.setMatrixAt(i, m); flowers.setColorAt(i, leaf.set(petals[i % 4]));
+    }
+    if (t.biome !== 'desert' && t.biome !== 'ice') world.add(flowers);
     const rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.9, 0), track(new THREE.MeshStandardMaterial({ color: '#8a857a', roughness: 0.95, flatShading: true })), 160);
     for (let i = 0; i < 160; i += 1) {
       const x = (hash(i, 71) - 0.5) * field.w * 1.2; const y = (hash(i, 72) - 0.5) * field.h * 1.2; const s = 0.4 + hash(i, 73) * (t.biome === 'mountain' ? 2.5 : 1.1);
@@ -385,8 +402,8 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
     }
     rocks.castShadow = rocks.receiveShadow = true; world.add(rocks);
     // кустарник по опушкам и полю
-    const bushGeo = mergeGeometries([new THREE.IcosahedronGeometry(0.9, 0).translate(0, 0.6, 0), new THREE.IcosahedronGeometry(0.7, 0).translate(0.7, 0.45, 0.2), new THREE.IcosahedronGeometry(0.6, 0).translate(-0.6, 0.4, -0.2)]);
-    const bushes = new THREE.InstancedMesh(bushGeo, track(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95, flatShading: true })), 420);
+    const bushGeo = shadeY(jitter(mergeGeometries([[0.9, 0, 0.6, 0], [0.7, 0.7, 0.45, 0.2], [0.6, -0.6, 0.4, -0.2], [0.5, 0.1, 0.95, -0.3]].map(([r, x, y, z]) => noUv(new THREE.IcosahedronGeometry(r, 1).translate(x, y, z))).map((g) => g.toNonIndexed())), 0.12), '#2a3f17', '#7d9a46', 0, 1.4);
+    const bushes = new THREE.InstancedMesh(bushGeo, track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true })), 420);
     for (let i = 0; i < 420; i += 1) {
       const w = t.woods[i % Math.max(1, t.woods.length)];
       const nearWood = w && i % 3 !== 0;
@@ -395,7 +412,7 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
       const s = 0.6 + hash(i, 95) * 1.1;
       q.setFromAxisAngle(up, hash(i, 96) * 6.28);
       m.compose(v.set(x, groundHeight(t, field, x, y) - 0.15, -y), q, sc.set(s, s * 0.8, s)); bushes.setMatrixAt(i, m);
-      bushes.setColorAt(i, leaf.set('#4a6328').offsetHSL((hash(i, 97) - 0.5) * 0.06, 0, (hash(i, 98) - 0.5) * 0.14));
+      bushes.setColorAt(i, leaf.setRGB(1, 1, 1).multiplyScalar(0.8 + hash(i, 98) * 0.2));
     }
     bushes.castShadow = bushes.receiveShadow = true; world.add(bushes);
     // дальние горы двумя планами в дымке
@@ -429,9 +446,7 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
       }
     }
     // павшие: торс, голова, раскинутые руки и ноги
-    const bodyGeo = mergeGeometries([box(0.44, 0.22, 0.62, 0, 0.11, 0.1), new THREE.SphereGeometry(0.13, 8, 6).translate(0, 0.12, 0.55),
-      box(0.17, 0.18, 0.85, -0.11, 0.09, -0.62).rotateY(0.12), box(0.17, 0.18, 0.85, 0.11, 0.09, -0.62).rotateY(-0.2),
-      box(0.6, 0.12, 0.13, -0.45, 0.07, 0.25).rotateY(0.3), box(0.6, 0.12, 0.13, 0.45, 0.07, 0.15).rotateY(-0.5)].map((g) => { g.deleteAttribute('uv'); return g; }));
+    const bodyGeo = forgeFallen(); // та же фигура, что и в строю, в последнем кадре падения
     bodies.meshes = new THREE.InstancedMesh(bodyGeo, track(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95 })), 4000);
     bodies.meshes.count = 0; bodies.count = 0; bodies.meshes.receiveShadow = true; bodies.meshes.castShadow = true; world.add(bodies.meshes);
     // кровь и следы: тёмные пятна под павшими
@@ -443,13 +458,21 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
   function makeRegiment(r) {
     const group = new THREE.Group();
     const color = new THREE.Color(colorOf(r.owner));
-    const model = models[r.type];
-    const entry = { id: r.id, type: r.type, group, color, meshes: [], parts: [], soldiers: [], cur: { ...r }, prev: { ...r }, t0: performance.now(), owned: [] };
+    const ext = models[`${r.type}@${r.era ?? 0}`] ?? models[r.type];
+    const forged = ext ? null : forgeUnit(forgeKey(r.type, r.era));
+    const model = ext ?? (forged ? { gltf: forged, scale: 1 } : null);
+    const entry = { id: r.id, type: r.type, group, color, meshes: [], parts: [], soldiers: [], cur: { ...r }, prev: { ...r }, t0: performance.now(), owned: [], mixT: 0 };
     if (model) {
-      // glTF: отдельный клон на солдата со своим микшером анимаций
+      // скелетная модель: отдельный клон на солдата со своим микшером; материал с цветом нации — один на полк
+      let forgeLike = Boolean(forged); model.gltf.scene.traverse((o) => { if (o.userData.forge) forgeLike = true; });
+      const mats = forgeLike ? [0, 1, 2].map((v) => forgeMaterial(colorOf(r.owner), v)) : null; // три оттенка на полк: строй не из клонов
+      if (mats) entry.owned.push(...mats);
       for (let i = 0; i < r.menMax; i += 1) {
-        const obj = SkeletonUtils.clone(model.gltf.scene); obj.scale.setScalar(model.scale ?? 1);
-        obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        const mat = mats ? mats[Math.floor(hash(i, 41) * 3)] : null;
+        const obj = SkeletonUtils.clone(model.gltf.scene); obj.scale.setScalar((model.scale ?? 1) * (forged?.kind === 'foot' ? 0.94 + hash(i, 21) * 0.12 : 1));
+        obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; if (mat && (forged || o.userData.forge)) o.material = mat; } });
+        obj.userData.turret = obj.getObjectByName('turret') ?? null;
+        obj.userData.lods = []; obj.traverse((o) => { if (o.userData.lod !== undefined) obj.userData.lods[o.userData.lod] = o; });
         const mixer = new THREE.AnimationMixer(obj);
         const clip = (name) => model.gltf.animations.find((a) => a.name === (model.clips?.[name] ?? name));
         entry.soldiers.push({ obj, mixer, actions: Object.fromEntries(['idle', 'walk', 'run', 'attack', 'die'].map((k) => [k, clip(k) ? mixer.clipAction(clip(k)) : null])), playing: null });
@@ -541,7 +564,7 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
           bodyM.compose(fieldToWorld(jx, jy, H(jx, jy), bodyV), bodyQ, bodyS);
           bodies.meshes.setMatrixAt(n, bodyM);
           bodies.falling.push({ n, x: jx, y: jy, yaw: hash(n, 9) * 6.28, born: now / 1000 + hash(n, 13) * 0.3 }); // падает, а не появляется лёжа
-          bodies.meshes.setColorAt(n, bodyC.copy(e.color).multiplyScalar(0.3).lerp(dark, 0.5));
+          bodies.meshes.setColorAt(n, bodyC.copy(e.color).multiplyScalar(0.45).lerp(dark, 0.6));
           bodyV.y += 0.04; bodyM.compose(bodyV, bodyQ, bodyS.set(0.8 + hash(n, 2) * 0.8, 1, 0.8 + hash(n, 3) * 0.8)); bodyS.set(1, 1, 1);
           bodies.stains.setMatrixAt(n, bodyM);
           bodies.count += 1;
@@ -647,6 +670,15 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
     if (visible && (!far || (Math.floor(time * 10) + e.id.length) % 3 === 0)) {
       const slots = slotsOf(r, time);
       if (e.soldiers.length) {
+        const mixDt = Math.min(0.25, e.mixT ? now / 1000 - e.mixT : 1 / 60); e.mixT = now / 1000; // дальний план обновляется реже — время клипа не отстаёт
+        const near = camera.position.distanceTo(sphere.center) < 140; // тени от бойцов — только вблизи: вдали их не видно, а треугольников вдвое больше
+        if (e.shadows !== near) { e.shadows = near; for (const s of e.soldiers) s.obj.traverse((o) => { if (o.isMesh && !o.userData.lod) o.castShadow = near; }); }
+        const lod = camera.position.distanceTo(sphere.center) > 55 ? 1 : 0; // дальний план — упрощённая модель на том же скелете
+        if (e.lod !== lod || e.lodShadow !== near) {
+          e.lod = lod; e.lodShadow = near;
+          // тень всегда отбрасывает упрощённая модель: силуэт тот же, треугольников втрое меньше
+          for (const s of e.soldiers) { const l = s.obj.userData.lods; if (l.length > 1) { l[0].visible = lod === 0; l[0].castShadow = false; l[1].visible = true; l[1].castShadow = near; l[1].material = lod === 1 ? l[0].material : shadowOnly; } }
+        }
         e.soldiers.forEach((s, i) => {
           s.obj.visible = i < slots.length;
           if (!s.obj.visible) return;
@@ -654,8 +686,12 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
           fieldToWorld(x, y, H(x, y) + air, s.obj.position); s.obj.rotation.y = yawBase + (r.state === 'rout' ? Math.PI : 0);
           const want = r.engaged ? 'attack' : moving ? (r.state === 'rout' ? 'run' : 'walk') : 'idle';
           const act = s.actions[want] ?? s.actions.idle;
-          if (act && s.playing !== act) { s.playing?.fadeOut(0.2); act.reset().fadeIn(0.2).play(); act.time = hash(i, 3) * act.getClip().duration; s.playing = act; }
-          s.mixer.update(1 / 60);
+          if (act && s.playing !== act) { s.playing?.fadeOut(0.2); act.reset().fadeIn(0.2).play(); act.time = hash(i, 3) * act.getClip().duration; act.timeScale = 0.9 + hash(i, 12) * 0.25; s.playing = act; }
+          if (r.engaged) s.obj.rotation.y += (hash(i, 8) - 0.5) * 0.7; // в свалке каждый рубит своего
+          if (s.obj.userData.turret) s.obj.userData.turret.rotation.y = aim;
+          if (air && r.type !== 'helicopter') s.obj.rotation.z = Math.sin(time * 0.7 + i) * 0.3;
+          if (air) s.obj.position.y += Math.sin(time + i) * 1.5;
+          s.mixer.update(mixDt);
         });
       } else {
         e.meshes.forEach((mesh, pi) => {
@@ -730,7 +766,7 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
     for (let i = bodies.falling.length - 1; i >= 0; i -= 1) {
       const b = bodies.falling[i]; const k = Math.min(1, Math.max(0, (clock - b.born) / 0.6));
       const ease = k * k * (3 - 2 * k);
-      fallQ.setFromEuler(fallE.set(-(1 - ease) * Math.PI / 2, b.yaw, (1 - ease) * 0.3, 'YXZ'));
+      fallQ.setFromEuler(fallE.set((1 - ease) * Math.PI / 2, b.yaw, (1 - ease) * 0.3, 'YXZ'));
       fieldToWorld(b.x, b.y, H(b.x, b.y) + (1 - ease) * 0.9, fallV);
       fallM.compose(fallV, fallQ, one3);
       bodies.meshes.setMatrixAt(b.n, fallM);
@@ -832,6 +868,7 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
   }
 
   let clock = 0; let lastT = 0;
+  const windTime = { value: 0 };
   function frame(time = performance.now()) {
     const t = time / 1000; const dt = Math.min(0.1, lastT ? t - lastT : 1 / 60); lastT = t; clock = t;
     const cpu0 = performance.now();
@@ -839,6 +876,11 @@ export function createBattleView(container, { colorOf = () => '#c8574d', modelBa
     moveCamera(dt);
     placeCamera();
     camera.updateMatrixWorld();
+    windTime.value = t;
+    // тени следуют за камерой: вблизи карта теней плотнее и солдаты отбрасывают чёткие тени
+    const half = Math.round(Math.min(340, Math.max(70, cam.dist * 1.25)) / 10) * 10;
+    sun.target.position.set(cam.target.x, 0, cam.target.z); sun.position.copy(SUN_DIR).multiplyScalar(400).add(sun.target.position);
+    if (half !== shadowHalf) { shadowHalf = half; Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half }); sun.shadow.camera.updateProjectionMatrix(); }
     frustum.setFromProjectionMatrix(projM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     for (const e of regs.values()) animateRegiment(e, t, time);
     animateFx(t, dt);
