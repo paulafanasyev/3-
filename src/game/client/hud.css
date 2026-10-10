@@ -1,0 +1,86 @@
+/* Интерфейс «Купола» поверх Cesium. Стеклянные панели, тёмная тема, шрифты из системы. */
+body.kupol { margin: 0; overflow: hidden; background: #000; }
+body.kupol > *:not(#kupol-globe):not(#kupol-root):not(#cesium-credits):not(script):not(style):not(link) { display: none !important; }
+#kupol-globe { position: fixed; inset: 0; }
+#kupol-root { --glass: rgba(8, 14, 24, .66); --line: rgba(160, 200, 255, .16); --txt: #e8eef6; --dim: #93a4b8; --gold: #f0c46a;
+  position: fixed; inset: 0; pointer-events: none; color: var(--txt); font-family: "Noto Sans", "Segoe UI", system-ui, sans-serif; font-size: 14px; z-index: 10; }
+#kupol-root * { box-sizing: border-box; }
+#kupol-root .glass { pointer-events: auto; background: var(--glass); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+.k-top { position: absolute; left: 16px; right: 16px; top: 12px; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 16px; }
+.k-logo { font-weight: 700; letter-spacing: .42em; font-size: 20px; color: var(--gold); }
+.k-sep { width: 1px; height: 28px; background: var(--line); }
+.k-turn { font-size: 12.5px; color: var(--dim); line-height: 1.25; } .k-turn b { color: var(--txt); font-size: 16px; }
+.k-chips { display: flex; gap: 8px; margin-left: auto; }
+.k-chip { display: flex; align-items: center; gap: 8px; padding: 7px 11px; border-radius: 10px; background: rgba(255, 255, 255, .05); }
+.k-chip i { font-style: normal; font-size: 10.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+.k-chip.red { background: rgba(220, 60, 50, .18); border: 1px solid rgba(255, 90, 80, .35); } .k-chip.red b { color: #ff8a7a; }
+.k-status { font-size: 11px; color: var(--dim); } .k-status.off { color: #ff8a7a; }
+.k-left { position: absolute; left: 16px; top: 80px; width: 310px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100% - 290px); overflow-y: auto; pointer-events: auto; scrollbar-width: thin; }
+.k-card { padding: 14px; }
+.k-head { display: flex; gap: 12px; align-items: center; }
+.k-por { width: 60px; height: 68px; border-radius: 10px; border: 2px solid; object-fit: cover; background: #1b2636; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; flex: none; }
+.k-nm { font-weight: 700; font-size: 17px; } .k-ld { font-size: 12.5px; color: var(--dim); }
+.k-h4 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+.k-list { display: flex; flex-direction: column; gap: 4px; overflow: auto; max-height: 300px; }
+.k-btn { pointer-events: auto; display: flex; justify-content: space-between; gap: 8px; align-items: center; width: 100%; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line);
+  background: rgba(120, 170, 255, .06); color: var(--txt); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.k-btn:hover { background: rgba(120, 170, 255, .16); } .k-btn small { color: var(--dim); }
+.k-btn.on { border-color: var(--gold); background: rgba(240, 196, 106, .14); }
+.k-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+.k-right { position: absolute; right: 16px; top: 80px; width: 330px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100% - 380px); overflow: auto; pointer-events: auto; }
+.k-lc { display: flex; gap: 11px; padding: 10px; align-items: flex-start; }
+.k-mood { display: inline-block; margin-top: 4px; font-size: 11px; padding: 2px 8px; border-radius: 9px; }
+.k-line { font-size: 12px; font-style: italic; color: #e9dcb8; margin-top: 4px; }
+.k-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.k-acts button { pointer-events: auto; font: inherit; font-size: 11.5px; padding: 4px 8px; border-radius: 7px; border: 1px solid var(--line); background: rgba(255, 255, 255, .05); color: var(--txt); cursor: pointer; }
+.k-acts button:hover { background: rgba(255, 255, 255, .14); } .k-acts button.war { border-color: rgba(255, 100, 90, .5); color: #ffb3a8; }
+.k-chron { position: absolute; left: 16px; bottom: 16px; width: 520px; padding: 12px 16px; font-size: 12.5px; line-height: 1.6; max-height: 170px; overflow: auto; }
+.k-chron b { color: var(--gold); font-weight: 600; margin-right: 6px; }
+.k-end { position: absolute; right: 16px; bottom: 16px; pointer-events: auto; padding: 16px 28px; border-radius: 14px; border: 0; cursor: pointer;
+  background: linear-gradient(180deg, #f2c76d, #c8902f); color: #1b1306; font: 700 16px "Noto Sans", sans-serif; letter-spacing: .04em; box-shadow: 0 8px 30px rgba(240, 190, 90, .35); }
+.k-end small { display: block; font-weight: 500; font-size: 11px; opacity: .75; } .k-end:disabled { filter: grayscale(.7); cursor: wait; }
+.k-fin { position: absolute; left: 50%; transform: translateX(-50%); bottom: 16px; width: 420px; padding: 12px 16px; font-size: 13px; }
+.k-bar { height: 8px; border-radius: 5px; background: rgba(255, 255, 255, .08); overflow: hidden; margin: 7px 0; } .k-bar i { display: block; height: 100%; background: linear-gradient(90deg, #55b6ff, #c7ecff); }
+.k-toast { position: absolute; left: 50%; top: 80px; transform: translateX(-50%); padding: 10px 16px; font-size: 13.5px; transition: opacity .3s; }
+.k-offer { position: absolute; left: 50%; top: 130px; transform: translateX(-50%); width: 420px; padding: 14px 16px; }
+.k-start { position: absolute; inset: 0; pointer-events: auto; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(0, 0, 0, .25), rgba(0, 0, 0, .75)); }
+.k-start .glass { width: 760px; padding: 26px; }
+.k-start h1 { margin: 0; font-size: 30px; letter-spacing: .4em; color: var(--gold); }
+.k-start p { color: var(--dim); margin: 6px 0 18px; }
+.k-nations { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.k-nations button { pointer-events: auto; display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); color: var(--txt); font: inherit; text-align: left; cursor: pointer; }
+.k-nations button:hover { background: rgba(255, 255, 255, .12); }
+.k-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); font-size: 12px; color: var(--dim); padding: 8px 14px; }
+.k-live { position: absolute; right: 16px; bottom: 96px; width: 230px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+
+/* ядерное оружие и разведка */
+#kupol-root .k-chip.nuke b { color: #ffd23a; }
+#kupol-root .k-chip.winter { border-color: rgba(168, 220, 255, .35); }
+#kupol-root .k-chip.winter b { color: #bfe6ff; }
+#kupol-root .k-nuke-hint { margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4;
+  background: rgba(255, 210, 58, .08); border: 1px solid rgba(255, 210, 58, .3); color: #f3e4b0; }
+#kupol-root .k-nuke-hint.sat { background: rgba(90, 209, 255, .07); border-color: rgba(90, 209, 255, .3); color: #cbefff; }
+#kupol-root .k-btn.locked { opacity: .45; cursor: not-allowed; }
+#kupol-root .k-alarm { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 40;
+  background: radial-gradient(circle, rgba(255, 220, 120, .35), rgba(255, 60, 20, .12) 40%, transparent 70%); animation: k-alarm 4.2s ease-out forwards; }
+#kupol-root .k-alarm.blue { background: radial-gradient(circle, rgba(90, 209, 255, .25), transparent 60%); }
+#kupol-root .k-alarm > div { text-align: center; padding: 18px 28px; border-radius: 14px; background: rgba(10, 12, 18, .82); border: 1px solid rgba(255, 210, 58, .5); }
+#kupol-root .k-alarm.blue > div { border-color: rgba(90, 209, 255, .5); }
+#kupol-root .k-alarm b { display: block; font-size: 26px; letter-spacing: .2em; color: #ffd23a; }
+#kupol-root .k-alarm.blue b { color: #5ad1ff; }
+#kupol-root .k-alarm span { display: block; margin-top: 6px; color: #e8e4da; font-size: 14px; max-width: 520px; }
+@keyframes k-alarm { 0% { opacity: 0; } 8% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* окно боя */
+#kupol-root .k-combat { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); width: 540px; padding: 18px 20px; z-index: 30; }
+#kupol-root .k-cb-title { text-align: center; font-size: 13px; letter-spacing: .18em; text-transform: uppercase; font-weight: 800; margin-bottom: 12px; }
+#kupol-root .k-cb-row { display: grid; grid-template-columns: 1fr 150px 1fr; gap: 12px; align-items: start; }
+#kupol-root .k-cb-side { text-align: center; }
+#kupol-root .k-cb-side img { width: 96px; height: 96px; border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+#kupol-root .k-cb-str { font-size: 26px; font-weight: 800; color: #f3ead8; margin: 2px 0 4px; }
+#kupol-root .k-cb-mods { font-size: 11.5px; color: #c6ccd6; line-height: 1.45; }
+#kupol-root .k-cb-mid { text-align: center; padding-top: 22px; }
+#kupol-root .k-cb-odds { font-size: 40px; font-weight: 900; line-height: 1; }
+#kupol-root .k-cb-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 10px 0 4px; background: #222; }
+#kupol-root .k-cb-bar i, #kupol-root .k-cb-bar b { display: block; height: 100%; }
+#kupol-root .k-cb-go { background: linear-gradient(180deg, #e9b14a, #c98a22); color: #1a1206; font-weight: 800; }

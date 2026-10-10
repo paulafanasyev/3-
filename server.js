@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { createGameSession } from './src/game/session.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -263,6 +264,10 @@ wss.on('connection', (socket) => {
 
   send(socket, { type: 'runtime:ready', version: 1 });
 
+  // «Купол»: одна партия на соединение, вся логика на сервере (src/game/session.js).
+  const game = createGameSession({ send: (payload) => send(socket, payload) });
+  socket.on('close', () => game.dispose());
+
   socket.on('message', (raw, isBinary) => {
     if (isBinary) {
       send(socket, { type: 'error', code: 'BINARY_NOT_SUPPORTED' });
@@ -287,7 +292,12 @@ wss.on('connection', (socket) => {
       return;
     }
 
-    // Stage 1 only verifies transport. Gameplay state is added in later stages.
+    if (message.type.startsWith('game:')) {
+      if (!game.handle(message)) send(socket, { type: 'error', code: 'UNKNOWN_GAME_MESSAGE' });
+      return;
+    }
+
+    // Остальные сообщения пока только подтверждают транспорт.
     send(socket, { type: 'runtime:ack', messageType: message.type });
   });
 });
