@@ -443,13 +443,6 @@ const OUTFIT = {
     rifle(k, { len: 0.95, stock: 'black', optic: true, mag: true, color: 'gun' });
   },
   // Космическая эпоха (3)
-  militia3(k) {
-    figure(k, { shirt: 'armor2', pants: 'dark', shin: 'dark', boot: 'black', fore: 'dark', hand: 'black' });
-    k.add('chest', G.rbox(0.36, 0.28, 0.26, 0, 1.3, 0.0, 0.3), 'teamMid');
-    k.add('head', G.ell(0.118, [1, 0.95, 1.05], 0, 1.68, 0, 16, 8, Math.PI * 0.55), 'armor2');
-    k.add('head', G.box(0.18, 0.04, 0.03, 0, 1.66, 0.105), 'visor');
-    rifle(k, { len: 0.75, stock: 'black', color: 'armor2', glow: true });
-  },
   infantry3(k) {
     figure(k, { shirt: 'armor', pants: 'armor2', shin: 'armor', boot: 'armor2', fore: 'armor', hand: 'dark', knee: 'armor2', belt: 'dark', hair: false, wide: 0.012 });
     // экзоброня: кираса, наплечники, гермошлем с визором, силовой ранец со свечением
@@ -552,19 +545,6 @@ const VEHICLE = {
     k.add('barrel', G.cyl(0.08, 0.1, 5.0, 0, 0, 0, 12).rotateX(Math.PI / 2).translate(0, 1.85, 4.0), 'gun');
     k.add('barrel', G.cyl(0.14, 0.14, 0.6, 0, 0, 0, 12).rotateX(Math.PI / 2).translate(0, 1.85, 3.5), 'gun');
   }, { attack: () => [recoil('barrel', [0, 0, 0], 0.55)] }, { parent: { barrel: 'turret' } }),
-  tank3: () => machine('tank3', (k) => { // Космическая эпоха: танк на воздушной подушке, рельсовые орудия
-    k.add('hover', G.plan([[-1.7, -3.3], [1.7, -3.3], [2.0, 1.4], [0.8, 3.6], [-0.8, 3.6], [-2.0, 1.4]], 0.7, 0.8), 'armor');
-    k.add('hover', G.plan([[-1.5, -3.0], [1.5, -3.0], [1.7, 1.3], [0.6, 3.2], [-0.6, 3.2], [-1.7, 1.3]], 0.12, 0.66), 'dark');
-    k.pair((s) => { for (const z of [-2.2, 0, 2.0]) k.add('hover', G.cyl(0.42, 0.5, 0.12, s * 1.3, 0.6, z, 16), 'glow'); k.add('hover', G.box(0.05, 0.25, 4.5, s * 1.95, 1.2, -0.3), 'team'); });
-    k.add('turret', G.plan([[-1.0, -1.4], [1.0, -1.4], [1.1, 0.4], [0.4, 1.3], [-0.4, 1.3], [-1.1, 0.4]], 0.55, 1.55), 'armor2');
-    k.add('turret', G.box(0.9, 0.04, 0.3, 0, 2.15, 0.6), 'visor');
-    k.pair((s) => k.add('barrel', G.box(0.16, 0.18, 3.6, s * 0.28, 1.85, 2.9), 'armor2'));
-    k.pair((s) => { for (let i = 0; i < 4; i += 1) k.add('barrel', G.box(0.22, 0.22, 0.06, s * 0.28, 1.85, 1.6 + i * 0.8), 'armor'); }); // кольца ускорителя
-    k.add('turret', G.cyl(0.05, 0.06, 0.9, 0.55, 2.6, -0.9, 8), 'armor2'); k.add('turret', G.ell(0.16, [1, 0.6, 1], 0.55, 3.08, -0.9, 12, 8), 'visor'); // мачта сенсоров
-    k.pair((s) => { k.add('hover', G.rbox(0.5, 0.45, 2.4, s * 2.0, 1.1, -0.8, 0.3), 'armor2'); for (let i = 0; i < 3; i += 1) k.add('hover', G.box(0.03, 0.1, 0.5, s * 2.26, 1.1, -1.6 + i * 0.8), 'glow'); }); // боковые модули
-    k.add('hover', G.box(1.6, 0.08, 0.5, 0, 1.52, -3.0), 'glow'); // кормовые дюзы
-    k.pair((s) => k.add('barrel', G.box(0.05, 0.05, 3.4, s * 0.28, 1.95, 3.0), 'glow'));
-  }, { idle: () => [bob('hover', 0.05, 0.12, 2.0)], walk: () => [bob('hover', 0.05, 0.08, 1.2)], attack: () => [bob('hover', 0.05, 0.12, 2.0), recoil('barrel', [0, 0, 0], 0.3, 0.8)] }, { parent: { turret: 'hover', barrel: 'turret' } }),
   gun1: () => machine('gun1', (k) => { // полевое орудие на деревянных колёсах + расчёт
     k.pair((s) => {
       k.add('body', G.torus(0.62, 0.06, Math.PI * 2, 6, 22).rotateY(Math.PI / 2).translate(s * 0.85, 0.64, 0), 'darkwood');
@@ -605,14 +585,17 @@ const VEHICLE = {
     k.add('rotor', G.box(12, 0.05, 0.35, 0, 1.25, -0.2), 'dark'); k.add('rotor', G.box(0.35, 0.05, 12, 0, 1.25, -0.2), 'dark');
     k.add('tail', G.box(0.05, 1.8, 0.18, 0.18, 1.05, -6.15), 'dark'); k.add('tail', G.box(0.05, 0.18, 1.8, 0.18, 1.05, -6.15), 'dark');
   }, Object.fromEntries(['idle', 'walk', 'run', 'attack'].map((c) => [c, () => [spin('rotor', [0, 1, 0], 4, 1), spin('tail', [1, 0, 0], 8, 1)]])), { kind: 'air', pivots: { rotor: [0, 0, -0.2], tail: [0.18, 1.05, -6.15] }, aoFoot: false }),
-  drone: () => machine('drone', (k) => { // ударный БПЛА: длинное крыло, V-хвост, толкающий винт
-    k.add('body', new THREE.CapsuleGeometry(0.38, 4.6, 6, 12).rotateX(Math.PI / 2), 'armor2');
-    k.add('body', G.ell(0.42, [1, 0.9, 1.3], 0, 0.12, 2.1, 12, 8), 'armor2');
-    k.add('body', G.box(14, 0.08, 0.75, 0, 0, 0.2), 'armor2'); k.pair((s) => k.add('body', G.box(2, 0.09, 0.77, s * 5.6, 0, 0.2), 'team'));
-    k.pair((s) => k.add('body', G.at(G.box(0.06, 1.3, 0.6), [0, 0, -s * 0.7], [s * 0.45, 0.45, -2.4]), 'armor2'));
-    k.pair((s) => k.add('body', G.cyl(0.08, 0.08, 1.2, 0, 0, 0, 8).rotateX(Math.PI / 2).translate(s * 2.4, -0.25, 0.2), 'dark'));
-    k.add('prop', G.box(1.6, 0.06, 0.12, 0, 0, -2.85), 'dark');
-  }, Object.fromEntries(['idle', 'walk', 'run', 'attack'].map((c) => [c, () => [spin('prop', [0, 0, 1], 6, 1)]])), { kind: 'air', pivots: { prop: [0, 0, -2.85] }, aoFoot: false }),
+  drone: () => machine('drone', (k) => { // ударный БПЛА: цельный фюзеляж с горбом спутниковой антенны, длинное сужающееся крыло, V-хвост, толкающий винт
+    k.add('body', G.lathe([[0.0, -2.75], [0.16, -2.68], [0.26, -2.3], [0.33, -1.2], [0.37, 0.2], [0.42, 1.3], [0.47, 1.95], [0.43, 2.45], [0.3, 2.8], [0.12, 2.98], [0.0, 3.02]], 1, 18).rotateX(Math.PI / 2).scale(1, 0.82, 1), 'armor2'); // фюзеляж одной деталью: без шва на носу
+    k.add('body', G.ell(0.34, [1, 0.55, 1.6], 0, 0.2, 1.75, 16, 8, Math.PI * 0.5), 'armor2'); // горб антенны спутниковой связи
+    k.add('body', G.ell(0.17, [1, 1, 1], 0, -0.36, 2.05, 14, 10), 'dark'); k.add('body', G.ell(0.07, [1, 1, 0.6], 0, -0.38, 2.2, 10, 8), 'glass'); // шар оптико-электронной станции
+    k.add('body', G.plan([[0.0, 0.7], [7.0, 0.38], [7.0, 0.02], [0.0, -0.32], [-7.0, 0.02], [-7.0, 0.38]], 0.07, 0.04), 'armor2'); // крыло с сужением к концам
+    k.pair((s) => k.add('body', G.box(1.6, 0.08, 0.38, s * 6.25, 0.06, 0.2), 'team'));
+    k.pair((s) => k.add('body', G.plan([[-0.65, 0.36], [0.65, 0.18], [0.65, -0.16], [-0.65, -0.34]], 0.05, -0.025).rotateZ(Math.PI / 2 - s * 0.82).translate(s * 0.44, 0.5, -2.25), 'armor2')); // V-хвост, сужается к концам
+    k.pair((s) => { for (const x of [2.0, 3.3]) { k.add('body', G.box(0.04, 0.16, 0.3, s * x, -0.08, 0.25), 'dark'); k.add('body', G.cyl(0.07, 0.07, 1.1, 0, 0, 0, 8).rotateX(Math.PI / 2).translate(s * x, -0.24, 0.2), 'white'); k.add('body', G.cone(0.07, 0.22, 0, 0, 0, 8).rotateX(Math.PI / 2).translate(s * x, -0.24, 0.86), 'white'); } }); // подвески с ракетами
+    k.add('body', G.cyl(0.12, 0.16, 0.25, 0, 0, 0, 12).rotateX(Math.PI / 2).translate(0, 0, -2.82), 'dark'); // втулка винта
+    k.add('prop', G.box(1.7, 0.05, 0.14, 0, 0, -2.98), 'dark'); k.add('prop', G.box(0.14, 1.7, 0.05, 0, 0, -2.98).rotateZ(0), 'dark'); k.add('prop', G.cone(0.1, 0.22, 0, 0, 0, 10).rotateX(-Math.PI / 2).translate(0, 0, -3.08), 'armor2');
+  }, Object.fromEntries(['idle', 'walk', 'run', 'attack'].map((c) => [c, () => [spin('prop', [0, 0, 1], 6, 1)]])), { kind: 'air', pivots: { prop: [0, 0, -2.98] }, aoFoot: false }),
   fighter: () => machine('fighter', (k) => { // реактивный истребитель: стреловидное крыло, два киля
     k.add('body', G.lathe([[0.0, -4.9], [0.55, -4.85], [0.68, -3.5], [0.7, 0.5], [0.6, 2.4], [0.42, 3.6], [0.18, 4.6], [0.0, 5.0]], 1, 16).rotateX(Math.PI / 2).scale(1, 0.85, 1), 'armor2'); // фюзеляж-«сигара» с плавным носом
     k.add('body', G.cone(0.05, 0.6, 0, 0, 0, 6).rotateX(Math.PI / 2).translate(0, 0, 5.25), 'dark'); // ПВД
@@ -670,15 +653,13 @@ export const FORGE = {
   helicopter: { era: 2, name: 'Ударный вертолёт', make: VEHICLE.helicopter },
   drone: { era: 2, name: 'Ударный беспилотник', make: VEHICLE.drone },
   fighter: { era: 2, name: 'Истребитель', make: VEHICLE.fighter },
-  militia3: { era: 3, name: 'Ополченец (Космическая эпоха)', make: () => humanoid('militia3', OUTFIT.militia3, 'rifle', { attackLen: 0.9 }) },
   infantry3: { era: 3, name: 'Экзопехотинец', make: () => humanoid('infantry3', OUTFIT.infantry3, 'rifle', { attackLen: 0.8 }) },
-  tank3: { era: 3, name: 'Танк на воздушной подушке', make: VEHICLE.tank3 },
 };
 /** Какая модель у типа полка в эпохе владельца: старшая доступная не новее эпохи. */
 const BY_TYPE = {
   warrior: ['ashigaru_yari'], archer: ['ashigaru_yumi'], swordsman: ['samurai'],
-  militia: ['peasant', 'militia1', 'militia2', 'militia3'], infantry: ['infantry1', 'infantry1', 'infantry2', 'infantry3'],
-  artillery: ['gun1', 'gun1', 'gun2', 'gun2'], tank: ['tank1', 'tank1', 'tank2', 'tank3'],
+  militia: ['peasant', 'militia1', 'militia2', 'militia2'], infantry: ['infantry1', 'infantry1', 'infantry2', 'infantry3'],
+  artillery: ['gun1', 'gun1', 'gun2', 'gun2'], tank: ['tank1', 'tank1', 'tank2', 'tank2'],
   helicopter: ['helicopter'], drone: ['drone'], fighter: ['fighter'], biplane: ['biplane'],
 };
 export function forgeKey(type, era = 0) {
