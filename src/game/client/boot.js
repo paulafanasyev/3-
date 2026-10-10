@@ -1,6 +1,7 @@
 // Клиент «Купола» на CesiumJS. Земля та же, что в God's Eye View: Google Photorealistic
-// 3D Tiles (спутниковые снимки и 3D-здания от орбиты до улицы), при недоступности —
-// глобус Cesium со спутниковой подложкой. Игровые слои ложатся поверх (layers.js).
+// 3D Tiles (спутниковые снимки и 3D-здания от орбиты до улицы), без ключа Google —
+// глобус Cesium: встроенный снимок Natural Earth (работает без ключей и интернета),
+// поверх него спутник Cesium ion или OpenStreetMap (imagery.js). Игровые слои ложатся поверх (layers.js).
 import * as Cesium from 'cesium';
 import './hud.css';
 import { createCellGeometry } from './geometry.js';
@@ -10,8 +11,11 @@ import { connectGame } from './net.js';
 import { createLiveLayers } from './liveLayers.js';
 import { openBattle } from './battle/hud.js';
 import { unitPortrait } from './icons.js';
+import { addFallbackImagery, SOURCE_TOAST } from './imagery.js';
 
 const START_VIEW = { lon: -98, lat: 22, height: 7_500_000 };
+/** Кому сообщить, что верхний слой подложки отвалился уже после старта (ставит bootKupol). */
+let onImageryChange = () => {};
 
 async function createViewer(container) {
   const cesiumToken = import.meta.env.CESIUM_ION_TOKEN;
@@ -46,14 +50,11 @@ async function createViewer(container) {
   } catch (error) {
     console.warn('[Купол] Google 3D Tiles недоступны, включаю запасной глобус:', error);
     viewer.scene.globe.show = true;
-    source = 'fallback';
-    try {
-      viewer.imageryLayers.add(Cesium.ImageryLayer.fromWorldImagery()); // спутниковая подложка Cesium Ion
-      source = 'ion';
-    } catch {
-      viewer.imageryLayers.add(new Cesium.ImageryLayer(new Cesium.OpenStreetMapImageryProvider({ url: 'https://tile.openstreetmap.org/' })));
-      source = 'osm';
-    }
+    // ошибки ion приходят асинхронно, поэтому каждый шаг ждём явно (imagery.js)
+    source = await addFallbackImagery(Cesium, viewer, {
+      online: typeof navigator === 'undefined' || navigator.onLine !== false,
+      onChange: (s) => onImageryChange(s),
+    });
   }
   await Cesium.GroundPrimitive.initializeTerrainHeights();
   return { viewer, source };
@@ -158,7 +159,8 @@ export async function bootKupol() {
   }
 
   hud.setStatus('connecting');
-  if (source !== 'google') hud.toast('Google 3D Tiles недоступны: показан запасной спутниковый глобус');
+  if (source !== 'google') hud.toast(SOURCE_TOAST[source] ?? SOURCE_TOAST.offline);
+  onImageryChange = (s) => hud.toast(SOURCE_TOAST[s] ?? SOURCE_TOAST.offline);
 
   async function endTurn() {
     if (!state || state.status !== 'running') return;

@@ -19,8 +19,12 @@
 ## Земля в клиенте
 
 Клиент (`/kupol`) показывает ту же Землю, что и God's Eye View: Google Photorealistic 3D Tiles
-через CesiumJS (условия Google Maps Platform, атрибуция выводится на экран), при недоступности —
-спутниковую подложку Cesium ion или OpenStreetMap (ODbL). Собственных снимков в репо нет.
+через CesiumJS (условия Google Maps Platform, атрибуция выводится на экран). Без ключа Google
+клиент показывает глобус Cesium (`src/game/client/imagery.js`): снизу всегда лежит снимок
+**Natural Earth II**, который поставляется внутри npm-пакета CesiumJS (`Assets/Textures/NaturalEarthII`,
+пакет под Apache-2.0; сам снимок Natural Earth — public domain) и работает без ключей и без интернета;
+поверх него — спутниковая подложка Cesium ion, а если она недоступна — OpenStreetMap (ODbL).
+Собственных снимков в репо нет.
 
 ## «Живая Земля» (слои GEV в игре)
 
