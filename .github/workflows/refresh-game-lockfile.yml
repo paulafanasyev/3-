@@ -1,0 +1,66 @@
+name: Refresh game lockfile and verify
+
+on:
+  push:
+    branches:
+      - feat/game-design
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/refresh-game-lockfile.yml'
+      - 'src/game/**'
+      - 'scripts/**'
+      - 'server.js'
+      - 'vite.config.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: game-lockfile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lockfile-and-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/game-design
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Regenerate package-lock.json
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit lockfile if changed
+        run: |
+          if ! git diff --quiet -- package-lock.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "build: update lockfile for game dependencies"
+            git push origin HEAD:feat/game-design
+          else
+            echo "package-lock.json already up to date"
+          fi
+
+      - name: Verify clean reproducible install
+        run: npm ci
+
+      - name: Run unit and game tests
+        run: |
+          npm test
+          npm run test:game
+
+      - name: Build production client
+        run: npm run build
