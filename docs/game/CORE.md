@@ -218,6 +218,6 @@
 npm run game:dev                    # dev-сервер с игрой: http://localhost:5173/kupol
 npm run build && npm start          # продакшен: http://localhost:4173/kupol
 node --test src/game/*.test.mjs src/game/client/*.test.mjs  # тесты ядра и клиентской сетки
-нпм run game:balance -- --games 40  # прогон баланса ИИ против ИИ
+npm run game:balance -- --games 40  # прогон баланса ИИ против ИИ
 npm run game:map -- --land <ne_50m_land.geojson> --imagery <blue-marble.jpg>  # пересборка местности
 ```
