@@ -85,7 +85,15 @@ async function postFailureComment(args, output) {
     const header = execFileSync('git', ['config', '--get', 'http.https://github.com/.extraheader'], { encoding: 'utf8' }).trim();
     const basic = header.split(' ').pop();
     const token = Buffer.from(basic, 'base64').toString('utf8').split(':').pop();
-    const body = `npm test: node ${args.slice(0, 3).join(' ')} ... failed on Node ${process.versions.node}\n\n\`\`\`\n${failureReport(output) || output.slice(-15000)}\n\`\`\``;
+    // file-level failures carry no subtest detail: rerun each failing file alone with TAP output
+    const files = [...new Set([...output.matchAll(/^test at (\S+?):\d+:\d+$/gm)].map((m) => m[1]))].slice(0, 3);
+    const reruns = files.map((file) => {
+      const r = spawnSync(process.execPath, ['--test', '--test-reporter=tap', file], { cwd: process.cwd(), env: process.env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      const text = `${r.stdout}\n${r.stderr}`;
+      const lines = text.split('\n').filter((line) => !/^\s*ok \d+ /.test(line) && !/^\s*# Subtest:/.test(line) && !/^\s*duration_ms:/.test(line) && !/^\s*(type: 'test'|\.\.\.|---)$/.test(line));
+      return `### ${file} (exit ${r.status})\n${lines.join('\n').slice(-9000)}`;
+    });
+    const body = `npm test: node ${args.slice(0, 3).join(' ')} ... failed on Node ${process.versions.node}\n\n\`\`\`\n${failureReport(output, 6000) || output.slice(-6000)}\n\n${reruns.join('\n\n')}\n\`\`\``;
     const res = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/commits/${process.env.GITHUB_SHA}/comments`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'content-type': 'application/json' },
