@@ -15,6 +15,7 @@ export const UNITS = Object.freeze({
   drone: { name: 'Ударный беспилотник', era: 2, cost: 100, str: 40, moves: 12, domain: 'air', tech: 'drones', resource: 'silicon', model: 'mq9.glb' },
   helicopter: { name: 'Вертолёт', era: 2, cost: 90, str: 35, moves: 6, domain: 'air', tech: 'radio', model: 'bell206.glb' },
   recon: { name: 'Самолёт-разведчик', era: 2, cost: 70, str: 0, moves: 14, domain: 'air', tech: 'computers', civilian: true, sight: 4, model: 'citation2.glb' },
+  icbm: { name: 'Баллистическая ракета', era: 2, cost: 200, str: 0, moves: 0, domain: 'space', tech: 'fission', resource: 'rare', civilian: true, needs: 'silo', model: null },
   satellite: { name: 'Спутник', era: 3, cost: 150, str: 0, moves: 0, domain: 'space', tech: 'satellites', resource: 'silicon', civilian: true, needs: 'spaceport', model: null },
   interceptor: { name: 'Перехватчик', era: 3, cost: 220, str: 0, moves: 0, domain: 'space', tech: 'kinetic', resource: 'rare', civilian: true, needs: 'spaceport', model: null },
 });

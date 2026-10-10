@@ -1,4 +1,4 @@
-// Дерево технологий: 4 эпохи по 6 технологий (DESIGN.md §7).
+// Дерево технологий: 4 эпохи, в каждой 6–7 технологий (DESIGN.md §7; «Ядерное деление» — седьмая в эпохе 2).
 export const ERAS = Object.freeze([
   { id: 0, name: 'Древность', cost: 130 },
   { id: 1, name: 'Индустрия', cost: 740 },
@@ -28,6 +28,7 @@ export const TECHS = Object.freeze({
   drones: { era: 2, name: 'Беспилотники', req: ['computers'] },
   networks: { era: 2, name: 'Глобальные сети', req: ['computers'] },
   rocketry: { era: 2, name: 'Ракетостроение', req: ['jet'] },
+  fission: { era: 2, name: 'Ядерное деление', req: ['rocketry'] },
   satellites: { era: 3, name: 'Орбитальные спутники', req: ['rocketry'] },
   heavyLift: { era: 3, name: 'Тяжёлые носители', req: ['rocketry'] },
   deepRadar: { era: 3, name: 'Радар дальнего космоса', req: ['satellites', 'heavyLift'] },

@@ -11,6 +11,7 @@ export const BUILDINGS = Object.freeze({
   airfield: { name: 'Аэродром', era: 1, cost: 70, tech: 'flight' },
   research: { name: 'Исследовательский центр', era: 2, cost: 160, sciencePct: 0.4, tech: 'computers' },
   datacenter: { name: 'Сервер-кластер', era: 2, cost: 150, gold: 6, science: 4, tech: 'networks' },
+  silo: { name: 'Ракетная шахта', era: 2, cost: 120, tech: 'fission' },
   spaceport: { name: 'Космодром', era: 3, cost: 240, tech: 'satellites', maxLat: 35 },
   observatory: { name: 'Обсерватория дальнего космоса', era: 3, cost: 200, science: 8, tech: 'deepRadar' },
   ark: { name: 'Ковчег', era: 3, tech: 'heavyLift', cost: 260, finale: 'ark' },
