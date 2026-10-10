@@ -126,10 +126,10 @@ export function cityYield(state, map, city) {
 /** Захваченный город: столько ходов оккупации, доход ×OCCUPATION_YIELD, рост стоит. */
 export const OCCUPATION_TURNS = 8;
 export const OCCUPATION_YIELD = 0.5;
-/** Размер державы: первые EMPIRE_FREE_CITIES городов бесплатно, дальше −2,5% к доходу за город, не больше −40%. */
+/** Размер державы: первые EMPIRE_FREE_CITIES городов бесплатно, дальше −2,8% к доходу за город, не больше −45%. */
 export const EMPIRE_FREE_CITIES = 12;
-export const EMPIRE_PENALTY_PER_CITY = 0.025;
-export const EMPIRE_PENALTY_CAP = 0.4;
+export const EMPIRE_PENALTY_PER_CITY = 0.028;
+export const EMPIRE_PENALTY_CAP = 0.45;
 
 /** Ядерная зима (см. nuclear.js): −5% еды за удар за последние 30 ходов, не ниже −30%. */
 export function nuclearWinter(state) {
