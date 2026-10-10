@@ -6,6 +6,7 @@ export function connectGame({ onState, onResult, onError, onStatus }) {
   let seq = 0;
   const pending = new Map();
   const queue = [];
+  const battleListeners = new Set(); // кадры тактического боя, которые сервер шлёт сам
 
   function open() {
     onStatus?.('connecting');
@@ -23,6 +24,7 @@ export function connectGame({ onState, onResult, onError, onStatus }) {
       let msg;
       try { msg = JSON.parse(event.data); } catch { return; }
       if (msg.type === 'game:state') onState?.(msg.state);
+      else if (msg.type === 'game:battle') for (const fn of battleListeners) fn(msg);
       else if (msg.type === 'game:command:result') {
         const p = pending.get(msg.requestId);
         if (p) { pending.delete(msg.requestId); p.resolve(msg); }
@@ -55,6 +57,10 @@ export function connectGame({ onState, onResult, onError, onStatus }) {
     newGame: (setup, seed) => raw({ type: 'game:new', setup, ...(Number.isInteger(seed) ? { seed } : {}) }),
     command: (command) => request({ type: 'game:command', command }),
     endTurn: () => request({ type: 'game:endTurn' }),
+    /** Скорость боя на сервере: 0 — пауза, 1, 2, 4. */
+    battleSpeed: (speed) => request({ type: 'game:battleSpeed', speed }),
+    /** Подписка на кадры боя; возвращает отписку. */
+    onBattle: (fn) => { battleListeners.add(fn); return () => battleListeners.delete(fn); },
     close: () => socket?.close(),
   };
 }

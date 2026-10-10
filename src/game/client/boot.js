@@ -8,6 +8,8 @@ import { createWorldLayers } from './layers.js';
 import { createHud } from './hud.js';
 import { connectGame } from './net.js';
 import { createLiveLayers } from './liveLayers.js';
+import { openBattle } from './battle/hud.js';
+import { unitPortrait } from './icons.js';
 
 const START_VIEW = { lon: -98, lat: 22, height: 7_500_000 };
 
@@ -166,7 +168,19 @@ export async function bootKupol() {
     if (!r.ok) hud.toast(r.message ?? 'Ход не завершён');
   }
 
-  // мышь: ЛКМ — выбор, ПКМ — приказ идти, двойной щелчок — подлёт к земле (как в God's Eye View)
+  // тактический бой в реальном времени: сервер ведёт часы и шлёт кадры сам
+  async function runTactical(unit, cell) {
+    const r = await send({ kind: 'battle', unitId: unit.id, to: cell });
+    if (!r.ok) return;
+    const colorOf = (id) => state.nations.find((n) => n.id === id)?.color ?? state.neutrals.find((n) => n.id === id)?.color ?? '#9a8f7a';
+    const battle = openBattle({ net, first: r.battle, colorOf, iconOf: (type, color) => `<img src="${unitPortrait(type, color, 46)}" alt="">` });
+    const combat = await battle.finished;
+    if (combat) hud.toast(combat.won ? (combat.captured ? 'Город взят' : 'Победа в бою') : 'Бой проигран');
+    selection.cell = myUnit(selection.unitId)?.cell ?? selection.cell;
+    redraw();
+  }
+
+  // мышь: ЛКМ — выбор, ПКМ — приказ идти, Shift+ПКМ — тактический бой, двойной щелчок — подлёт к земле (как в God's Eye View)
   const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   handler.setInputAction((e) => {
     const hit = layers.pick(e.position);
@@ -204,6 +218,7 @@ export async function bootKupol() {
     if (odds?.ok && odds.preview) {
       const go = await hud.combatPreview(odds.preview, state);
       if (!go) return;
+      if (go === 'tactical') { await runTactical(unit, cell); return; }
     }
     send({ kind: 'move', unitId: selection.unitId, to: cell }).then((r) => {
       const u = myUnit(selection.unitId);
@@ -212,6 +227,18 @@ export async function bootKupol() {
       redraw();
     });
   }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+  // Shift+ПКМ по врагу рядом — сразу командовать боем самому, без окна шансов
+  handler.setInputAction(async (e) => {
+    const unit = state && myUnit(selection.unitId);
+    if (!unit) return;
+    const hit = layers.pick(e.position);
+    const cell = hit?.kind === 'city' ? state.cities.find((x) => x.id === hit.id)?.cell : hit?.cell;
+    if (cell === undefined || cell === null) return;
+    const odds = await net.command({ kind: 'odds', unitId: unit.id, to: cell }).catch(() => null);
+    if (!odds?.ok || !odds.preview) { hud.toast('Shift+ПКМ — по врагу на соседней клетке'); return; }
+    if (!odds.preview.tactical) { hud.toast('Этот бой нельзя вести вручную'); return; }
+    await runTactical(unit, cell);
+  }, Cesium.ScreenSpaceEventType.RIGHT_CLICK, Cesium.KeyboardEventModifier.SHIFT);
   handler.setInputAction((e) => {
     const hit = layers.pick(e.position);
     const cell = hit?.kind === 'city' ? state?.cities.find((x) => x.id === hit.id)?.cell : hit?.cell;
