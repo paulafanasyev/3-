@@ -52,6 +52,8 @@ export function hasResource(state, nationId, resource) {
 
 // ---------- доходы ----------
 export function cellYield(state, map, cell, ownerId) {
+  // радиоактивные осадки: клетка ничего не даёт, пока не очистится
+  if ((state.fallout?.[cell] ?? 0) > state.turn) return { food: 0, prod: 0, gold: 0 };
   const code = map.terrain[cell];
   const t = TERRAIN[code];
   let food = t.food;
@@ -113,7 +115,7 @@ export function cityYield(state, map, city) {
   gold += city.pop * 0.4;
   const mult = (isOccupied(state, city) ? OCCUPATION_YIELD : 1) * (1 - empirePenalty(state, city.owner));
   return {
-    food,
+    food: food * nuclearWinter(state),
     prod: prod * (1 + prodPct) * mult,
     gold: gold * mult,
     science: science * (1 + sciencePct) * mult,
@@ -128,6 +130,14 @@ export const OCCUPATION_YIELD = 0.5;
 export const EMPIRE_FREE_CITIES = 12;
 export const EMPIRE_PENALTY_PER_CITY = 0.025;
 export const EMPIRE_PENALTY_CAP = 0.4;
+
+/** Ядерная зима (см. nuclear.js): −5% еды за удар за последние 30 ходов, не ниже −30%. */
+export function nuclearWinter(state) {
+  const strikes = state.nuclear?.strikes;
+  if (!strikes?.length) return 1;
+  const recent = strikes.filter((x) => !x.intercepted && state.turn - x.turn < 30).length;
+  return Math.max(0.7, 1 - 0.05 * recent);
+}
 
 export const isOccupied = (state, city) => (city.occupiedUntil ?? 0) > state.turn;
 
@@ -173,7 +183,7 @@ export function itemBlocker(state, map, city, item) {
     const u = UNITS[item.id];
     if (u.tech && !hasTech(state, nationId, u.tech)) return 'TECH_UNAVAILABLE';
     if (u.resource && !hasResource(state, nationId, u.resource)) return 'NEED_RESOURCE';
-    if (u.needs && !city.buildings.includes(u.needs)) return 'NEED_SPACEPORT';
+    if (u.needs && !city.buildings.includes(u.needs)) return u.needs === 'silo' ? 'NEED_SILO' : 'NEED_SPACEPORT';
     if (u.domain === 'sea' && !map.coast[city.cell]) return 'ITEM_UNAVAILABLE';
     return null;
   }
@@ -372,6 +382,8 @@ export function visibleCells(state, map, nationId) {
   const allies = [nationId, ...state.treaties.filter((t) => t.type === 'alliance' && (t.a === nationId || t.b === nationId)).map((t) => (t.a === nationId ? t.b : t.a))];
   const set = new Set();
   for (const id of allies) for (const [cell, r] of visionSources(state, id)) for (const c of cellsWithin(map, cell, r)) set.add(c);
+  // орбитальная разведка спутником (только своя, союзникам не передаётся)
+  for (const z of state.recon?.[nationId] ?? []) if (z.until > state.turn) for (const c of cellsWithin(map, z.cell, 3)) set.add(c);
   return set;
 }
 
@@ -393,4 +405,3 @@ export function treatyBetween(state, a, b, type) {
 export function militaryPower(state, nationId) {
   return Object.values(state.units).filter((u) => u.owner === nationId).reduce((s, u) => s + unitStrength(state, u), 0);
 }
-
