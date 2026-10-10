@@ -36,7 +36,7 @@
 
 | Файл | Автор | Лицензия | Как сделано |
 |---|---|---|---|
-| `src/game/faces/avatar-svg.js` (**в репо не коммитится**, в `.gitignore`; положить файл вручную) | Pavel Afanasev, Sergei Mikhailov (репо [paulafanasyev/ai-english-teacher](https://github.com/paulafanasyev/ai-english-teacher), `apps/web/src/avatar/svg.js`, blob `ba68462d70476ca48b665b61ec9fa97209113172`) | **Proprietary © 2026**, используется по решению владельца репо (Pavel Afanasev). Не входит в MIT-лицензию этого форка. Перед публикацией нужно письменное согласие соавтора Sergei Mikhailov | Скопирован без изменений |
+| `src/game/faces/avatar-svg.js` | Pavel Afanasev, единственный автор и владелец (репо [paulafanasyev/ai-english-teacher](https://github.com/paulafanasyev/ai-english-teacher), `apps/web/src/avatar/svg.js`, blob `ba68462d70476ca48b665b61ec9fa97209113172`) | © 2026 Pavel Afanasev, включён в этот репо самим автором. Не входит в MIT-лицензию форка без отдельного решения автора | Скопирован без изменений |
 | `src/game/faces/leaderFaces.js` | этот проект | MIT | Токены внешности лидеров, борода, седина, значок, рамка, мимика по настроению |
 | `public/game/leaders/<нация>[-<настроение>].svg/.png` (генерируются, в `.gitignore`) | этот проект (на основе отрисовщика выше) | как у `avatar-svg.js` | `node scripts/game-portraits.mjs` |
 | `public/game/leaders/custom.png` | этот проект | MIT | Силуэт-заглушка для своей нации, тот же скрипт |
