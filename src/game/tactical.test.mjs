@@ -6,7 +6,7 @@ import { createGame, addUnit, stateHash } from './state.js';
 import { applyCommand } from './commands.js';
 import { pairKey } from './rules.js';
 import { isWater } from './data/terrain.js';
-import { stepBattle, orderRegiment, TROOPS } from './tactical.js';
+import { stepBattle, orderRegiment, TROOPS, battleView } from './tactical.js';
 
 const map = loadMap();
 
@@ -87,4 +87,13 @@ test('удар в тыл страшнее удара в лоб', () => {
     return foe.menStart - foe.men;
   };
   assert.ok(casualties(true) > casualties(false) * 1.5);
+});
+
+test('полк знает эпоху владельца: по ней клиент берёт облик (асигару, шинель, экзоброня)', () => {
+  const { s, ua, d } = scenario(['infantry'], ['infantry']);
+  s.nations.auris.era = 2; s.nations.borea.era = 1;
+  applyCommand(s, 'auris', { kind: 'battle', unitId: ua[0].id, to: d }, map);
+  const v = battleView(s.battle);
+  assert.equal(v.regiments.find((r) => r.side === 'a').era, 2);
+  assert.equal(v.regiments.find((r) => r.side === 'd').era, 1);
 });

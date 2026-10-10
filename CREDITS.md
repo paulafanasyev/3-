@@ -74,7 +74,7 @@
 ## Тактический бой
 
 - **three.js** (MIT, © 2010–2026 three.js authors), https://threejs.org — рендер поля боя.
-- Солдаты, техника, деревья и дома на поле сейчас процедурные, собраны в коде (`src/game/client/battle/view.js`), автор — Pavel Afanasev.
+- Юниты боя сделаны с нуля в коде, без сторонних ассетов: «кузница» `src/game/client/battle/forge.js` (скелет, скиннинг, анимации; 19 моделей по четырём эпохам) и запасные фигуры `src/game/client/battle/models.js`. Деревья и дома собраны в `src/game/client/battle/view.js`. Автор — Pavel Afanasev. Выгрузка в `.glb` для Blender — `npm run game:units` (`public/game/units/forge/`), лицензия та же, что у кода репозитория.
 - Источники моделей для замены (лицензия проверена по страницам паков, в репозиторий ещё не добавлены):
   - Quaternius, Ultimate Modular Men Pack, RPG Character Pack, Toon Shooter Game Kit, Animated Tank Pack, Universal Animation Library — CC0, https://quaternius.com
   - Kenney, City Kit и другие 3D-киты — CC0, https://kenney.nl
