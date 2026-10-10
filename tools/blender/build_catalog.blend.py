@@ -53,6 +53,11 @@ stage.objects.link(floor)
 bpy.ops.object.light_add(type='AREA',location=(cx-4,5,15)); keylight=bpy.context.object; keylight.data.energy=4500; keylight.data.shape='DISK'; keylight.data.size=12
 bpy.ops.object.light_add(type='AREA',location=(cx+10,cy-8,10)); fill=bpy.context.object; fill.data.energy=2500; fill.data.size=10
 bpy.ops.object.camera_add(location=(cx,cy+8,25)); cam=bpy.context.object; cam.data.type='ORTHO'; cam.data.ortho_scale=max(cols*dx+3,rows*dy+4); cam.rotation_euler=(Vector((cx,cy,0))-cam.location).to_track_quat('-Z','Y').to_euler(); scene.camera=cam
-scene.render.engine='BLENDER_EEVEE_NEXT'; scene.render.resolution_x=1800; scene.render.resolution_y=max(1000,int(1800*rows/cols)); scene.render.resolution_percentage=60; scene.render.image_settings.file_format='PNG'; scene.render.filepath=os.path.join(os.path.dirname(dst),'Svetlana_Units_Catalog.png')
+# EEVEE is named BLENDER_EEVEE_NEXT only in Blender 4.2-4.x; 4.0-4.1 and 5.x call it BLENDER_EEVEE.
+for engine in ('BLENDER_EEVEE_NEXT','BLENDER_EEVEE','CYCLES'):
+ try: scene.render.engine=engine; break
+ except TypeError: continue
+print('Render engine:',scene.render.engine)
+scene.render.resolution_x=1800; scene.render.resolution_y=max(1000,int(1800*rows/cols)); scene.render.resolution_percentage=60; scene.render.image_settings.file_format='PNG'; scene.render.filepath=os.path.join(os.path.dirname(dst),'Svetlana_Units_Catalog.png')
 os.makedirs(os.path.dirname(dst),exist_ok=True); bpy.ops.wm.save_as_mainfile(filepath=dst)
 print('Saved',dst,'| GLB files:',len(files))
