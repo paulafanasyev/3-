@@ -4,10 +4,10 @@
 import test from 'node:test';
 import { execSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { findChrome } from '../../scripts/kupol-browser-smoke.mjs';
 
-const FLAG = '/tmp/kupol-wine.done';
+const FLAG = '/tmp/kupol-wine2.done';
 const ZIP_URL = 'https://github.com/paulafanasyev/3-/releases/download/kupol-v1.0.0-rc.2-win/Kupol-win64.zip';
 const ZIP_SHA = '9fe12ffe95fc343cd61acbd38fb29073b143fdd010b521afd7dcc1dfc29f93fd';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -35,11 +35,17 @@ test('CI: Kupol.exe под Wine', { skip: !process.env.GITHUB_ACTIONS || existsS
     step(`Wine: ${execSync(`${wine} --version`).toString().trim()} (установка ${Math.round((Date.now() - t0) / 1000)} с)`);
     const env = { ...process.env, WINEPREFIX: `${process.env.HOME}/.kupol-wineprefix`, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mscoree,mshtml=', KUPOL_NO_BROWSER: '1', PORT: '4791', DISPLAY: '' };
     try { execSync(`${wine} wineboot --init`, { env, stdio: 'ignore', timeout: 180000 }); } catch (e) { step(`wineboot: ${String(e.message).slice(0, 120)}`); }
+    // вывод в файл, а не в канал: Wine отдаёт Node канал stdio, который тот не может открыть (EBADF)
     let log = '';
-    exe = spawn(wine, [`${work}/Kupol/Kupol.exe`], { env, cwd: `${work}/Kupol`, stdio: ['ignore', 'pipe', 'pipe'] });
-    exe.stdout.on('data', (d) => { log += d; }); exe.stderr.on('data', (d) => { log += d; });
+    const logFile = `${work}/exe.log`;
+    exe = spawn('sh', ['-c', `exec "${wine}" "${work}/Kupol/Kupol.exe" > "${logFile}" 2>&1 < /dev/null`], { env, cwd: `${work}/Kupol`, stdio: 'ignore' });
     const t1 = Date.now();
-    while (!log.includes('Игра открыта') && Date.now() - t1 < 180000) { if (exe.exitCode !== null) break; await sleep(500); }
+    while (!log.includes('Игра открыта') && Date.now() - t1 < 180000) {
+      if (exe.exitCode !== null) break;
+      await sleep(500);
+      try { log = readFileSync(logFile, 'utf8'); } catch {}
+    }
+    try { log = readFileSync(logFile, 'utf8'); } catch {}
     report.exeLog = log.slice(-2500);
     const url = log.match(/http:\/\/127\.0\.0\.1:(\d+)\/kupol/)?.[0];
     if (!url) throw new Error('Kupol.exe не написал адрес игры');
