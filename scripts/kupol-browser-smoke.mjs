@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Дымовая проверка «Купола» в настоящем браузере: поднимает dev-сервер (scripts/kupol-dev.mjs)
 // без ключа Google, открывает /kupol в headless Chrome с отрезанной внешней сетью и ждёт,
-// пока встанет запасной глобус Natural Earth. Без зависимостей: Chrome DevTools Protocol
-// через встроенный WebSocket Node.
-//   node scripts/kupol-browser-smoke.mjs [--shot out.png] [--online]
+// пока встанет запасной глобус Natural Earth. С --game ещё и играет: выбирает нацию, открывает
+// тактический бой (сценарий KUPOL_SCENARIO=battle: враг рядом), досчитывает его автобоем
+// и завершает ход. Без зависимостей: Chrome DevTools Protocol через встроенный WebSocket Node.
+//   node scripts/kupol-browser-smoke.mjs [--game] [--shot out.png] [--online]
 // Код выхода 1 — если игра не запустилась или глобус не загрузился.
 import { spawn, execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -24,8 +25,9 @@ export function findChrome() {
 }
 
 /** Dev-сервер «Купола» без ключа Google. Возвращает { url, stop, log }. */
-export async function startDevServer({ timeoutMs = 60000 } = {}) {
+export async function startDevServer({ timeoutMs = 60000, scenario = null } = {}) {
   const env = { ...process.env, GOOGLE_MAPS_API_KEY: '' };
+  if (scenario) env.KUPOL_SCENARIO = scenario; else delete env.KUPOL_SCENARIO;
   delete env.NODE_TEST_CONTEXT; // иначе вложенный процесс считает себя частью node --test
   const proc = spawn(process.execPath, [path.join(ROOT, 'scripts/kupol-dev.mjs')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
@@ -63,7 +65,7 @@ async function cdp(port) {
  * Открыть страницу и дождаться глобуса. offline: внешняя сеть отрезана мёртвым прокси
  * (локальный сервер доступен). Возвращает отчёт; ok — всё в порядке.
  */
-export async function smokeKupol({ url, chrome = findChrome(), offline = true, timeoutMs = 45000, shot = null } = {}) {
+export async function smokeKupol({ url, chrome = findChrome(), offline = true, timeoutMs = 45000, shot = null, game = false } = {}) {
   if (!chrome) throw new Error('не найден Chrome/Chromium (можно указать CHROME_PATH)');
   const port = 9300 + Math.floor(Math.random() * 600);
   const args = ['--headless=new', `--remote-debugging-port=${port}`, '--no-sandbox', '--no-first-run', '--use-angle=swiftshader',
@@ -94,6 +96,7 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
       if (report.canvas && toastOk && report.natural.ok > 0) break;
       if (report.waitedMs > timeoutMs) break;
     }
+    if (game && !report.bootError) report.game = await playGame(s);
     if (shot) {
       const png = await s.send('Page.captureScreenshot', { format: 'png' });
       if (png.result?.data) writeFileSync(shot, Buffer.from(png.result.data, 'base64'));
@@ -106,16 +109,53 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
   if (!report.canvas) report.problems.push('нет холста Cesium');
   if (report.natural.ok === 0) report.problems.push('не загрузился ни один тайл Natural Earth');
   if (offline && !report.toasts.some((x) => x.includes(OFFLINE_TOAST))) report.problems.push('нет подсказки об офлайн-глобусе');
+  if (game) for (const p of report.game?.problems ?? ['партия не началась']) report.problems.push(p);
   report.ok = report.problems.length === 0;
   return report;
+}
+
+/** Партия в браузере: нация → тактический бой (автобой) → конец хода. Нужен сценарий battle. */
+async function playGame(s) {
+  const ev = async (expression) => (await s.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.result?.value;
+  const waitFor = async (expression, ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await ev(expression); if (v) return v; await sleep(250); } return null; };
+  const g = { problems: [] };
+  g.nation = await waitFor("(() => { const b = document.querySelector('.k-start button[data-id]'); if (!b) return null; b.click(); return b.dataset.id; })()", 15000);
+  if (!g.nation) { g.problems.push('нет окна выбора нации'); return g; }
+  const st = await waitFor("(() => { const s = window.__kupol?.state; if (!s) return null; return JSON.stringify({ turn: s.turn, me: s.nationId, tanks: s.units.filter((u) => u.owner === s.nationId && u.type === 'tank').map((u) => u.id), enemies: [...new Set(s.units.filter((u) => u.owner !== s.nationId).map((u) => u.cell))] }); })()", 20000);
+  if (!st) { g.problems.push('сервер не прислал партию после выбора нации'); return g; }
+  Object.assign(g, JSON.parse(st));
+  if (!g.tanks.length) { g.problems.push('нет танка из сценария battle (dev-сервер без KUPOL_SCENARIO=battle?)'); return g; }
+  // бой: перебираем видимые клетки врага, пока сервер не откроет поле
+  for (const cell of g.enemies) {
+    await ev(`window.__kbDone = undefined; window.__kupol.tactical(${JSON.stringify(g.tanks[0])}, ${cell}).then((r) => { window.__kbDone = r ? JSON.stringify(r) : 'null'; }, (e) => { window.__kbDone = 'error: ' + e; }); true`);
+    const opened = await waitFor("document.querySelector('.kb-root') ? true : (window.__kbDone !== undefined ? 'no' : null)", 8000);
+    if (opened === true) { g.battleCell = cell; break; }
+  }
+  if (g.battleCell === undefined) { g.problems.push('тактический бой не открылся'); return g; }
+  await sleep(1500);
+  g.regiments = await ev("document.querySelectorAll('.kb-cards > *').length");
+  g.battleCanvas = await ev("!!document.querySelector('.kb-scene canvas')");
+  if (!g.battleCanvas) g.problems.push('у боя нет холста three.js');
+  await ev("document.querySelector('.kb-root [data-auto]')?.click(); true");
+  g.result = await waitFor("(() => { const el = document.querySelector('.kb-result'); return el && el.style.display === 'flex' ? el.innerText.slice(0, 200) : null; })()", 60000);
+  if (!g.result) { g.problems.push('автобой не закончился за 60 с'); return g; }
+  await ev("document.querySelector('.kb-root [data-close]')?.click(); true");
+  g.closed = await waitFor("window.__kbDone !== undefined && !document.querySelector('.kb-root') ? window.__kbDone : null", 10000);
+  if (!g.closed) g.problems.push('окно боя не закрылось');
+  // конец хода
+  await ev('window.__kupol.endTurn(); true');
+  g.turnAfter = await waitFor(`(window.__kupol.state?.turn ?? 0) > ${g.turn} ? window.__kupol.state.turn : null`, 30000);
+  if (!g.turnAfter) g.problems.push('ход не завершился за 30 с');
+  return g;
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : '';
 if (import.meta.url === invokedPath) {
   const shotAt = process.argv.indexOf('--shot');
-  const server = await startDevServer();
+  const game = process.argv.includes('--game');
+  const server = await startDevServer({ scenario: game ? 'battle' : null });
   try {
-    const report = await smokeKupol({ url: server.url, offline: !process.argv.includes('--online'), shot: shotAt > 0 ? process.argv[shotAt + 1] : null });
+    const report = await smokeKupol({ url: server.url, game, offline: !process.argv.includes('--online'), shot: shotAt > 0 ? process.argv[shotAt + 1] : null });
     console.log(JSON.stringify(report, null, 2));
     if (!report.ok) process.exitCode = 1;
   } finally { server.stop(); }
