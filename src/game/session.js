@@ -11,7 +11,8 @@ import { TICK } from './tactical.js';
 export const BATTLE_FRAME_MS = 100;
 const BATTLE_SPEEDS = [0, 1, 2, 4];
 
-export function createGameSession({ send, now = () => Date.now(), map = loadMap(), timers = { setInterval, clearInterval } } = {}) {
+/** onNewGame(game, map) — необязательная подготовка свежей партии до первого снимка (сценарии dev-сервера). */
+export function createGameSession({ send, now = () => Date.now(), map = loadMap(), timers = { setInterval, clearInterval }, onNewGame = null } = {}) {
   if (typeof send !== 'function') throw new TypeError('send is required');
   let game = null;
   let lastEventSeq = 0;
@@ -101,6 +102,7 @@ export function createGameSession({ send, now = () => Date.now(), map = loadMap(
           return true;
         }
         lastEventSeq = 0;
+        if (onNewGame) onNewGame(game, map);
         broadcast();
         return true;
       }

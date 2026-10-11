@@ -5,10 +5,14 @@
 import { createServer } from 'vite';
 import { WebSocketServer } from 'ws';
 import { createGameSession } from '../src/game/session.js';
+import { SCENARIOS } from '../src/game/scenarios.js';
 
 const vite = await createServer({ configFile: new URL('../vite.config.js', import.meta.url).pathname });
 await vite.listen();
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+// KUPOL_SCENARIO=battle — готовая ситуация для проверок в браузере (scripts/kupol-browser-smoke.mjs)
+const scenario = SCENARIOS[process.env.KUPOL_SCENARIO] ?? null;
+if (process.env.KUPOL_SCENARIO && !scenario) console.warn(`[Купол] неизвестный сценарий: ${process.env.KUPOL_SCENARIO}`);
 
 vite.httpServer.on('upgrade', (req, socket, head) => {
   let pathname;
@@ -19,7 +23,7 @@ vite.httpServer.on('upgrade', (req, socket, head) => {
 
 wss.on('connection', (socket) => {
   const send = (payload) => { if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(payload)); };
-  const game = createGameSession({ send });
+  const game = createGameSession({ send, onNewGame: scenario });
   socket.on('close', () => game.dispose());
   socket.on('message', (raw, isBinary) => {
     if (isBinary) return;

@@ -173,13 +173,14 @@ export async function bootKupol() {
   // тактический бой в реальном времени: сервер ведёт часы и шлёт кадры сам
   async function runTactical(unit, cell) {
     const r = await send({ kind: 'battle', unitId: unit.id, to: cell });
-    if (!r.ok) return;
+    if (!r.ok) return null;
     const colorOf = (id) => state.nations.find((n) => n.id === id)?.color ?? state.neutrals.find((n) => n.id === id)?.color ?? '#9a8f7a';
     const battle = openBattle({ net, first: r.battle, colorOf, iconOf: (type, color) => `<img src="${unitPortrait(type, color, 46)}" alt="">` });
     const combat = await battle.finished;
     if (combat) hud.toast(combat.won ? (combat.captured ? 'Город взят' : 'Победа в бою') : 'Бой проигран');
     selection.cell = myUnit(selection.unitId)?.cell ?? selection.cell;
     redraw();
+    return combat;
   }
 
   // мышь: ЛКМ — выбор, ПКМ — приказ идти, Shift+ПКМ — тактический бой, двойной щелчок — подлёт к земле (как в God's Eye View)
@@ -256,5 +257,10 @@ export async function bootKupol() {
 
   const player = await hud.chooseNation();
   net.newGame({ player });
-  window.__kupol = { viewer, get state() { return state; } };
+  // ручки для отладки и дымовой проверки в браузере: те же команды, что у мыши и Enter
+  window.__kupol = {
+    viewer, get state() { return state; },
+    endTurn,
+    tactical: (unitId, cell) => { const u = myUnit(unitId); return u ? runTactical(u, cell) : Promise.resolve(null); },
+  };
 }
