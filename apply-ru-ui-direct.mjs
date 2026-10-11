@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { repairIdentifiers } from './scripts/repair-i18n-identifiers.mjs';
 
 const replacements = {
   'src/data/rocketLaunches.js': [
@@ -107,15 +108,22 @@ const replacements = {
   ],
 };
 
+// Одно слово ЗАГЛАВНЫМИ (MISSION, ORBIT, NEXT…) переводим только целиком: внутри
+// идентификатора вроде ROCKET_MISSION_ID или REPLAY_ORBIT_DURATION_SEC его не трогаем,
+// иначе ломаются импорты. Страховка: repairIdentifiers возвращает латиницу, если что-то проскочило.
+const applyPair = (text, from, to) => (/^[A-Z]+$/.test(from)
+  ? text.replace(new RegExp(`(?<![A-Za-z0-9_$])${from}(?![A-Za-z0-9_$])`, 'g'), () => to)
+  : text.split(from).join(to));
+
 let changed = 0;
 for (const [file, pairs] of Object.entries(replacements)) {
   let text = fs.readFileSync(file, 'utf8');
   for (const [from, to] of pairs) {
     const before = text;
-    text = text.split(from).join(to);
+    text = applyPair(text, from, to);
     if (text !== before) changed++;
   }
-  fs.writeFileSync(file, text);
+  fs.writeFileSync(file, repairIdentifiers(text).text);
 }
 
 console.log(`Direct Russian UI replacements: ${changed}`);
