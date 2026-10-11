@@ -19,9 +19,10 @@ export const PAL = {
   olive2: '#5c6741', field: '#5a5e4a', coat: '#4a4a3c', wool: '#6b6450', rubber: '#1c1d1d', dark: '#2a2c2e',
   gun: '#2e3134', camo: '#5d6447', camo2: '#454b33', tan: '#a08d66', black: '#18191a', denim: '#34445e',
   hood: '#4a4f55', glass: '#2a3a46', visor: '#7fe9ff', glow: '#9ff4ff', armor: '#c5c9cc', armor2: '#8b9196',
+  ceramic: '#d8d4ca', carbon: '#2c3034', coil: '#b87333',
   team: '#b8352e',
 };
-const METALS = new Set(['steel', 'iron', 'gold', 'gun', 'armor', 'armor2', 'dark']);
+const METALS = new Set(['steel', 'iron', 'gold', 'gun', 'armor', 'armor2', 'dark', 'coil']);
 const GLOWS = new Set(['glow', 'visor']);
 const TEAM = { team: 1, teamDark: 0.45, teamMid: 0.7 };
 
@@ -443,6 +444,22 @@ const OUTFIT = {
     rifle(k, { len: 0.95, stock: 'black', optic: true, mag: true, color: 'gun' });
   },
   // Космическая эпоха (3)
+  militia3(k) { // колониальный ополченец: лёгкий скафандр, круглый шлем со светофильтром, ранец жизнеобеспечения
+    figure(k, { shirt: 'ceramic', pants: 'ceramic', shin: 'carbon', boot: 'carbon', fore: 'ceramic', hand: 'carbon', knee: 'carbon', belt: 'carbon', hair: false });
+    k.add('chest', G.rbox(0.34, 0.2, 0.24, 0, 1.36, 0.01, 0.3), 'ceramic'); // жёсткий нагрудник скафандра
+    k.add('chest', G.box(0.16, 0.06, 0.02, 0.06, 1.36, 0.13), 'team'); // нашивка
+    k.add('chest', G.cyl(0.14, 0.15, 0.06, 0, 1.5, 0, 16).scale(1, 1, 0.9), 'carbon'); // шейное кольцо шлема
+    k.add('head', G.sph(0.145, 0, 1.67, 0.0, 18, 14), 'ceramic'); // круглый шлем скафандра
+    k.add('head', G.ell(0.12, [1, 0.74, 0.6], 0, 1.665, 0.088, 18, 12), 'gold'); // золочёный светофильтр
+    k.add('head', G.cyl(0.022, 0.022, 0.06, 0, 0, 0, 8).rotateZ(Math.PI / 2).translate(-0.15, 1.66, -0.01), 'carbon'); // разъём связи
+    k.add('head', G.box(0.04, 0.03, 0.03, 0.11, 1.74, 0.06), 'glow'); // налобный фонарь
+    k.pair((s, L) => k.add(`arm${L}`, G.cyl(0.07, 0.07, 0.07, s * 0.205, 1.3, 0, 12), s > 0 ? 'team' : 'carbon')); // повязка нации
+    k.add('chest', G.rbox(0.3, 0.38, 0.16, 0, 1.3, -0.21, 0.3), 'ceramic'); // ранец жизнеобеспечения
+    k.pair((s) => k.add('chest', G.cyl(0.05, 0.05, 0.34, s * 0.09, 1.3, -0.31, 12), 'carbon')); // баллоны
+    k.add('chest', G.seg([0.12, 1.42, -0.16], [0.13, 1.56, -0.04], 0.018, 0.018, 6), 'carbon'); // шланг к шлему
+    k.add('hips', G.box(0.3, 0.05, 0.1, 0, 1.0, 0.12), 'carbon'); // пояс с подсумками
+    rifle(k, { len: 0.8, stock: 'carbon', color: 'ceramic', glow: true, mag: true });
+  },
   infantry3(k) {
     figure(k, { shirt: 'armor', pants: 'armor2', shin: 'armor', boot: 'armor2', fore: 'armor', hand: 'dark', knee: 'armor2', belt: 'dark', hair: false, wide: 0.012 });
     // экзоброня: кираса, наплечники, гермошлем с визором, силовой ранец со свечением
@@ -490,7 +507,8 @@ function machine(name, build, clips = {}, opts = {}) {
   return { scene, animations, kind: opts.kind ?? 'vehicle', tris };
 }
 const spin = (node, axis, speed, len = 1) => { const q = new THREE.Quaternion(); const a = new THREE.Vector3(...axis); const v = []; const t = []; for (let i = 0; i <= 8; i += 1) { q.setFromAxisAngle(a, (i / 8) * Math.PI * 2 * Math.sign(speed)); v.push(q.x, q.y, q.z, q.w); t.push((i / 8) * len / Math.abs(speed)); } return new THREE.QuaternionKeyframeTrack(`${node}.quaternion`, t, v); };
-const recoil = (node, p, dz, len = 1.2) => new THREE.VectorKeyframeTrack(`${node}.position`, [0, 0.06, 0.5, len], [...p, p[0], p[1], p[2] - dz, ...p, ...p]);
+/** Откат ствола вдоль его оси axis (для поднятого ствола ось наклонена). */
+const recoil = (node, p, dz, len = 1.2, axis = [0, 0, 1]) => new THREE.VectorKeyframeTrack(`${node}.position`, [0, 0.06, 0.5, len], [...p, p[0] - axis[0] * dz, p[1] - axis[1] * dz, p[2] - axis[2] * dz, ...p, ...p]);
 const bob = (node, y0, a, len) => new THREE.VectorKeyframeTrack(`${node}.position`, [0, len / 2, len], [0, y0, 0, 0, y0 + a, 0, 0, y0, 0]);
 
 /** Гусеница: лента-стадион с катками и ленивцем. */
@@ -545,6 +563,47 @@ const VEHICLE = {
     k.add('barrel', G.cyl(0.08, 0.1, 5.0, 0, 0, 0, 12).rotateX(Math.PI / 2).translate(0, 1.85, 4.0), 'gun');
     k.add('barrel', G.cyl(0.14, 0.14, 0.6, 0, 0, 0, 12).rotateX(Math.PI / 2).translate(0, 1.85, 3.5), 'gun');
   }, { attack: () => [recoil('barrel', [0, 0, 0], 0.55)] }, { parent: { barrel: 'turret' } }),
+  tank3: () => machine('tank3', (k) => { // Космическая эпоха: рельсотронный танк, гранёная керамическая броня, необитаемая башня
+    tracks(k, { len: 7.2, h: 0.9, w: 0.66, x: 1.55, wheels: 6, r: 0.34, c: 'carbon' });
+    k.pair((s) => { // гранёные надгусеничные экраны со светящейся полосой
+      k.add('body', G.side([[-3.7, 0.5], [3.3, 0.5], [3.75, 0.95], [3.4, 1.2], [-3.5, 1.2], [-3.75, 0.85]], 0.1, s * 1.93), 'ceramic');
+      k.add('body', G.box(0.03, 0.06, 5.6, s * 1.99, 0.72, -0.1), 'glow');
+      k.add('body', G.box(0.03, 0.12, 2.2, s * 1.99, 0.98, -1.2), 'team');
+    });
+    k.add('body', G.side([[-3.6, 0.6], [3.0, 0.6], [3.85, 0.95], [3.1, 1.45], [-3.2, 1.55], [-3.65, 1.05]], 3.6), 'ceramic'); // корпус: острый клин лба
+    k.add('body', G.plan([[-1.7, -3.2], [1.7, -3.2], [1.75, 2.6], [0.9, 3.05], [-0.9, 3.05], [-1.75, 2.6]], 0.06, 1.52), 'carbon'); // крыша корпуса
+    for (const x of [-0.9, 0.9]) k.add('body', G.box(0.5, 0.04, 0.5, x, 1.6, 2.4), 'armor2'); // лючки датчиков
+    k.add('body', G.box(2.0, 0.22, 0.12, 0, 1.22, -3.6), 'carbon'); k.pair((s) => k.add('body', G.box(0.5, 0.16, 0.06, s * 0.7, 1.22, -3.66), 'glow')); // кормовые теплообменники
+    // необитаемая башня: низкий шестигранник с наклонными гранями
+    k.add('turret', G.plan([[-1.25, -1.7], [1.25, -1.7], [1.5, 0.2], [0.75, 1.55], [-0.75, 1.55], [-1.5, 0.2]], 0.5, 1.6), 'ceramic');
+    k.add('turret', G.plan([[-1.05, -1.5], [1.05, -1.5], [1.25, 0.15], [0.6, 1.3], [-0.6, 1.3], [-1.25, 0.15]], 0.12, 2.1), 'armor2');
+    k.add('turret', G.box(1.8, 0.06, 0.08, 0, 2.0, -1.72), 'team');
+    k.pair((s) => { for (let i = 0; i < 2; i += 1) k.add('turret', G.at(G.cyl(0.11, 0.11, 0.18, 0, 0, 0, 10), [0, 0, s * Math.PI / 2], [s * 1.42, 1.86, -0.9 + i * 0.5]), 'carbon'); }); // модули активной защиты
+    k.add('turret', G.cyl(0.04, 0.04, 0.7, 0.8, 2.55, -1.1, 6), 'carbon'); k.add('turret', G.sph(0.13, 0.8, 2.95, -1.1, 12, 8), 'dark'); k.add('turret', G.box(0.12, 0.06, 0.04, 0.8, 2.95, -0.98), 'glow'); // мачта с обзорным шаром
+    // рельсотрон: две шины с разрядником между ними и медные катушки
+    k.pair((s) => k.add('barrel', G.box(0.2, 0.3, 5.4, s * 0.2, 1.88, 3.7), 'armor2'));
+    k.add('barrel', G.box(0.12, 0.06, 5.2, 0, 1.88, 3.8), 'glow');
+    for (let i = 0; i < 5; i += 1) k.add('barrel', G.box(0.72, 0.5, 0.2, 0, 1.88, 1.9 + i * 0.85), 'coil');
+    k.add('barrel', G.rbox(0.66, 0.46, 0.5, 0, 1.88, 6.5, 0.4), 'carbon'); // дульный блок
+    k.add('barrel', G.rbox(0.9, 0.62, 1.0, 0, 1.88, 1.4, 0.3), 'ceramic'); // маска
+  }, { attack: () => [recoil('barrel', [0, 0, 0], 0.35)] }, { parent: { barrel: 'turret' } }),
+  gun3: () => machine('gun3', (k) => { // Космическая эпоха: самоходная рельсовая батарея на колёсном шасси 6×6
+    k.pair((s) => { for (const z of [-1.9, -0.5, 1.9]) {
+      k.add('body', G.cyl(0.58, 0.58, 0.5, 0, 0, 0, 20).rotateZ(Math.PI / 2).translate(s * 1.35, 0.58, z), 'rubber');
+      k.add('body', G.cyl(0.32, 0.32, 0.52, 0, 0, 0, 12).rotateZ(Math.PI / 2).translate(s * 1.35, 0.58, z), 'carbon');
+      k.add('body', G.cyl(0.08, 0.08, 0.54, 0, 0, 0, 8).rotateZ(Math.PI / 2).translate(s * 1.35, 0.58, z), 'glow');
+    } });
+    k.add('body', G.side([[-3.2, 0.7], [2.4, 0.7], [2.9, 1.1], [2.7, 1.45], [-3.1, 1.45]], 2.3), 'ceramic'); // рама-корпус
+    k.add('body', G.side([[1.4, 1.45], [2.7, 1.45], [2.4, 2.35], [1.5, 2.45]], 2.2), 'ceramic'); // кабина
+    k.add('body', G.side([[1.95, 1.75], [2.55, 1.6], [2.33, 2.22], [1.98, 2.28]], 2.24), 'glass'); // остекление
+    k.pair((s) => { k.add('body', G.box(0.06, 0.5, 2.6, s * 1.18, 1.15, -1.2), 'team'); k.add('body', G.box(0.16, 0.9, 0.16, s * 1.05, 0.55, -3.05), 'carbon'); k.add('body', G.box(0.42, 0.06, 0.42, s * 1.05, 0.03, -3.05), 'carbon'); }); // борта и выдвижные опоры
+    for (let i = 0; i < 3; i += 1) { k.add('body', G.box(1.8, 0.4, 0.5, 0, 1.68, -2.6 + i * 0.6), 'carbon'); k.add('body', G.box(1.82, 0.05, 0.08, 0, 1.9, -2.6 + i * 0.6), 'glow'); } // накопители
+    k.add('turret', G.cyl(0.85, 0.95, 0.3, 0, 1.6, -0.5, 18), 'armor2'); // поворотный круг
+    k.add('turret', G.side([[-1.3, 1.75], [0.9, 1.75], [0.6, 2.45], [-1.2, 2.5]], 1.3), 'ceramic'); // люлька
+    k.pair((s) => k.add('barrel', G.box(0.12, 0.18, 5.6, s * 0.15, 0, 0).rotateX(-0.42).translate(0, 2.55, 1.3), 'armor2'));
+    k.add('barrel', G.box(0.1, 0.05, 5.4, 0, 0, 0).rotateX(-0.42).translate(0, 2.55, 1.3), 'glow');
+    for (let i = 0; i < 5; i += 1) k.add('barrel', G.box(0.5, 0.32, 0.14, 0, 0, -1.8 + i * 0.95).rotateX(-0.42).translate(0, 2.55, 1.3), 'coil');
+  }, { attack: () => [recoil('barrel', [0, 0, 0], 0.5, 2.0, [0, Math.sin(0.42), Math.cos(0.42)])] }, { parent: { barrel: 'turret' }, pivots: { turret: [0, 1.6, -0.5], barrel: [0, 1.6, -0.5] } }),
   gun1: () => machine('gun1', (k) => { // полевое орудие на деревянных колёсах + расчёт
     k.pair((s) => {
       k.add('body', G.torus(0.62, 0.06, Math.PI * 2, 6, 22).rotateY(Math.PI / 2).translate(s * 0.85, 0.64, 0), 'darkwood');
@@ -607,6 +666,17 @@ const VEHICLE = {
     k.pair((s) => { k.add('body', G.at(G.box(0.08, 1.8, 1.3), [0, 0, -s * 0.3], [s * 0.85, 1.0, -3.9]), 'armor2'); k.add('body', G.box(1.5, 0.08, 0.6, s * 4.4, -0.06, -2.2), 'team'); });
     k.add('body', G.cyl(0.5, 0.42, 0.7, 0, 0, 0, 14, true).rotateX(Math.PI / 2).translate(0, 0, -5.1), 'iron'); k.add('body', G.cyl(0.36, 0.36, 0.05, 0, 0, 0, 12).rotateX(Math.PI / 2).translate(0, 0, -5.0), 'glow'); // сопло с форсажем
   }, {}, { kind: 'air', aoFoot: false }),
+  fighter3: () => machine('fighter3', (k) => { // Космическая эпоха: аэрокосмический перехватчик, несущий корпус и треугольное крыло
+    k.add('body', G.lathe([[0.0, -4.6], [0.7, -4.5], [0.95, -3.0], [1.0, 0.0], [0.8, 2.4], [0.45, 4.2], [0.14, 5.4], [0.0, 5.7]], 1, 20).rotateX(Math.PI / 2).scale(1.15, 0.5, 1), 'ceramic'); // сплющенный несущий фюзеляж
+    k.add('body', G.plan([[0.0, 4.6], [0.9, 3.4], [1.3, 0.2], [0.0, 0.4], [-1.3, 0.2], [-0.9, 3.4]], 0.08, -0.04), 'ceramic'); // наплывы-«щёки»
+    k.add('body', G.plan([[0.0, 1.6], [1.2, 1.2], [6.2, -3.1], [6.2, -3.7], [1.0, -4.3], [-1.0, -4.3], [-6.2, -3.7], [-6.2, -3.1], [-1.2, 1.2]], 0.1, -0.08), 'ceramic'); // треугольное крыло
+    k.pair((s) => k.add('body', G.plan([[s * 5.2, -2.7], [s * 6.2, -3.15], [s * 6.2, -3.7], [s * 5.1, -3.5]], 0.11, -0.075), 'team')); // законцовки цвета нации
+    k.add('body', G.plan([[0.0, -0.2], [0.9, -0.6], [0.9, -4.3], [-0.9, -4.3], [-0.9, -0.6]], 0.06, -0.12), 'carbon'); // термозащита снизу
+    k.add('body', G.ell(0.36, [0.9, 0.55, 2.4], 0, 0.36, 2.6, 16, 10, Math.PI * 0.5), 'gold'); // кабина со светофильтром
+    k.pair((s) => k.add('body', G.at(G.plan([[-0.75, 0.5], [0.75, 0.15], [0.75, -0.35], [-0.75, -0.6]], 0.06, -0.03), [0, 0, Math.PI / 2 - s * 0.45], [s * 1.0, 0.85, -3.6]), 'ceramic')); // разнесённые кили
+    k.pair((s) => { k.add('body', G.cyl(0.42, 0.36, 0.9, 0, 0, 0, 16, true).rotateX(Math.PI / 2).translate(s * 0.5, -0.02, -4.8), 'carbon'); k.add('body', G.cyl(0.32, 0.32, 0.05, 0, 0, 0, 14).rotateX(Math.PI / 2).translate(s * 0.5, -0.02, -4.75), 'glow'); }); // два сопла
+    k.pair((s) => k.add('body', G.box(0.03, 0.05, 2.4, s * 3.6, -0.02, -2.6), 'glow')); // навигационные полосы
+  }, {}, { kind: 'air', aoFoot: false }),
   biplane: () => machine('biplane', (k) => { // Индустрия: биплан с расчалками
     k.add('body', G.seg([0, 0, -3.6], [0, 0.05, 2.0], 0.22, 0.55, 12), 'khaki');
     k.add('body', G.cyl(0.58, 0.55, 0.5, 0, 0, 0, 14).rotateX(Math.PI / 2).translate(0, 0.05, 2.1), 'dark');
@@ -653,14 +723,18 @@ export const FORGE = {
   helicopter: { era: 2, name: 'Ударный вертолёт', make: VEHICLE.helicopter },
   drone: { era: 2, name: 'Ударный беспилотник', make: VEHICLE.drone },
   fighter: { era: 2, name: 'Истребитель', make: VEHICLE.fighter },
+  militia3: { era: 3, name: 'Колониальный ополченец', make: () => humanoid('militia3', OUTFIT.militia3, 'rifle', { attackLen: 0.9 }) },
   infantry3: { era: 3, name: 'Экзопехотинец', make: () => humanoid('infantry3', OUTFIT.infantry3, 'rifle', { attackLen: 0.8 }) },
+  gun3: { era: 3, name: 'Рельсовая батарея', make: VEHICLE.gun3 },
+  tank3: { era: 3, name: 'Рельсотронный танк', make: VEHICLE.tank3 },
+  fighter3: { era: 3, name: 'Аэрокосмический перехватчик', make: VEHICLE.fighter3 },
 };
 /** Какая модель у типа полка в эпохе владельца: старшая доступная не новее эпохи. */
 const BY_TYPE = {
   warrior: ['ashigaru_yari'], archer: ['ashigaru_yumi'], swordsman: ['samurai'],
-  militia: ['peasant', 'militia1', 'militia2', 'militia2'], infantry: ['infantry1', 'infantry1', 'infantry2', 'infantry3'],
-  artillery: ['gun1', 'gun1', 'gun2', 'gun2'], tank: ['tank1', 'tank1', 'tank2', 'tank2'],
-  helicopter: ['helicopter'], drone: ['drone'], fighter: ['fighter'], biplane: ['biplane'],
+  militia: ['peasant', 'militia1', 'militia2', 'militia3'], infantry: ['infantry1', 'infantry1', 'infantry2', 'infantry3'],
+  artillery: ['gun1', 'gun1', 'gun2', 'gun3'], tank: ['tank1', 'tank1', 'tank2', 'tank3'],
+  helicopter: ['helicopter'], drone: ['drone'], fighter: ['fighter', 'fighter', 'fighter', 'fighter3'], biplane: ['biplane'],
 };
 export function forgeKey(type, era = 0) {
   const list = BY_TYPE[type]; if (!list) return null;
