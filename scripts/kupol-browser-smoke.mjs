@@ -137,7 +137,11 @@ async function playGame(s) {
     if (opened === true) { g.battleCell = cell; break; }
   }
   if (g.battleCell === undefined) { g.problems.push('тактический бой не открылся'); return g; }
+  // пауза сразу: в сценарии танк против воина бой кончается за секунды, а ниже нужна перезагрузка посреди боя
+  await ev("document.querySelector('.kb-root [data-pause]')?.click(); true");
   await sleep(1500);
+  g.pausedActive = await ev("(() => { const el = document.querySelector('.kb-result'); return !(el && el.style.display === 'flex'); })()");
+  if (!g.pausedActive) { g.problems.push('бой закончился раньше паузы: перезагрузку посреди боя проверить нельзя'); return g; }
   g.regiments = await ev("document.querySelectorAll('.kb-cards > *').length");
   g.battleCanvas = await ev("!!document.querySelector('.kb-scene canvas')");
   if (!g.battleCanvas) g.problems.push('у боя нет холста three.js');
