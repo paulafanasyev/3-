@@ -1,0 +1,1546 @@
+{
+  "at": "2026-10-11T08:27:21.207Z",
+  "commit": "9c2643b99fbeed03eceda3d88bc82289b600c70d",
+  "screens": {
+    "start-1280": {
+      "vw": 1280,
+      "vh": 633,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1248,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 591,
+            "w": 520,
+            "h": 26
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1112,
+            "y": 555,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1034,
+            "y": 349,
+            "w": 230,
+            "h": 188
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 884,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 557,
+            "w": 544,
+            "h": 60
+          }
+        },
+        {
+          "el": ".k-start",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 633
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 6
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "Конец хода\nEnter",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Самолёты\nвыкл",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Запуски ракет\nвыкл",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Спутники\nвыкл",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Сейсмика\nвыкл",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "?",
+          "by": ".k-start"
+        }
+      ],
+      "latin": [
+        "Enter",
+        "Google",
+        "OpenStreetMap"
+      ]
+    },
+    "start-1024": {
+      "vw": 1024,
+      "vh": 768,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 992,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 726,
+            "w": 520,
+            "h": 26
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 856,
+            "y": 690,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 778,
+            "y": 484,
+            "w": 230,
+            "h": 188
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 628,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-start",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 6
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "Конец хода\nEnter",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Самолёты\nвыкл",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Запуски ракет\nвыкл",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Спутники\nвыкл",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Сейсмика\nвыкл",
+          "by": ".k-start"
+        },
+        {
+          "kind": "control-covered",
+          "text": "?",
+          "by": ".k-start"
+        }
+      ],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "hud-1280x720": {
+      "vw": 1280,
+      "vh": 720,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1248,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 430
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 934,
+            "y": 80,
+            "w": 330,
+            "h": 280
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 635,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1112,
+            "y": 642,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1034,
+            "y": 388,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 884,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 644,
+            "w": 544,
+            "h": 60
+          }
+        }
+      ],
+      "counts": {},
+      "issues": [],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "hud-1366x768": {
+      "vw": 1366,
+      "vh": 768,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1334,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 478
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 1020,
+            "y": 80,
+            "w": 330,
+            "h": 290
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 683,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1198,
+            "y": 690,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1120,
+            "y": 436,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 970,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 706,
+            "w": 630,
+            "h": 46
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 1
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "",
+          "by": "summary"
+        }
+      ],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "hud-1920x1080": {
+      "vw": 1920,
+      "vh": 1080,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1888,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 513
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 1574,
+            "y": 80,
+            "w": 330,
+            "h": 290
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 995,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1752,
+            "y": 1002,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1674,
+            "y": 748,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 1524,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 1032,
+            "w": 1184,
+            "h": 32
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 2
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "",
+          "by": "summary"
+        },
+        {
+          "kind": "control-covered",
+          "text": "",
+          "by": "details"
+        }
+      ],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "hud-1024x768": {
+      "vw": 1024,
+      "vh": 768,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 992,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 478
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 678,
+            "y": 80,
+            "w": 330,
+            "h": 290
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 683,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 856,
+            "y": 690,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 778,
+            "y": 436,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 628,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 1
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "",
+          "by": "summary"
+        }
+      ],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "tech-open-1280": {
+      "vw": 1280,
+      "vh": 720,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1248,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 430
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 934,
+            "y": 80,
+            "w": 330,
+            "h": 280
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 635,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1112,
+            "y": 642,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1034,
+            "y": 388,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 884,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 644,
+            "w": 544,
+            "h": 60
+          }
+        }
+      ],
+      "counts": {},
+      "issues": [],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "help-1280": {
+      "vw": 1280,
+      "vh": 720,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1248,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 430
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 934,
+            "y": 80,
+            "w": 330,
+            "h": 280
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 635,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1112,
+            "y": 642,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1034,
+            "y": 388,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 884,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-help-overlay",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 720
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 644,
+            "w": 544,
+            "h": 60
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 12
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "Земледелие\nдоступно",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Обработка бронзы\nдоступно",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Железо\nзакрыто",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Письменность\nдоступно",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Мореходство\nдоступно",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Колесо\nзакрыто",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Конец хода\nEnter",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Самолёты\n🔒 Воздухоплавание",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Запуски ракет\n🔒 Ракетостроение",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Спутники\n🔒 Орбитальные спутники",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Сейсмика\n🔒 Ядерное деление",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "?",
+          "by": ".k-first-hint"
+        }
+      ],
+      "latin": [
+        "Enter",
+        "Shift",
+        "Esc"
+      ]
+    },
+    "help-1024": {
+      "vw": 1024,
+      "vh": 768,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 992,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 478
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 678,
+            "y": 80,
+            "w": 330,
+            "h": 290
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 683,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 856,
+            "y": 690,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 778,
+            "y": 436,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 628,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-help-overlay",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 13
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "Земледелие\nдоступно",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Обработка бронзы\nдоступно",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Железо\nзакрыто",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Письменность\nдоступно",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Мореходство\nдоступно",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Колесо\nзакрыто",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Паровой двигатель\nзакрыто",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Конец хода\nEnter",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Самолёты\n🔒 Воздухоплавание",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Запуски ракет\n🔒 Ракетостроение",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Спутники\n🔒 Орбитальные спутники",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Сейсмика\n🔒 Ядерное деление",
+          "by": ".k-help-overlay"
+        },
+        {
+          "kind": "control-covered",
+          "text": "?",
+          "by": ".glass.k-help-box"
+        }
+      ],
+      "latin": [
+        "Enter",
+        "Shift",
+        "Esc"
+      ]
+    },
+    "hud-turn2-1280": {
+      "vw": 1280,
+      "vh": 720,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1248,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 430
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 934,
+            "y": 80,
+            "w": 330,
+            "h": 280
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 555,
+            "w": 520,
+            "h": 149
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1112,
+            "y": 642,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1034,
+            "y": 388,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 884,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 644,
+            "w": 544,
+            "h": 60
+          }
+        }
+      ],
+      "counts": {},
+      "issues": [],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "gameover-1280": {
+      "vw": 1280,
+      "vh": 633,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1248,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 343
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 934,
+            "y": 80,
+            "w": 330,
+            "h": 193
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 548,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-gameover",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1280,
+            "h": 633
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1112,
+            "y": 555,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1034,
+            "y": 301,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 884,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 557,
+            "w": 544,
+            "h": 60
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 10
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "Земледелие\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Обработка бронзы\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Железо\nзакрыто",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Письменность\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Конец хода\nEnter",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Самолёты\n🔒 Воздухоплавание",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Запуски ракет\n🔒 Ракетостроение",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Спутники\n🔒 Орбитальные спутники",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Сейсмика\n🔒 Ядерное деление",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "?",
+          "by": ".k-gameover"
+        }
+      ],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "gameover-1024": {
+      "vw": 1024,
+      "vh": 768,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 992,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 478
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 678,
+            "y": 80,
+            "w": 330,
+            "h": 290
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 683,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-gameover",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 856,
+            "y": 690,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 778,
+            "y": 436,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 628,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 13
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "Земледелие\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Обработка бронзы\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Железо\nзакрыто",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Письменность\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Мореходство\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Колесо\nзакрыто",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Конец хода\nEnter",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Самолёты\n🔒 Воздухоплавание",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Запуски ракет\n🔒 Ракетостроение",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Спутники\n🔒 Орбитальные спутники",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Сейсмика\n🔒 Ядерное деление",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "?",
+          "by": ".k-gameover"
+        }
+      ],
+      "latin": [
+        "Enter"
+      ]
+    },
+    "gameover-1920": {
+      "vw": 1920,
+      "vh": 1080,
+      "panels": [
+        {
+          "el": ".k-top.glass",
+          "rect": {
+            "x": 16,
+            "y": 12,
+            "w": 1888,
+            "h": 56
+          }
+        },
+        {
+          "el": ".k-left",
+          "rect": {
+            "x": 16,
+            "y": 80,
+            "w": 310,
+            "h": 513
+          }
+        },
+        {
+          "el": ".k-right",
+          "rect": {
+            "x": 1574,
+            "y": 80,
+            "w": 330,
+            "h": 290
+          }
+        },
+        {
+          "el": ".k-chron.glass",
+          "rect": {
+            "x": 16,
+            "y": 995,
+            "w": 520,
+            "h": 69
+          }
+        },
+        {
+          "el": ".k-gameover",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1920,
+            "h": 1080
+          }
+        },
+        {
+          "el": ".k-end",
+          "rect": {
+            "x": 1752,
+            "y": 1002,
+            "w": 152,
+            "h": 62
+          }
+        },
+        {
+          "el": ".k-live.glass",
+          "rect": {
+            "x": 1674,
+            "y": 748,
+            "w": 230,
+            "h": 236
+          }
+        },
+        {
+          "el": ".k-help",
+          "rect": {
+            "x": 1524,
+            "y": 80,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "el": ".k-hint.glass",
+          "rect": {
+            "x": 552,
+            "y": 1032,
+            "w": 1184,
+            "h": 32
+          }
+        }
+      ],
+      "counts": {
+        "control-covered": 13
+      },
+      "issues": [
+        {
+          "kind": "control-covered",
+          "text": "Земледелие\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Обработка бронзы\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Железо\nзакрыто",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Письменность\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Мореходство\nдоступно",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Колесо\nзакрыто",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Конец хода\nEnter",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Самолёты\n🔒 Воздухоплавание",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Запуски ракет\n🔒 Ракетостроение",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Спутники\n🔒 Орбитальные спутники",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "Сейсмика\n🔒 Ядерное деление",
+          "by": ".k-gameover"
+        },
+        {
+          "kind": "control-covered",
+          "text": "?",
+          "by": ".k-gameover"
+        }
+      ],
+      "latin": [
+        "Enter"
+      ]
+    }
+  },
+  "texts": {
+    "start": "КУПОЛ\n\nНастоящая Земля, вымышленная политика. Через двести ходов к планете придёт астероид.\n\nСложность: \nЛёгкая\nОбычная\nСложная\nБ\nБорея\nИнгвар Хольмстад\nН\nНовый Картель\nСабина Ортелли\nЛ\nЛига Меридиана\nТаэль Ноэрис\nР\nРеспублика Аурис\nИлан Сорейо",
+    "top": "КУПОЛ\nХод 1\nДревность\nсервер на связи\nСЛОЖНОСТЬ\nсложная\nЗОЛОТО\n30\nНАУКА\n0\nВЛИЯНИЕ\n0\nТЕХНОЛОГИИ\n0\nРЕПУТАЦИЯ\n70",
+    "left": "Б\nБорея\nИнгвар Хольмстад\nХранитель Севера\nЭПОХА\nДревность\nФИНАЛ\n—\nИССЛЕДОВАНИЕ\nДревность\n0/4\nЗемледелие\nдоступно\nОбработка бронзы\nдоступно\nЖелезо\nзакрыто\nПисьменность\nдоступно\nМореходство\nдоступно\nКолесо\nзакрыто\nИндустрия\n0/4\nИнформационная эпоха\n0/4\nКосмическая эпоха\n0/4",
+    "right": "?\nНовый Картель\nЕщё не встречались\n?\nЛига Меридиана\nЕщё не встречались\n?\nРеспублика Аурис\nЕщё не встречались",
+    "diplomacyButtons": [],
+    "tech": "ИССЛЕДОВАНИЕ\nДревность\n0/4\nЗемледелие\nдоступно\nОбработка бронзы\nдоступно\nЖелезо\nзакрыто\nПисьменность\nдоступно\nМореходство\nдоступно\nКолесо\nзакрыто\nИндустрия\n0/4\nПаровой двигатель\nзакрыто\nСталь\nзакрыто\nЭлектричество\nзакрыто\nНефтедобыча\nзакрыто\nВоздухоплавание\nзакрыто\nМассовое производство\nзакрыто\nИнформационная эпоха\n0/4\nРадиоэлектроника\nзакрыто\nРеактивный двигатель\nзакрыто\nЭВМ\nзакрыто\nБеспилотники\nзакрыто\nГлобальные сети\nзакрыто\nРакетостроение\nзакрыто\nЯдерное деление\nзакрыто\nКосмическая эпоха\n0/4\nОрбитальные спутники\nзакрыто\nТяжёлые носители\nзакрыто\nРадар дальнего космоса\nзакрыто\nКинетический перехват\nзакрыто\nТермоядерные двигатели\nзакрыто\nПланетарный щит\nзакрыто",
+    "help": "×\nСправка по «Куполу»\nСовет первого хода: основайте город клавишей F, выберите исследование и поставьте производство. Затем нажмите Enter.\nЦель\n\nЧерез 25 ходов после обнаружения астероида спасти Землю общим пактом «Купол» или пережить удар в Ковчеге. Полное спасение требует щита и совместных вкладов; при провале выживает только держава с построенным Ковчегом.\n\nУправление\n\nЛКМ — выбрать юнит или город; ПКМ — идти или атаковать; Shift+ПКМ — тактический бой; двойной щелчок — приблизить; F — основать город; Enter — конец хода; Esc — снять выбор; F1 или ? — эта справка.\n\nХод\n\nВыберите технологию, задайте производство городам и прикажите юнитам действовать. В конце хода города дают ресурсы, накапливается наука, завершается исследование и обновляются армии.\n\nДипломатия\n\nВ правой панели можно заключать договоры, дарить золото, торговаться, выдвигать ультиматумы, вести тайные операции и объявлять войну. Влияние и золото списываются сервером; предложения другой стороны появляются сверху.\n\nЯдерные правила\n\nРакета требует войны и разведки цели. Удар ухудшает репутацию и вызывает ядерную зиму; ПРО и спутники могут перехватить ракету. Спутник открывает разведанную область, а перехватчики помогают обороне «Купола».\n\nПонятно",
+    "gameover": "Земля спасена\n\n«Купол» выдержал удар. Цивилизация получила шанс на будущее.\n\nХод\n1\nПобедитель\nБорея\nЗащита\n100%\nВКЛАД В СПАСЕНИЕ\nРеспублика Аурис\n140\nБорея\n110\nНовый Картель\n80\nНовая партия"
+  },
+  "errors": [],
+  "helpClosed": true,
+  "gameoverShown": true,
+  "endTurnDisabled": true,
+  "summary": {
+    "start-1280": {
+      "control-covered": 6
+    },
+    "start-1024": {
+      "control-covered": 6
+    },
+    "hud-1280x720": {},
+    "hud-1366x768": {
+      "control-covered": 1
+    },
+    "hud-1920x1080": {
+      "control-covered": 2
+    },
+    "hud-1024x768": {
+      "control-covered": 1
+    },
+    "tech-open-1280": {},
+    "help-1280": {
+      "control-covered": 12
+    },
+    "help-1024": {
+      "control-covered": 13
+    },
+    "hud-turn2-1280": {},
+    "gameover-1280": {
+      "control-covered": 10
+    },
+    "gameover-1024": {
+      "control-covered": 13
+    },
+    "gameover-1920": {
+      "control-covered": 13
+    }
+  }
+}
