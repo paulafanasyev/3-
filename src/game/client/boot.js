@@ -38,7 +38,7 @@ async function createViewer(container) {
   viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
   viewer.scene.skyAtmosphere.saturationShift = -0.12;
   viewer.scene.skyAtmosphere.brightnessShift = -0.08;
-  viewer.screenSpaceCameraController.enableCollisionDetection = true;
+  viewer.scene.screenSpaceCameraController.enableCollisionDetection = true; // у Viewer нет своего контроллера камеры: он живёт в scene
   viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
   let source = 'google';
