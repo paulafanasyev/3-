@@ -27,9 +27,33 @@ const http = require('node:http');
 const { createRequire } = require('node:module');
 const { exec } = require('node:child_process');
 
+const fs = require('node:fs');
+const os = require('node:os');
+const util = require('node:util');
+
 const root = process.env.KUPOL_ROOT || path.dirname(process.execPath);
 const app = path.join(root, 'resources', 'app');
 const start = path.join(app, 'start.cjs');
+
+// Вывод, который не роняет игру: если окна консоли нет или канал вывода сломан (EBADF),
+// пишем только в kupol.log рядом с Kupol.exe (или во временную папку, если туда нельзя).
+const logFile = (() => {
+  for (const dir of [root, os.tmpdir()]) {
+    try { const f = path.join(dir, 'kupol.log'); fs.writeFileSync(f, ''); return f; } catch { /* следующая папка */ }
+  }
+  return null;
+})();
+function emit(stream, text) {
+  try { process[stream].write(text + '\n'); } catch { /* консоли нет — остаётся файл */ }
+  if (logFile) { try { fs.appendFileSync(logFile, text + '\n'); } catch { /* диск недоступен */ } }
+}
+const fmt = (args) => args.map((a) => (typeof a === 'string' ? a : (a && a.stack) || util.inspect(a))).join(' ');
+// служебные английские строки сервера игроку не нужны, но в журнал попадают
+const quiet = (args) => typeof args[0] === 'string' && args[0].startsWith('[nuclear-gods-eye]');
+console.log = console.info = (...args) => { if (quiet(args)) { if (logFile) { try { fs.appendFileSync(logFile, fmt(args) + '\n'); } catch {} } return; } emit('stdout', fmt(args)); };
+console.warn = console.error = (...args) => emit('stderr', fmt(args));
+for (const s of ['stdout', 'stderr']) { try { process[s].on('error', () => {}); } catch { /* потока нет */ } }
+process.on('uncaughtException', (error) => { console.error('Ошибка «Купола»: ' + ((error && error.stack) || error)); });
 
 function pickPort(preferred) {
   return new Promise((resolve) => {
@@ -52,10 +76,6 @@ function openBrowser(url) {
   else exec('xdg-open "' + url + '"');
 }
 
-// Служебные английские строки сервера игроку не нужны; ошибки (console.error) остаются.
-const print = console.log.bind(console);
-console.log = (...args) => { if (typeof args[0] === 'string' && args[0].startsWith('[nuclear-gods-eye]')) return; print(...args); };
-
 (async () => {
   console.log('«Купол» запускается…');
   const port = await pickPort(Number(process.env.PORT) || 4173);
@@ -76,6 +96,7 @@ console.log = (...args) => { if (typeof args[0] === 'string' && args[0].startsWi
 })().catch((error) => {
   console.error('');
   console.error('Не удалось запустить «Купол»: ' + (error && error.message ? error.message : error));
+  if (logFile) console.error('Подробности записаны в файл: ' + logFile);
   console.error('Окно закроется через 60 секунд.');
   setTimeout(() => process.exit(1), 60000);
 });
@@ -96,6 +117,7 @@ const README = [
   '3. Если Windows покажет «Система Windows защитила ваш компьютер», нажмите «Подробнее»',
   '   и «Выполнить в любом случае»: файл не подписан сертификатом, это ожидаемо.',
   '4. Чтобы выйти, закройте чёрное окно. Партия живёт, пока открыто окно сервера.',
+  '5. Если что-то пошло не так, рядом с Kupol.exe появится файл kupol.log — пришлите его разработчику.',
   '',
   'Интернет не нужен: глобус работает на встроенном снимке Земли.',
   'Игра слушает только этот компьютер (127.0.0.1), снаружи к ней подключиться нельзя.',
@@ -225,6 +247,7 @@ async function main() {
     inject(linux, blob);
     report.smoke = await smoke(linux);
     rmSync(linux, { force: true });
+    rmSync(join(stage, 'kupol.log'), { force: true }); // журнал Linux-проверки в архив не нужен
     console.log(`[kupol-win] Linux-проверка запускателя: ${report.smoke.url}, ход ${report.smoke.turn}`);
   }
   const exe = join(stage, 'Kupol.exe');
