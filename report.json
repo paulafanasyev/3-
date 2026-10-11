@@ -1,0 +1,59 @@
+{
+  "at": "2026-10-11T10:47:30.818Z",
+  "commit": "ade8debb7facc88de320b78400c4abe75fd98dd5",
+  "shots": {
+    "01-start": {
+      "bytes": 119679,
+      "mean": 48,
+      "stdev": 27
+    },
+    "02-capital": {
+      "bytes": 246970,
+      "mean": 109,
+      "stdev": 42
+    },
+    "03-world": {
+      "bytes": 330286,
+      "mean": 70,
+      "stdev": 77
+    },
+    "04-tech": {
+      "bytes": 332349,
+      "mean": 100,
+      "stdev": 61
+    },
+    "05-diplomacy": {
+      "bytes": 323666,
+      "mean": 102,
+      "stdev": 60
+    },
+    "06-battle": {
+      "bytes": 323837,
+      "mean": 102,
+      "stdev": 60
+    },
+    "07-battle-result": {
+      "bytes": 325734,
+      "mean": 101,
+      "stdev": 60
+    },
+    "08-turn2": {
+      "bytes": 336944,
+      "mean": 100,
+      "stdev": 61
+    },
+    "09-help": {
+      "bytes": 294837,
+      "mean": 38,
+      "stdev": 31
+    },
+    "10-finale": {
+      "bytes": 137556,
+      "mean": 27,
+      "stdev": 20
+    }
+  },
+  "notes": [],
+  "errors": [],
+  "battleResult": "Победа\n      Бой длился 0:04. Потери: ваши 0, противника 22.\n      К карте"
+}
