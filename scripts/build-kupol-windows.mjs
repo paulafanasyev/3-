@@ -43,9 +43,22 @@ const logFile = (() => {
   }
   return null;
 })();
+// Если стандартный поток не открывается (под Wine, без консоли), подменяем его заглушкой:
+// иначе любое обращение к process.stdout/stderr где угодно в Node бросает EBADF.
+const { Readable, Writable } = require('node:stream');
+const broken = {};
+for (const s of ['stdin', 'stdout', 'stderr']) {
+  try { void process[s]; continue; } catch { broken[s] = true; }
+  const sink = s === 'stdin'
+    ? new Readable({ read() { this.push(null); } })
+    : new Writable({ write(chunk, enc, cb) { if (logFile) { try { fs.appendFileSync(logFile, chunk); } catch { /* диск недоступен */ } } cb(); } });
+  sink.isTTY = false;
+  sink.fd = { stdin: 0, stdout: 1, stderr: 2 }[s];
+  Object.defineProperty(process, s, { configurable: true, enumerable: true, get: () => sink });
+}
 function emit(stream, text) {
   try { process[stream].write(text + '\n'); } catch { /* консоли нет — остаётся файл */ }
-  if (logFile) { try { fs.appendFileSync(logFile, text + '\n'); } catch { /* диск недоступен */ } }
+  if (logFile && !broken[stream]) { try { fs.appendFileSync(logFile, text + '\n'); } catch { /* диск недоступен */ } }
 }
 const fmt = (args) => args.map((a) => (typeof a === 'string' ? a : (a && a.stack) || util.inspect(a))).join(' ');
 // служебные английские строки сервера игроку не нужны, но в журнал попадают
@@ -96,6 +109,7 @@ function openBrowser(url) {
 })().catch((error) => {
   console.error('');
   console.error('Не удалось запустить «Купол»: ' + (error && error.message ? error.message : error));
+  if (logFile && error && error.stack) { try { fs.appendFileSync(logFile, error.stack + '\n'); } catch { /* диск недоступен */ } }
   if (logFile) console.error('Подробности записаны в файл: ' + logFile);
   console.error('Окно закроется через 60 секунд.');
   setTimeout(() => process.exit(1), 60000);
