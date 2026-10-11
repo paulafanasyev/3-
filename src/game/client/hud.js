@@ -138,13 +138,17 @@ export function createHud(root, actions) {
   }
 
   function right(s, me) {
-    const all = [...(s.nations ?? []).filter((n) => n.id !== me.id), ...(s.neutrals ?? [])];
+    // нейтральные народы: только живые и уже открытые на карте (иначе панель — список из десятков незнакомцев)
+    // owner в снимке уже скрыт туманом: народ «известен», если видна хоть одна его клетка
+    const known = (id) => (s.owner ?? []).some((o) => o === id);
+    const neutrals = (s.neutrals ?? []).filter((p) => p.alive !== false && known(p.id)).sort((a, b) => (b.relation ?? 0) - (a.relation ?? 0));
+    const all = [...(s.nations ?? []).filter((n) => n.id !== me.id), ...neutrals];
     const war = (id) => (s.wars ?? []).some((k) => k.split('|').includes(id));
     const actionHtml = (a) => {
       const d = Object.entries(a.payload ?? {}).filter(([k, v]) => v !== null && v !== undefined && typeof v !== 'object');
       const attrs = d.map(([k, v]) => `data-${esc(k)}="${esc(v)}"`).join(' ');
       const input = a.input ? `<input data-value type="number" min="1" step="1" value="10" aria-label="Количество золота" title="Количество золота">` : '';
-      return `<span class="k-action">${input}<button ${attrs} data-act="${esc(a.action)}" ${a.enabled ? '' : 'disabled'} title="${esc(a.title || a.reason || '')}">${esc(a.label)}${a.reason && !a.enabled ? ` <small>(${esc(a.reason)})</small>` : ''}</button></span>`;
+      return `<span class="k-action">${input}<button ${attrs} data-act="${esc(a.action)}" ${a.enabled ? '' : 'disabled'} title="${esc(!a.enabled && a.reason ? a.reason : (a.title || ''))}">${esc(a.label)}</button></span>`;
     };
     $('.k-right').innerHTML = all.map((n) => {
       const major = s.nations.some((x) => x.id === n.id);
