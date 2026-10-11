@@ -162,6 +162,8 @@ export async function bootKupol() {
   net.onBattle((m) => {
     if (battleWindow || tacticalPending || !state || !m.battle || m.finished || m.battle.result) return;
     showBattle(m.battle);
+    // бой на сервере стоял на паузе: окно показывает то же самое, а не «идёт» при замершем времени
+    if (m.speed === 0) battleWindow?.pause(true);
   });
 
   function selectionView() {
