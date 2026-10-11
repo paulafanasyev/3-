@@ -1,11 +1,11 @@
-// Разово в CI: пересъёмка тактического боя «Купола» (1920×1080) с диагностикой: что лежит поверх окна боя.
-// Отчёт и кадры — в ветку ci/battle-shots. Файл удаляется следующим коммитом.
+// Разово в CI: пересъёмка тактического боя «Купола» (1920×1080) после исправления видимости окна боя.
+// Кадры заменяют 06/07 в галерее ci/screenshots (обзорный лист пересобирается); отчёт — в ci/battle-shots.
 import test from 'node:test';
 import { execSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { findChrome, startDevServer } from '../../scripts/kupol-browser-smoke.mjs';
 
-const FLAG = '/tmp/kupol-battleshot.done';
+const FLAG = '/tmp/kupol-battleshot2.done';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SCEN = 'src/game/scenarios.js';
 const EXTRA = `
@@ -18,7 +18,11 @@ export function showScenario(game, map) {
     if (!game.nations[id].met.includes(me)) game.nations[id].met.push(me);
   }
   for (let c = 0; c < game.owner.length; c += 1) game.explored[me][c] = 1;
-  return battleScenario(game, map);
+  const r = battleScenario(game, map);
+  // для кадра побольше противника: ещё два воина в той же клетке
+  const enemy = Object.keys(game.nations).find((id) => id !== me);
+  if (r && enemy) { addUnit(game, enemy, 'warrior', r.to); addUnit(game, enemy, 'warrior', r.to); }
+  return r;
 }
 export function overScenario(game) {
   game.status = 'over';
@@ -95,24 +99,19 @@ test('CI: пересъёмка боя', { skip: !process.env.GITHUB_ACTIONS || e
     }
     if (!opened) throw new Error('бой не открылся');
     await b.ev("document.querySelector('.kb-root [data-pause]')?.click(); window.__kupol.battleSpeed(0).catch(() => {}); true");
-    await sleep(4000);
+    await sleep(5000);
     report.diag.paused = JSON.parse(await b.ev(DIAG));
-    await shot(b, 'b1-paused');
-    await shot(b, 'b1-paused-surface', { fromSurface: true, captureBeyondViewport: false });
+    await shot(b, 'b1-start');
     await b.ev("window.__kupol.battleSpeed(1).catch(() => {}); true");
-    await sleep(1500);
+    await sleep(1800);
     await b.ev("window.__kupol.battleSpeed(0).catch(() => {}); true");
     await sleep(2500);
     report.diag.mid = JSON.parse(await b.ev(DIAG));
     await shot(b, 'b2-mid');
-    await b.ev("(() => { const r = document.querySelector('.kb-root'); if (r) { r.style.zIndex = '2147483000'; document.body.appendChild(r); } return true; })()");
-    await sleep(1500);
-    report.diag.forced = JSON.parse(await b.ev(DIAG));
-    await shot(b, 'b3-forced-top');
     await b.ev("document.querySelector('.kb-root [data-auto]')?.click(); window.__kupol.battleSpeed(1).catch(() => {}); true");
-    report.result = await b.waitFor("(() => { const el = document.querySelector('.kb-result'); return el && el.style.display === 'flex' ? el.innerText.slice(0, 200) : null; })()", 60000);
-    await sleep(1200);
-    await shot(b, 'b4-result');
+    report.result = await b.waitFor("(() => { const el = document.querySelector('.kb-result'); return el && el.style.display === 'flex' ? el.innerText.slice(0, 200) : null; })()", 90000);
+    await sleep(1500);
+    await shot(b, 'b3-result');
     report.errors.push(...b.errors);
   } catch (e) {
     report.fatal = String(e?.stack ?? e).slice(0, 2000);
@@ -128,11 +127,36 @@ test('CI: пересъёмка боя', { skip: !process.env.GITHUB_ACTIONS || e
       report.shots[name].stdev = Math.round(s.channels.slice(0, 3).reduce((a, c) => a + c.stdev, 0) / 3);
     }
   } catch (e) { report.notes.push(`sharp: ${String(e?.message ?? e).slice(0, 300)}`); }
+  const header0 = execSync('git config --get http.https://github.com/.extraheader || true', { cwd: root }).toString().trim();
+  const remote0 = execSync('git remote get-url origin', { cwd: root }).toString().trim();
+  const visible = report.diag.mid?.display && report.diag.mid.display !== 'none' && (report.diag.mid.rect?.width ?? 0) > 0;
+  report.visible = Boolean(visible);
+  if (visible && existsSync(`${out}/b2-mid.jpg`) && existsSync(`${out}/b3-result.jpg`)) {
+    try {
+      const gal = '/tmp/kupol-gallery';
+      execSync(`rm -rf ${gal} && git ${header0 ? `-c http.https://github.com/.extraheader="${header0}"` : ''} clone -q --depth 1 -b ci/screenshots ${remote0} ${gal}`, { stdio: 'inherit' });
+      copyFileSync(`${out}/b2-mid.jpg`, `${gal}/06-battle.jpg`);
+      copyFileSync(`${out}/b3-result.jpg`, `${gal}/07-battle-result.jpg`);
+      const sharp = (await import('sharp')).default;
+      const names = ['01-start', '02-capital', '03-world', '04-tech', '05-diplomacy', '06-battle', '07-battle-result', '08-turn2', '09-help', '10-finale'].filter((n) => existsSync(`${gal}/${n}.jpg`));
+      const tiles = [];
+      for (const n of names) tiles.push(await sharp(`${gal}/${n}.jpg`).resize(640, 360).toBuffer());
+      const rows = Math.ceil(tiles.length / 2);
+      await sharp({ create: { width: 2 * 640 + 3 * 16, height: rows * 360 + (rows + 1) * 16, channels: 3, background: '#0b1020' } })
+        .composite(tiles.map((t, i) => ({ input: t, left: 16 + (i % 2) * 656, top: 16 + Math.floor(i / 2) * 376 })))
+        .jpeg({ quality: 85 }).toFile(`${gal}/00-overview.jpg`);
+      const g = (c) => execSync(c, { cwd: gal, stdio: 'inherit' });
+      g('git add -A');
+      g('git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "CI: кадры боя пересняты"');
+      execSync(`git ${header0 ? `-c http.https://github.com/.extraheader="${header0}"` : ''} push -q origin ci/screenshots`, { cwd: gal, stdio: 'inherit' });
+      report.gallery = 'обновлена';
+    } catch (e) { report.notes.push(`галерея: ${String(e?.message ?? e).slice(0, 300)}`); }
+  } else report.notes.push('окно боя не видно — галерею не трогаю');
   writeFileSync(`${out}/report.json`, JSON.stringify(report, null, 2));
   const header = execSync('git config --get http.https://github.com/.extraheader || true', { cwd: root }).toString().trim();
   const remote = execSync('git remote get-url origin', { cwd: root }).toString().trim();
   const o = (c) => execSync(c, { cwd: out, stdio: 'inherit' });
   o('git init -q && git checkout -q -b ci/battle-shots && git add -A');
-  o('git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "CI: пересъёмка боя"');
+  o('git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "CI: пересъёмка боя (после исправления)"');
   execSync(`git ${header ? `-c http.https://github.com/.extraheader="${header}"` : ''} push -f ${remote} ci/battle-shots`, { cwd: out, stdio: 'inherit' });
 });
