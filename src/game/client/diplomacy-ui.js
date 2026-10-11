@@ -59,7 +59,8 @@ export function diplomacyActions(snapshot, targetId) {
         const discount = DOCTRINES[me.doctrine]?.treatyDiscount ?? 0;
         const costs = Math.round(baseCosts[type] * (1 - discount));
         const enough = influence >= costs;
-        add(TREATY_NAMES[type] ?? type, { kind: 'propose', target: targetId, treaty: type }, {
+        const name = TREATY_NAMES[type] ?? type;
+        add(name.charAt(0).toUpperCase() + name.slice(1), { kind: 'propose', target: targetId, treaty: type }, {
           action: 'propose', treaty: type, title: `Цена: ${costs} влияния.`, ...reason(enough, 'Недостаточно влияния.'),
         });
       }

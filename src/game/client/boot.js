@@ -101,6 +101,7 @@ export async function bootKupol() {
     produce: (d) => send({ kind: 'produce', cityId: d.city, append: d.append === '1', item: d.kind === 'dome' ? { kind: 'dome' } : { kind: d.kind, id: d.id } }),
     gift: (d) => send({ kind: 'gift', target: d.target, gold: Math.max(1, Math.floor(Number(d.amount) || 0)) }),
     annex: (d) => send({ kind: 'annex', target: d.target }),
+    cancelTreaty: (d) => { if (confirm('Расторгнуть договор? Это ударит по отношениям и репутации.')) send({ kind: 'cancelTreaty', target: d.target, treaty: d.treaty }).then((r) => r.ok && hud.toast('Договор расторгнут')); },
     negotiate: (d) => send({ kind: 'negotiate', target: d.target, deal: { give: { gold: Math.max(1, Math.floor(Number(d.amount) || 0)) }, take: {} } }),
     demand: (d) => send({ kind: 'demand', target: d.target, take: { gold: Math.max(1, Math.floor(Number(d.amount) || 0)) } }),
     spy: (d) => send({ kind: 'spy', op: d.op, target: d.target, ...(d.third ? { third: d.third } : {}) }),

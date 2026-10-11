@@ -36,3 +36,8 @@ test('подсказка договора называет цену в влия�
   assert.ok(titles.length > 0);
   for (const t of titles) assert.match(t, /^Цена: \d+ влияния\.$/);
 });
+
+test('кнопки договоров начинаются с заглавной буквы', () => {
+  const labels = diplomacyActions(base(), 'cartel').filter((a) => a.action === 'propose').map((a) => a.label);
+  for (const l of labels) assert.equal(l[0], l[0].toUpperCase(), l);
+});
