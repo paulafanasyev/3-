@@ -73,7 +73,7 @@ test('перехват: перехватчики и спутник дают ша
   for (let i = 0; i < 8; i += 1) addUnit(s, 'auris', 'interceptor', b.cell);
   assert.equal(interceptChance(s, 'auris'), NUKE.interceptCap);
   addUnit(s, 'auris', 'satellite', b.cell);
-  assert.equal(interceptChance(s, 'auris'), NUKE.interceptCap + NUKE.earlyWarning);
+  assert.equal(interceptChance(s, 'auris'), NUKE.interceptCap);
   // при многих пусках часть ракет сбивают
   s.explored.borea[b.cell] = 1;
   declareWar(s, 'borea', 'auris');

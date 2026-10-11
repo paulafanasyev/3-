@@ -326,29 +326,40 @@ export function stepBattle(b, ticks = 1) {
   return b.result?.winner ?? null;
 }
 
-/** Приказ полку игрока. */
-export function orderRegiment(b, side, order) {
+/** Проверяет приказ полку без изменения боя. */
+export function validateBattleOrder(b, side, order) {
   const r = b.regiments.find((x) => x.id === order?.regiment);
-  if (!r || r.side !== side || !alive(r)) return 'NOT_YOUR_UNIT';
-  if (r.state === 'rout') return 'ROUTING';
+  if (!r || r.side !== side || !alive(r)) return { error: 'NOT_YOUR_UNIT' };
+  if (r.state === 'rout') return { error: 'ROUTING' };
   const num = (v) => typeof v === 'number' && Number.isFinite(v);
   switch (order.kind) {
     case 'move':
-      if (!num(order.x) || !num(order.y)) return 'BAD_COMMAND';
-      r.order = { kind: 'move', x: clamp(order.x, -FIELD.w / 2, FIELD.w / 2), y: clamp(order.y, -FIELD.h / 2, FIELD.h / 2), run: Boolean(order.run) };
-      return null;
+      if (!Number.isFinite(order.x) || !Number.isFinite(order.y)) return { error: 'BAD_COMMAND' };
+      return { r, value: { kind: 'move', x: clamp(order.x, -FIELD.w / 2, FIELD.w / 2), y: clamp(order.y, -FIELD.h / 2, FIELD.h / 2), run: Boolean(order.run) } };
     case 'attack': {
       const t = b.regiments.find((x) => x.id === order.target);
-      if (!t || t.side === side || !alive(t)) return 'NO_TARGET';
-      r.order = { kind: 'attack', target: t.id, run: Boolean(order.run), keep: TROOPS[r.type].range && !order.melee ? TROOPS[r.type].range * 0.8 : 0 };
-      return null;
+      if (!t || t.side === side || !alive(t)) return { error: 'NO_TARGET' };
+      return { r, value: { kind: 'attack', target: t.id, run: Boolean(order.run), keep: TROOPS[r.type].range && !order.melee ? TROOPS[r.type].range * 0.8 : 0 } };
     }
-    case 'hold': r.order = { kind: 'hold' }; return null;
+    case 'hold': return { r, value: { kind: 'hold' } };
     case 'formation':
-      if (!FORMATIONS[order.formation] || TROOPS[r.type].kind !== 'foot') return 'BAD_COMMAND';
-      r.formation = order.formation; return null;
-    default: return 'BAD_COMMAND';
+      if (!FORMATIONS[order.formation] || TROOPS[r.type].kind !== 'foot') return { error: 'BAD_COMMAND' };
+      return { r, value: null, formation: order.formation };
+    default: return { error: 'BAD_COMMAND' };
   }
+}
+
+function applyRegimentOrder(validated) {
+  if (validated.formation) validated.r.formation = validated.formation;
+  else validated.r.order = validated.value;
+}
+
+/** Приказ полку игрока. */
+export function orderRegiment(b, side, order) {
+  const validated = validateBattleOrder(b, side, order);
+  if (validated.error) return validated.error;
+  applyRegimentOrder(validated);
+  return null;
 }
 
 /** Итог боя переносится на стратегическую карту: потери в HP, гибель, захват города. */

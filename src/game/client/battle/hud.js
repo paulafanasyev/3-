@@ -48,7 +48,7 @@ export function openBattle({ net, first, colorOf, iconOf = () => '', autoplay = 
   root.innerHTML = `<div class="kb-scene"></div>
     <div class="kb-top"><div class="kb-side a"></div><div class="kb-mid"><div class="kb-time"></div><div class="kb-bar"><i></i><b></b></div></div><div class="kb-side d"></div></div>
     <canvas class="kb-mini" width="220" height="165" title="Миникарта: щелчок — перенести камеру"></canvas>
-    <div class="kb-labels"></div><div class="kb-box"></div><div class="kb-toast"></div><div class="kb-queue"></div>
+    <div class="kb-labels"></div><div class="kb-box"></div><div class="kb-toast"></div><div class="kb-queue"></div><div class="kb-disconnect" style="display:none">Связь с сервером потеряна</div>
     <div class="kb-help">ЛКМ / рамка — выбрать · ПКМ — идти · двойной ПКМ — бегом · ПКМ по врагу — атака · Alt — рукопашная · Пробел — пауза · H — стоять · F — строй</div>
     <div class="kb-bottom"><div class="kb-cards"></div>
       <div class="kb-tools">
@@ -60,6 +60,9 @@ export function openBattle({ net, first, colorOf, iconOf = () => '', autoplay = 
   document.body.appendChild(root);
   const view = createBattleView(root.querySelector('.kb-scene'), { colorOf });
   let battle = first; let selected = []; let speed = 1; let paused = false; let busy = false; let done = null;
+  let disconnected = false;
+  let statusUnsubscribe = null;
+  let stateUnsubscribe = null;
   const me = () => battle.human ?? 'a';
   const mine = () => battle.regiments.filter((r) => r.side === me() && r.state !== 'dead' && r.state !== 'fled');
 
@@ -90,6 +93,7 @@ export function openBattle({ net, first, colorOf, iconOf = () => '', autoplay = 
       c.querySelector('.kb-st').textContent = st;
       c.title = `${NAMES[r.type] ?? r.type}: ${r.men} из ${r.menStart}, дух ${r.morale}, усталость ${r.fatigue}${r.ammo ? `, боезапас ${r.ammo}` : ''}`;
     }
+    root.querySelectorAll('button:not([data-close])').forEach((button) => { button.disabled = disconnected; });
   }
   function drawLabels() {
     const box = root.querySelector('.kb-labels');
@@ -182,6 +186,7 @@ export function openBattle({ net, first, colorOf, iconOf = () => '', autoplay = 
     clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2200);
   }
   function order(orders) {
+    if (disconnected || done) return Promise.resolve({ ok: false, message: 'Нет связи с сервером' });
     // оптимистично: сразу показываем приказ на карте и в карточках
     for (const o of orders) {
       const r = battle.regiments.find((x) => x.id === o.regiment);
@@ -221,6 +226,17 @@ export function openBattle({ net, first, colorOf, iconOf = () => '', autoplay = 
   // режим «сервер сам шлёт кадры»: если сеть умеет подписку, опроса нет вообще
   const push = typeof net.onBattle === 'function';
   const unsubscribe = push ? net.onBattle((m) => { if (m.battle) apply(m.battle); if (m.finished) finish(m); }) : null;
+  const setConnection = (status) => {
+    disconnected = status !== 'online';
+    const notice = root.querySelector('.kb-disconnect');
+    notice.style.display = disconnected ? 'flex' : 'none';
+    render();
+  };
+  statusUnsubscribe = typeof net.onStatus === 'function' ? net.onStatus(setConnection) : null;
+  stateUnsubscribe = typeof net.onState === 'function' ? net.onState((state) => {
+    // снимок карты окно боя не закрывает: конец боя приходит кадром finished
+    if (state?.battle) apply(state.battle, true);
+  }) : null;
   const serverSpeed = () => { if (push) net.battleSpeed(paused ? 0 : speed).catch(() => {}); };
   let timer = 0;
   function startLoop() {
@@ -240,6 +256,7 @@ export function openBattle({ net, first, colorOf, iconOf = () => '', autoplay = 
   root.addEventListener('click', (e) => {
     const t = e.target.closest('button,[data-reg]');
     if (!t) return;
+    if (disconnected && !t.dataset.close) return;
     if (t.dataset.reg) {
       const id = t.dataset.reg;
       if (e.detail === 2) { const r = battle.regiments.find((x) => x.id === id); if (r) view.focus(r.x, r.y); }
@@ -286,7 +303,7 @@ export function openBattle({ net, first, colorOf, iconOf = () => '', autoplay = 
   let lastRight = 0;
   canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    if (!selected.length) return;
+    if (disconnected || !selected.length) return;
     const p = view.pickField(e.clientX, e.clientY); if (!p) return;
     const run = performance.now() - lastRight < 350; lastRight = performance.now();
     const foe = view.regimentAt(p, me() === 'a' ? 'd' : 'a');
@@ -324,13 +341,14 @@ export function openBattle({ net, first, colorOf, iconOf = () => '', autoplay = 
   let resolveDone;
   const finished = new Promise((res) => { resolveDone = res; });
   function close() {
-    stopLoop(); unsubscribe?.(); cancelAnimationFrame(raf);
+    stopLoop(); unsubscribe?.(); statusUnsubscribe?.(); stateUnsubscribe?.(); cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey); window.removeEventListener('pointermove', onPress); window.removeEventListener('pointerup', onRelease);
     view.dispose(); root.remove(); resolveDone(done);
   }
   return {
     finished, view, root, select, finish, pause: setPaused,
-    setBattle(b) { apply(b); drawLabels(); drawMini(); },
+    setBattle(b) { if (b) apply(b); drawLabels(); drawMini(); },
+    close,
     labels: () => { drawLabels(); drawMini(); },
   };
 }

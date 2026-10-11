@@ -42,7 +42,7 @@ test('пауза останавливает время боя, скорость 
   session.handle({ type: 'game:battleSpeed', speed: 4 });
   step(500);
   const f = sent.filter((m) => m.type === 'game:battle').at(-1);
-  assert.ok(f.battle.tick >= 9, `тиков: ${f.battle.tick}`); // 0,5 с × 4 / 0,2 с = 10 тиков
+  assert.equal(f.battle.tick, 2, `фиксированный кадр: ${f.battle.tick}`); // один вызов таймера = 4 × 100 ms / 200 ms = 2 тика
 });
 
 test('итог боя останавливает часы и рассылает снимок карты', () => {

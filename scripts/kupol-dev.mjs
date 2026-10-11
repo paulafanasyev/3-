@@ -4,7 +4,7 @@
 // В продакшене то же самое делает server.js (npm run build && npm start).
 import { createServer } from 'vite';
 import { WebSocketServer } from 'ws';
-import { createGameSession } from '../src/game/session.js';
+import { createSessionRegistry, createSessionConnection } from '../src/game/sessions.js';
 import { SCENARIOS } from '../src/game/scenarios.js';
 
 const vite = await createServer({ configFile: new URL('../vite.config.js', import.meta.url).pathname });
@@ -12,6 +12,7 @@ await vite.listen();
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 // KUPOL_SCENARIO=battle — готовая ситуация для проверок в браузере (scripts/kupol-browser-smoke.mjs)
 const scenario = SCENARIOS[process.env.KUPOL_SCENARIO] ?? null;
+const sessions = createSessionRegistry();
 if (process.env.KUPOL_SCENARIO && !scenario) console.warn(`[Купол] неизвестный сценарий: ${process.env.KUPOL_SCENARIO}`);
 
 vite.httpServer.on('upgrade', (req, socket, head) => {
@@ -23,14 +24,16 @@ vite.httpServer.on('upgrade', (req, socket, head) => {
 
 wss.on('connection', (socket) => {
   const send = (payload) => { if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(payload)); };
-  const game = createGameSession({ send, onNewGame: scenario });
-  socket.on('close', () => game.dispose());
-  socket.on('message', (raw, isBinary) => {
-    if (isBinary) return;
-    let message;
-    try { message = JSON.parse(raw.toString()); } catch { send({ type: 'error', code: 'INVALID_JSON' }); return; }
-    if (typeof message?.type === 'string' && message.type.startsWith('game:')) game.handle(message);
+  const connection = createSessionConnection({
+    socket,
+    registry: sessions,
+    sessionOptions: { onNewGame: scenario },
+    onBinary: () => {},
+    onInvalidJson: () => send({ type: 'error', code: 'INVALID_JSON' }),
+    onUnknown: (message) => { if (!message?.type?.startsWith('game:')) send({ type: 'error', code: 'UNKNOWN_GAME_MESSAGE' }); },
   });
+  socket.on('close', () => connection.close());
+  socket.on('message', (raw, isBinary) => connection.message(raw, isBinary));
 });
 
 vite.printUrls();

@@ -3,6 +3,7 @@
 import { nextRandom } from './rng.js';
 import { UNITS } from './data/units.js';
 import { cellsWithin } from './map.js';
+import { visibleCells } from './rules.js';
 import { pushEvent, nameOf } from './events.js';
 import { atWar, isNeutralId, unitsAt, nuclearWinter } from './rules.js';
 import { changeRelation, changeReputation } from './diplomacy.js';
@@ -52,7 +53,7 @@ export function interceptChance(state, victim) {
   const mine = Object.values(state.units).filter((u) => u.owner === victim);
   const interceptors = mine.filter((u) => u.type === 'interceptor').length;
   const warning = mine.some((u) => u.type === 'satellite') ? NUKE.earlyWarning : 0;
-  return Math.min(NUKE.interceptCap, interceptors * NUKE.interceptPerUnit) + (interceptors ? warning : warning / 2);
+  return Math.min(NUKE.interceptCap, interceptors * NUKE.interceptPerUnit + (interceptors ? warning : warning / 2));
 }
 
 const validCell = (map, cell) => typeof cell === 'number' && Number.isSafeInteger(cell) && cell >= 0 && cell < map.size;
@@ -60,6 +61,8 @@ const validCell = (map, cell) => typeof cell === 'number' && Number.isSafeIntege
 export function nukeBlocker(state, map, nationId, unit, to) {
   if (!unit || unit.owner !== nationId) return 'NOT_YOUR_UNIT';
   if (unit.type !== 'icbm') return 'NOT_WARHEAD';
+  const launchCity = Object.values(state.cities).find((city) => city.cell === unit.cell);
+  if (!launchCity || launchCity.owner !== nationId || !launchCity.buildings.includes('silo')) return 'NEED_SILO';
   if (!validCell(map, to)) return 'NO_TARGET';
   if (!state.explored[nationId][to]) return 'NOT_EXPLORED';
   const victim = state.owner[to];
@@ -82,7 +85,18 @@ export function launchNuke(state, map, nationId, unit, to) {
   const strike = { turn: state.turn, from: nationId, to: victim, fromCell: from, cell: to, intercepted, city: target?.name ?? null };
   log.strikes.push(strike);
   if (log.strikes.length > 60) log.strikes.shift();
-  const extra = { cell: to, fromCell: from, nuclear: true };
+  // Координаты получают только атакующий, жертва и те, кто сейчас видит хотя бы одну из клеток.
+  // Общесистемное событие намеренно остаётся без координат: туман войны — это серверный контракт.
+  const coordinateAudience = Object.keys(state.nations).sort().filter((id) => {
+    if (!state.nations[id].alive || id === nationId || id === victim) return state.nations[id]?.alive;
+    const seen = visibleCells(state, map, id);
+    return seen.has(to) || seen.has(from);
+  });
+  const detail = { cell: to, fromCell: from, nuclear: true };
+  const emitNuclear = (key, params) => {
+    pushEvent(state, key, params, 'all');
+    if (coordinateAudience.length) pushEvent(state, key, params, coordinateAudience, detail);
+  };
   // мир реагирует на сам пуск, даже если ракету сбили
   const attackerName = nameOf(state, nationId);
   const victimName = nameOf(state, victim);
@@ -101,7 +115,7 @@ export function launchNuke(state, map, nationId, unit, to) {
   }
   if (isNeutralId(victim)) for (const p of Object.values(state.neutrals)) p.relations[nationId] = Math.max(-100, (p.relations[nationId] ?? 0) - 40);
   if (intercepted) {
-    pushEvent(state, 'nuclearIntercepted', { a: attackerName, b: victimName }, 'all', extra);
+    emitNuclear('nuclearIntercepted', { a: attackerName, b: victimName });
     return { ok: true, intercepted: true, chance };
   }
   let killed = 0;
@@ -125,7 +139,7 @@ export function launchNuke(state, map, nationId, unit, to) {
     }
   }
   strike.killed = killed;
-  pushEvent(state, target ? 'nuclearStrike' : 'nuclearStrikeField', { a: attackerName, b: victimName, city: target?.name ?? '' }, 'all', extra);
+  emitNuclear(target ? 'nuclearStrike' : 'nuclearStrikeField', { a: attackerName, b: victimName, city: target?.name ?? '' });
   return { ok: true, intercepted: false, chance, killed, cities: hitCities };
 }
 

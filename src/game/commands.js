@@ -23,7 +23,7 @@ import {
 } from './negotiation.js';
 import { runOperation } from './intrigue.js';
 import { launchNuke, dismantle, orbitalRecon } from './nuclear.js';
-import { startBattle, stepBattle, orderRegiment, finishBattle, battleView, isTacticalType } from './tactical.js';
+import { startBattle, stepBattle, orderRegiment, validateBattleOrder, finishBattle, battleView, isTacticalType } from './tactical.js';
 import { say, remember } from './leaders.js';
 
 const ok = (extra = {}) => ({ ok: true, ...extra });
@@ -279,6 +279,7 @@ function dispatch(state, nationId, command, map) {
   const needCity = () => (city && city.owner === nationId ? null : fail('NOT_YOUR_CITY'));
   const target = typeof command.target === 'string' ? command.target : null;
   const knownTarget = isMajor(state, target) || isPeople(state, target);
+  const targetAlive = (id) => (isMajor(state, id) ? state.nations[id].alive : isPeople(state, id) ? state.neutrals[id].alive : false);
 
   // во время тактического боя партия стоит: доступны только приказы на поле
   if (state.battle && !command.kind.startsWith('battle')) return fail('BATTLE_ACTIVE');
@@ -300,8 +301,12 @@ function dispatch(state, nationId, command, map) {
     }
     case 'battleOrder': {
       if (!state.battle) return fail('NO_BATTLE');
-      const orders = Array.isArray(command.orders) ? command.orders.slice(0, 40) : [command];
-      for (const o of orders) { const err = orderRegiment(state.battle, state.battle.human, o); if (err) return fail(err); }
+      const orders = Array.isArray(command.orders) ? command.orders : [command];
+      if (orders.length > 40) return fail('BAD_COMMAND');
+      const checked = orders.map((o) => validateBattleOrder(state.battle, state.battle.human, o));
+      const invalid = checked.find((x) => x.error);
+      if (invalid) return fail(invalid.error);
+      for (const o of orders) orderRegiment(state.battle, state.battle.human, o);
       return ok({ battle: battleView(state.battle) });
     }
     case 'battleAdvance': {
@@ -376,12 +381,12 @@ function dispatch(state, nationId, command, map) {
       return ok();
     }
     case 'declareWar': {
-      if (!knownTarget || target === nationId) return fail('UNKNOWN_NATION');
+      if (!knownTarget || !targetAlive(target) || target === nationId) return fail('UNKNOWN_NATION');
       if (isMajor(state, target) && !nation.met.includes(target)) return fail('NOT_MET');
       return declareWar(state, nationId, target);
     }
     case 'proposePeace': {
-      if (!knownTarget) return fail('UNKNOWN_NATION');
+      if (!knownTarget || !targetAlive(target)) return fail('UNKNOWN_NATION');
       if (!atWar(state, nationId, target)) return fail('NOT_AT_WAR');
       if (isNeutralId(target) || !state.nations[target].human) {
         if (!evaluatePeace(state, target, nationId)) return fail('REJECTED');
@@ -394,7 +399,7 @@ function dispatch(state, nationId, command, map) {
       const type = command.treaty;
       if (!own(TREATY_RULES, type)) return fail('BAD_COMMAND');
       if (isPeople(state, target)) return proposeToNeutral(state, map, nation, target, type);
-      if (!isMajor(state, target) || target === nationId) return fail('UNKNOWN_NATION');
+      if (!isMajor(state, target) || !targetAlive(target) || target === nationId) return fail('UNKNOWN_NATION');
       if (!nation.met.includes(target)) return fail('NOT_MET');
       if (treatyBetween(state, nationId, target, type)) return fail('TREATY_EXISTS');
       if (atWar(state, nationId, target)) return fail('ALREADY_AT_WAR');
@@ -412,13 +417,14 @@ function dispatch(state, nationId, command, map) {
     }
     case 'cancelTreaty': {
       const type = command.treaty;
-      if (!knownTarget || !own(TREATY_RULES, type) || !treatyBetween(state, nationId, target, type)) return fail('NO_TREATY');
+      if (!knownTarget || !targetAlive(target)) return fail('UNKNOWN_NATION');
+      if (!own(TREATY_RULES, type) || !treatyBetween(state, nationId, target, type)) return fail('NO_TREATY');
       removeTreaty(state, nationId, target, type, { broken: true, by: nationId });
       return ok();
     }
     case 'respond': {
       const offer = state.offers.find((o) => o.id === command.offerId && o.to === nationId);
-      if (!offer) return fail('BAD_OFFER');
+      if (!offer || !targetAlive(offer.from)) return fail('BAD_OFFER');
       const consume = () => { state.offers = state.offers.filter((o) => o !== offer); };
       const accept = command.accept === true;
       // предложение снимается только после успешного ответа: при ошибке его можно принять позже
@@ -457,7 +463,7 @@ function dispatch(state, nationId, command, map) {
     }
     case 'gift': {
       const gold = typeof command.gold === 'number' && Number.isFinite(command.gold) ? Math.floor(command.gold) : 0;
-      if (!knownTarget || target === nationId) return fail('UNKNOWN_NATION');
+      if (!knownTarget || !targetAlive(target) || target === nationId) return fail('UNKNOWN_NATION');
       if (gold <= 0 || gold > nation.gold) return fail('NOT_ENOUGH_GOLD');
       nation.gold -= gold;
       if (isMajor(state, target)) { state.nations[target].gold += gold; remember(state, target, nationId, 'favor', Math.min(30, gold / 5), 'gift'); }
@@ -479,7 +485,7 @@ function dispatch(state, nationId, command, map) {
       return ok();
     }
     case 'negotiate': {
-      if (!isMajor(state, target) || target === nationId) return fail('UNKNOWN_NATION');
+      if (!isMajor(state, target) || !targetAlive(target) || target === nationId) return fail('UNKNOWN_NATION');
       if (!nation.met.includes(target)) return fail('NOT_MET');
       const deal = normalizeDeal(command.deal);
       const blocker = dealBlocker(state, nationId, target, deal);
@@ -496,7 +502,7 @@ function dispatch(state, nationId, command, map) {
       return { ok: false, error: 'REJECTED', reply: say(state, target, 'rejectDeal', { target: nation.name }) };
     }
     case 'demand': {
-      if (!isMajor(state, target) || target === nationId) return fail('UNKNOWN_NATION');
+      if (!isMajor(state, target) || !targetAlive(target) || target === nationId) return fail('UNKNOWN_NATION');
       if (!nation.met.includes(target)) return fail('NOT_MET');
       if (atWar(state, nationId, target)) return fail('ALREADY_AT_WAR');
       const demandBlocked = demandBlocker(state, nationId, target);
@@ -517,7 +523,7 @@ function dispatch(state, nationId, command, map) {
       return { ok: true, ...result };
     }
     case 'spy': {
-      if (!isMajor(state, target)) return fail('UNKNOWN_NATION');
+      if (!isMajor(state, target) || !targetAlive(target)) return fail('UNKNOWN_NATION');
       const third = typeof command.third === 'string' ? command.third : null;
       return runOperation(state, map, nationId, command.op, target, third);
     }

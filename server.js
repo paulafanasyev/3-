@@ -7,7 +7,10 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { createGameSession } from './src/game/session.js';
+import { createSessionRegistry, createSessionConnection } from './src/game/sessions.js';
+
+// Партии переживают обрыв связи и перезагрузку страницы: 10 минут по токену (game:resume).
+const gameSessions = createSessionRegistry();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -265,8 +268,12 @@ wss.on('connection', (socket) => {
   send(socket, { type: 'runtime:ready', version: 1 });
 
   // «Купол»: одна партия на соединение, вся логика на сервере (src/game/session.js).
-  const game = createGameSession({ send: (payload) => send(socket, payload) });
-  socket.on('close', () => game.dispose());
+  const game = createSessionConnection({
+    socket,
+    registry: gameSessions,
+    onUnknown: () => send(socket, { type: 'error', code: 'UNKNOWN_GAME_MESSAGE' }),
+  });
+  socket.on('close', () => game.close());
 
   socket.on('message', (raw, isBinary) => {
     if (isBinary) {
@@ -293,7 +300,7 @@ wss.on('connection', (socket) => {
     }
 
     if (message.type.startsWith('game:')) {
-      if (!game.handle(message)) send(socket, { type: 'error', code: 'UNKNOWN_GAME_MESSAGE' });
+      game.message(raw, false);
       return;
     }
 
@@ -325,6 +332,7 @@ function shutdown(signal) {
   shuttingDown = true;
   console.log(`[nuclear-gods-eye] ${signal} received, shutting down`);
   clearInterval(heartbeat);
+  gameSessions.dispose();
   for (const socket of wss.clients) socket.terminate();
   wss.close();
   Promise.resolve(vite?.close())

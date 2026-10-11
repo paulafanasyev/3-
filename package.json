@@ -1,7 +1,7 @@
 {
   "name": "nuclear-gods-eye",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "description": "Nuclear God's Eye — стратегическая игровая симуляция на 3D-глобусе. Форк God's Eye View (Bilawal Sidhu, MIT).",
   "type": "module",
   "license": "MIT",
@@ -24,13 +24,15 @@
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
-    "test:game": "node --test src/game/*.test.mjs",
+    "test:game": "node --test src/game/*.test.mjs src/game/client/*.test.mjs",
     "game:map": "node scripts/build-game-map.mjs",
     "game:balance": "node scripts/game-balance.mjs",
     "game:portraits": "node scripts/game-portraits.mjs",
     "game:units": "node scripts/game-units.mjs",
     "game:dev": "node scripts/kupol-dev.mjs",
-    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs"
+    "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
+    "prebuild": "npm run game:portraits && npm run game:units",
+    "postbuild": "node scripts/check-game-build.mjs"
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
@@ -39,13 +41,13 @@
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
     "satellite.js": "^6.0.2",
-    "three": "^0.185.0"
+    "three": "^0.185.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "puppeteer": "^24.37.5",
     "sharp": "^0.34.5",
     "vite": "^6.0.0",
-    "vite-plugin-cesium": "^1.2.23",
-    "ws": "^8.21.0"
+    "vite-plugin-cesium": "^1.2.23"
   }
 }

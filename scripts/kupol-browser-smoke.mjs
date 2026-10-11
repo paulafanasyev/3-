@@ -136,6 +136,12 @@ async function playGame(s) {
   g.regiments = await ev("document.querySelectorAll('.kb-cards > *').length");
   g.battleCanvas = await ev("!!document.querySelector('.kb-scene canvas')");
   if (!g.battleCanvas) g.problems.push('у боя нет холста three.js');
+  // перезагрузка посреди боя: сессия на сервере жива, окно боя возвращается само
+  await s.send('Page.reload', {});
+  g.battleRestored = await waitFor("document.querySelector('.kb-root .kb-scene canvas') && !document.querySelector('.k-start') ? true : null", 40000);
+  if (!g.battleRestored) { g.problems.push('после перезагрузки посреди боя окно боя не вернулось'); return g; }
+  await sleep(1000);
+  await ev("window.__kbDone = 'resumed'; true");
   await ev("document.querySelector('.kb-root [data-auto]')?.click(); true");
   g.result = await waitFor("(() => { const el = document.querySelector('.kb-result'); return el && el.style.display === 'flex' ? el.innerText.slice(0, 200) : null; })()", 60000);
   if (!g.result) { g.problems.push('автобой не закончился за 60 с'); return g; }
@@ -143,9 +149,17 @@ async function playGame(s) {
   g.closed = await waitFor("window.__kbDone !== undefined && !document.querySelector('.kb-root') ? window.__kbDone : null", 10000);
   if (!g.closed) g.problems.push('окно боя не закрылось');
   // конец хода
-  await ev('window.__kupol.endTurn(); true');
+  // конец хода: двойное нажатие (Enter + кнопка) должно дать ровно один ход
+  await ev('window.__kupol.endTurn(); window.__kupol.endTurn(); true');
   g.turnAfter = await waitFor(`(window.__kupol.state?.turn ?? 0) > ${g.turn} ? window.__kupol.state.turn : null`, 30000);
-  if (!g.turnAfter) g.problems.push('ход не завершился за 30 с');
+  if (!g.turnAfter) { g.problems.push('ход не завершился за 30 с'); return g; }
+  await sleep(3000);
+  g.turnSettled = await ev('window.__kupol.state?.turn ?? null');
+  if (g.turnSettled !== g.turn + 1) g.problems.push(`двойной конец хода: ход ${g.turn} → ${g.turnSettled}, ожидался ${g.turn + 1}`);
+  // перезагрузка страницы: партия возвращается по токену сессии, без окна выбора нации
+  await s.send('Page.reload', {});
+  g.resumedTurn = await waitFor("(() => { const st = window.__kupol?.state; return st && !document.querySelector('.k-start') ? st.turn : null; })()", 40000);
+  if (g.resumedTurn !== g.turnSettled) g.problems.push(`после перезагрузки партия не вернулась (ход ${g.resumedTurn ?? '—'} вместо ${g.turnSettled})`);
   return g;
 }
 

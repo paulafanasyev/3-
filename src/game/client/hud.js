@@ -8,6 +8,9 @@ import { LEADERS } from '../data/leaders.js';
 import { TREATY_NAMES } from '../i18n/ru.js';
 import { LIVE_LAYERS, liveUnlocked } from './liveList.js';
 import { unitPortrait } from './icons.js';
+import { diplomacyActions } from './diplomacy-ui.js';
+import { technologyTree } from './tech-ui.js';
+import { endingCopy } from './endgame.js';
 
 const MOOD = { hostile: ['враждебность', '#ff6b5e'], cold: ['холодность', '#8fb3ff'], neutral: ['сдержанность', '#c6ccd6'], warm: ['дружелюбие', '#8fe0a6'], friend: ['близкий союзник', '#5ee0b0'] };
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -26,15 +29,20 @@ export function createHud(root, actions) {
     <div class="k-right"></div>
     <div class="k-chron glass"></div>
     <div class="k-fin glass" style="display:none"></div>
+    <div class="k-gameover" style="display:none"></div>
+    <div class="k-reconnect" style="display:none"><b>Связь с сервером потеряна — переподключаемся…</b><button data-act="reload">Обновить страницу</button></div>
     <button class="k-end">Конец хода<small>Enter</small></button>
     <div class="k-toast glass" style="opacity:0"></div>
     <div class="k-offer glass" style="display:none"></div>
     <div class="k-live glass"></div>
+    <button class="k-help" data-act="help" title="Справка (F1 или ?)">?</button>
+    <div class="k-help-overlay" style="display:none"></div>
     <div class="k-combat glass" style="display:none"></div>
     <div class="k-hint glass">ЛКМ — выбрать · ПКМ — идти/атаковать (у ракеты — пуск, у спутника — съёмка) · двойной щелчок — приблизить · F — основать город · Enter — конец хода</div>`;
   const $ = (s) => root.querySelector(s);
   let toastTimer = null;
   let netStatus = 'connecting';
+  let turnBusy = false;
   let lastSnap = null;
   let liveState = null;
 
@@ -42,9 +50,31 @@ export function createHud(root, actions) {
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const d = b.dataset;
-    actions[d.act]?.(d);
+    const input = b.closest('.k-action')?.querySelector('input[data-value]') ?? b.closest('.k-lc, .k-card')?.querySelector('input[data-value]');
+    const data = { ...d, amount: input?.value };
+    if (d.act === 'help') help();
+    else if (d.act === 'helpClose') help(false);
+    else actions[d.act]?.(data);
   });
   $('.k-end').addEventListener('click', () => actions.endTurn());
+
+  function help(show = true) {
+    const el = $('.k-help-overlay');
+    if (!show) { el.style.display = 'none'; return; }
+    let first = false;
+    try { first = !localStorage.getItem('kupol.help.seen'); localStorage.setItem('kupol.help.seen', '1'); } catch { /* приватный режим браузера */ }
+    el.innerHTML = `<div class="glass k-help-box"><button class="k-help-close" data-act="helpClose">×</button><h2>Справка по «Куполу»</h2>
+      ${first ? '<div class="k-first-hint"><b>Совет первого хода:</b> основайте город клавишей F, выберите исследование и поставьте производство. Затем нажмите Enter.</div>' : ''}
+      <h3>Цель</h3><p>Через 25 ходов после обнаружения астероида спасти Землю общим пактом «Купол» или пережить удар в Ковчеге. Полное спасение требует щита и совместных вкладов; при провале выживает только держава с построенным Ковчегом.</p>
+      <h3>Управление</h3><p><b>ЛКМ</b> — выбрать юнит или город; <b>ПКМ</b> — идти или атаковать; <b>Shift+ПКМ</b> — тактический бой; двойной щелчок — приблизить; <b>F</b> — основать город; <b>Enter</b> — конец хода; <b>Esc</b> — снять выбор; <b>F1</b> или <b>?</b> — эта справка.</p>
+      <h3>Ход</h3><p>Выберите технологию, задайте производство городам и прикажите юнитам действовать. В конце хода города дают ресурсы, накапливается наука, завершается исследование и обновляются армии.</p>
+      <h3>Дипломатия</h3><p>В правой панели можно заключать договоры, дарить золото, торговаться, выдвигать ультиматумы, вести тайные операции и объявлять войну. Влияние и золото списываются сервером; предложения другой стороны появляются сверху.</p>
+      <h3>Ядерные правила</h3><p>Ракета требует войны и разведки цели. Удар ухудшает репутацию и вызывает ядерную зиму; ПРО и спутники могут перехватить ракету. Спутник открывает разведанную область, а перехватчики помогают обороне «Купола».</p>
+      <button class="k-btn" data-act="helpClose">Понятно</button></div>`;
+    el.style.display = 'grid';
+  }
+  root.addEventListener('click', (e) => { if (e.target.closest('.k-help-close')) help(false); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'F1' || e.key === '?') { e.preventDefault(); help(); } });
 
   function top(s, me) {
     const fz = s.finale;
@@ -53,6 +83,7 @@ export function createHud(root, actions) {
       <div class="k-turn"><b>Ход ${s.turn}</b><br>${esc(ERAS[me.era]?.name)}</div>
       <div class="k-status ${netStatus === 'online' ? '' : 'off'}">${netStatus === 'online' ? 'сервер на связи' : netStatus === 'offline' ? 'нет связи с сервером' : 'подключение…'}</div>
       <div class="k-chips">
+        ${s.difficulty || me.difficulty ? `<div class="k-chip"><i>сложность</i><b>${esc(({ easy: 'лёгкая', normal: 'обычная', hard: 'сложная' }[s.difficulty || me.difficulty] ?? (s.difficulty || me.difficulty)))}</b></div>` : ''}
         <div class="k-chip"><i>золото</i><b>${Math.floor(me.gold)}</b></div>
         <div class="k-chip"><i>наука</i><b>${Math.floor(me.sciencePool ?? 0)}</b></div>
         <div class="k-chip"><i>влияние</i><b>${Math.floor(me.influence ?? 0)}</b></div>
@@ -68,19 +99,18 @@ export function createHud(root, actions) {
     const leader = LEADERS[me.id];
     const research = me.research ? TECHS[me.research]?.name : null;
     let html = `<div class="glass k-card"><div class="k-head">${img(portrait(me.id), me.color, me.name[0])}
-      <div><div class="k-nm" style="color:${me.color}">${esc(me.name)}</div><div class="k-ld">${esc(me.leader?.name ?? leader?.name ?? '')}<br>${esc(me.leader?.title ?? '')}</div></div></div>
+      <div><div class="k-nm" style="color:${esc(me.color)}">${esc(me.name)}</div><div class="k-ld">${esc(me.leader?.name ?? leader?.name ?? '')}<br>${esc(me.leader?.title ?? '')}</div></div></div>
       <div class="k-row"><div class="k-chip"><i>эпоха</i><b>${esc(ERAS[me.era]?.name)}</b></div><div class="k-chip"><i>финал</i><b>${me.finale?.path === 'pact' ? '«Купол»' : me.finale?.path === 'ark' ? 'Ковчег' : '—'}</b></div></div></div>`;
-    html += `<div class="glass k-card"><h4 class="k-h4">Исследование${research ? `: ${esc(research)}` : ''}</h4><div class="k-list">${
-      s.choices.techs.map((t) => `<button class="k-btn ${me.research === t ? 'on' : ''}" data-act="research" data-tech="${t}">${esc(TECHS[t].name)}<small>${esc(ERAS[TECHS[t].era].name)}</small></button>`).join('') || '<small class="k-ld">Все доступные технологии изучены</small>'
-    }</div></div>`;
+    const tree = technologyTree(s);
+    html += `<div class="glass k-card k-tech"><h4 class="k-h4">Исследование${research ? `: ${esc(research)}` : ''}</h4>${tree.eras.map((era) => `<details ${era.current ? 'open' : ''}><summary>${esc(era.name)} <small>${era.researched}/${era.required}</small></summary><div class="k-list">${era.techs.map((t) => `<button class="k-btn ${t.current ? 'on' : ''} ${t.researched ? 'done' : ''}" data-act="research" data-tech="${esc(t.id)}" ${t.available ? '' : 'disabled'} title="${esc(t.researched ? 'Технология изучена' : t.available ? 'Начать исследование' : `Нужны: ${t.req.map((r) => TECHS[r]?.name ?? r).join(', ') || 'предыдущая эпоха'}`)}">${esc(t.name)}<small>${t.researched ? 'изучено' : t.current ? 'исследуется' : t.available ? 'доступно' : 'закрыто'}</small></button>`).join('')}</div></details>`).join('')}</div>`;
     if (sel?.city) {
       const c = sel.city;
       const items = s.choices.production[c.id] ?? [];
       const current = c.queue?.[0];
       html += `<div class="glass k-card"><h4 class="k-h4">Город «${esc(c.name)}» · население ${c.pop}</h4>
         <div class="k-ld">Строится: ${current ? esc(itemName(current)) : 'ничего'} · постройки: ${c.buildings.length ? c.buildings.map((b) => esc(BUILDINGS[b]?.name)).join(', ') : 'нет'}</div>
-        <div class="k-list" style="margin-top:8px">${items.map((it) => `<button class="k-btn ${current && current.kind === it.kind && current.id === it.id ? 'on' : ''}" data-act="produce" data-city="${c.id}" data-kind="${it.kind}" data-id="${it.id ?? ''}">${esc(itemName(it))}<small>${it.cost ?? '∞'}</small></button>`).join('')}</div>
-        ${current && current.kind !== 'dome' ? `<div class="k-row"><button class="k-btn" data-act="buy" data-city="${c.id}">Купить за золото</button><button class="k-btn" data-act="fly" data-cell="${c.cell}">Приблизить</button></div>` : ''}</div>`;
+        <div class="k-list" style="margin-top:8px">${items.map((it) => `<div class="k-prod"><button class="k-btn ${current && current.kind === it.kind && current.id === it.id ? 'on' : ''}" data-act="produce" data-city="${esc(c.id)}" data-kind="${esc(it.kind)}" data-id="${esc(it.id ?? '')}" title="Заменить очередь">${esc(itemName(it))}<small>${it.cost ?? '∞'}</small></button><button class="k-queue" data-act="produce" data-append="1" data-city="${esc(c.id)}" data-kind="${esc(it.kind)}" data-id="${esc(it.id ?? '')}" title="Добавить в очередь">+</button></div>`).join('')}</div>
+        ${current && current.kind !== 'dome' ? `<div class="k-row"><button class="k-btn" data-act="buy" data-city="${esc(c.id)}">Купить за золото</button><button class="k-btn" data-act="fly" data-cell="${esc(c.cell)}">Приблизить</button></div>` : ''}</div>`;
     }
     if (sel?.units?.length) {
       html += `<div class="glass k-card"><h4 class="k-h4">Юниты в клетке</h4><div class="k-list">${sel.units.map((u) => `<button class="k-btn ${u.id === sel.unitId ? 'on' : ''}" data-act="selectUnit" data-unit="${u.id}">${esc(UNITS[u.type].name)}<small>${u.owner === me.id ? `ходы ${u.moves} · ${u.hp}%` : 'чужой'}</small></button>`).join('')}</div>
@@ -108,23 +138,21 @@ export function createHud(root, actions) {
   }
 
   function right(s, me) {
-    const others = s.nations.filter((n) => n.id !== me.id);
-    const treaty = (id, type) => s.treaties.some((t) => t.type === type && (t.a === id || t.b === id));
-    const war = (id) => s.wars.some((k) => k.split('|').includes(id));
-    $('.k-right').innerHTML = others.map((n) => {
+    const all = [...(s.nations ?? []).filter((n) => n.id !== me.id), ...(s.neutrals ?? [])];
+    const war = (id) => (s.wars ?? []).some((k) => k.split('|').includes(id));
+    const actionHtml = (a) => {
+      const d = Object.entries(a.payload ?? {}).filter(([k, v]) => v !== null && v !== undefined && typeof v !== 'object');
+      const attrs = d.map(([k, v]) => `data-${esc(k)}="${esc(v)}"`).join(' ');
+      const input = a.input ? `<input data-value type="number" min="1" step="1" value="10" aria-label="Количество золота" title="Количество золота">` : '';
+      return `<span class="k-action">${input}<button ${attrs} data-act="${esc(a.action)}" ${a.enabled ? '' : 'disabled'} title="${esc(a.title || a.reason || '')}">${esc(a.label)}${a.reason && !a.enabled ? ` <small>(${esc(a.reason)})</small>` : ''}</button></span>`;
+    };
+    $('.k-right').innerHTML = all.map((n) => {
+      const major = s.nations.some((x) => x.id === n.id);
       const [mood, mc] = MOOD[n.moodId] ?? MOOD.neutral;
-      const leader = n.leader;
-      if (!n.met) {
-        return `<div class="glass k-lc">${img('', '#3a4658', '?')}<div><div class="k-nm" style="color:${n.color}">${esc(n.name)}</div><div class="k-ld">Ещё не встречались</div></div></div>`;
-      }
-      const acts = war(n.id)
-        ? `<button data-act="peace" data-target="${n.id}">Предложить мир</button>`
-        : ['trade', 'nap', 'research', 'alliance'].filter((t) => !treaty(n.id, t)).map((t) => `<button data-act="propose" data-target="${n.id}" data-treaty="${t}">${esc(TREATY_NAMES[t])}</button>`).join('')
-          + `<button class="war" data-act="war" data-target="${n.id}">Объявить войну</button>`;
-      return `<div class="glass k-lc">${img(portrait(n.id, n.moodId), n.color, n.name[0])}<div style="flex:1">
-        <div class="k-nm" style="color:${n.color}">${esc(n.name)}</div><div class="k-ld">${esc(leader?.name ?? '')} · ${esc(ERAS[n.era]?.name ?? '')}</div>
-        <span class="k-mood" style="background:${alpha(mc, 0.16)};color:${mc}">${mood}${war(n.id) ? ' · война' : ''}</span>
-        <div class="k-acts">${acts}</div></div></div>`;
+      if (major && !n.met) return `<div class="glass k-lc">${img('', '#3a4658', '?')}<div><div class="k-nm" style="color:${esc(n.color)}">${esc(n.name)}</div><div class="k-ld">Ещё не встречались</div></div></div>`;
+      const actionsList = diplomacyActions(s, n.id);
+      const acts = `${war(n.id) ? '<button data-act="peace" data-target="'+esc(n.id)+'" title="Мир возможен после пяти ходов войны.">Предложить мир</button>' : ''}${!war(n.id) && major ? '<button class="war" data-act="war" data-target="'+esc(n.id)+'" title="Ухудшит отношения и репутацию.">Объявить войну</button>' : ''}${actionsList.map(actionHtml).join('')}`;
+      return `<div class="glass k-lc">${major ? img(portrait(n.id, n.moodId), n.color, n.name[0]) : img('', n.color ?? '#3a4658', n.name[0])}<div style="flex:1"><div class="k-nm" style="color:${esc(n.color)}">${esc(n.name)}</div><div class="k-ld">${major ? esc(n.leader?.name ?? '')+' · '+esc(ERAS[n.era]?.name ?? '') : 'нейтральный народ'}</div><span class="k-mood" style="background:${alpha(mc, 0.16)};color:${mc}">${esc(major ? mood : `отношение ${n.relation ?? 0}`)}${war(n.id) ? ' · война' : ''}</span><div class="k-acts">${acts}</div></div></div>`;
     }).join('');
   }
 
@@ -142,6 +170,21 @@ export function createHud(root, actions) {
       ${r ? `Итог: <b>${r.outcome === 'saved' ? 'Земля спасена' : r.outcome === 'partial' ? 'частичный успех' : 'провал'}</b>` : `<div class="k-acts">
         <button data-act="path" data-path="pact">Вступить в «Купол»</button><button data-act="path" data-path="ark">Строить Ковчег</button>
         <button data-act="contribute">Вложить половину золота</button></div>`}`;
+  }
+
+  function gameOver(s) {
+    const el = $('.k-gameover');
+    if (!s || s.status === 'running') { el.style.display = 'none'; return; }
+    const r = s.result ?? {};
+    const copy = endingCopy(r);
+    const winner = r.winnerName ?? s.nations.find((n) => n.id === r.winner)?.name ?? 'нет';
+    const contribution = Object.entries(r.contributions ?? {}).filter(([, v]) => Number.isFinite(v)).sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([id, value]) => `<div><span>${esc(s.nations.find((n) => n.id === id)?.name ?? id)}</span><b>${Math.round(value).toLocaleString('ru')}</b></div>`).join('');
+    el.style.display = 'grid';
+    el.innerHTML = `<div class="k-gameover-card glass"><h1>${esc(copy.title)}</h1><p>${esc(copy.text)}</p>
+      <div class="k-gameover-stats"><div><span>Ход</span><b>${Number(s.turn) || 0}</b></div><div><span>Победитель</span><b>${esc(winner)}</b></div>${r.defense !== undefined ? `<div><span>Защита</span><b>${esc(r.defense)}%</b></div>` : ''}</div>
+      ${contribution ? `<h4 class="k-h4">Вклад в спасение</h4><div class="k-contributions">${contribution}</div>` : ''}
+      <button class="k-btn k-new-game" data-act="newGame">Новая партия</button></div>`;
   }
 
   function offers(s) {
@@ -190,7 +233,7 @@ export function createHud(root, actions) {
       const mods = (side) => p.mods.filter((m) => m.side === side).map((m) => `<div>${esc(m.text)}</div>`).join('') || '<div class="k-ld">без бонусов</div>';
       el.innerHTML = `<div class="k-cb-title" style="color:${verdict[1]}">${verdict[0]}</div>
         <div class="k-cb-row">
-          <div class="k-cb-side"><img src="${unitPortrait(p.attacker, me.color, 96)}" alt=""><div class="k-nm" style="color:${me.color}">${esc(UNITS[p.attacker]?.name)}</div><div class="k-cb-str">${p.attack}</div><div class="k-cb-mods">${mods('a')}</div></div>
+          <div class="k-cb-side"><img src="${unitPortrait(p.attacker, me.color, 96)}" alt=""><div class="k-nm" style="color:${esc(me.color)}">${esc(UNITS[p.attacker]?.name)}</div><div class="k-cb-str">${p.attack}</div><div class="k-cb-mods">${mods('a')}</div></div>
           <div class="k-cb-mid"><div class="k-cb-odds" style="color:${verdict[1]}">${odds}%</div><div class="k-cb-bar"><i style="width:${odds}%;background:${me.color}"></i><b style="width:${100 - odds}%;background:${foe?.color ?? '#888'}"></b></div><small>шанс победы</small></div>
           <div class="k-cb-side"><img src="${unitPortrait(p.defender ?? 'warrior', foe?.color ?? '#9a8f7a', 96)}" alt="" ${p.defender ? '' : 'style="opacity:.5"'}><div class="k-nm" style="color:${foe?.color}">${esc(p.city ? `«${p.city}»` : UNITS[p.defender]?.name ?? '')}</div><div class="k-cb-str">${p.defense}</div><div class="k-cb-mods">${mods('d')}</div></div>
         </div>
@@ -216,26 +259,31 @@ export function createHud(root, actions) {
       root.appendChild(el);
       setTimeout(() => el.remove(), 4200);
     },
-    setStatus(status) { netStatus = status; },
+    setStatus(status) {
+      netStatus = status;
+      const overlay = $('.k-reconnect');
+      overlay.style.display = status === 'offline' || status === 'reconnecting' ? 'flex' : 'none';
+    },
     render(s, sel, log) {
       lastSnap = s;
       const me = s.nations.find((n) => n.id === s.nationId);
-      top(s, me); left(s, me, sel); right(s, me); chronicle(s, log); finale(s); offers(s); live(null);
-      $('.k-end').disabled = s.status !== 'running';
+      top(s, me); left(s, me, sel); right(s, me); chronicle(s, log); finale(s); gameOver(s); offers(s); live(null);
+      $('.k-end').disabled = turnBusy || s.status !== 'running';
     },
-    busy(on) { $('.k-end').disabled = on; },
+    busy(on) { turnBusy = on; $('.k-end').disabled = on || lastSnap?.status !== 'running'; },
     toast(text) {
       const el = $('.k-toast'); el.textContent = text; el.style.opacity = 1;
       clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.style.opacity = 0; }, 2600);
     },
+    reset() { $('.k-gameover').style.display = 'none'; },
     /** Экран выбора нации перед партией. */
     chooseNation() {
       return new Promise((resolve) => {
         const wrap = document.createElement('div');
         wrap.className = 'k-start';
         wrap.innerHTML = `<div class="glass"><h1>КУПОЛ</h1><p>Настоящая Земля, вымышленная политика. Через двести ходов к планете придёт астероид.</p>
-          <div class="k-nations">${NATIONS.map((n) => `<button data-id="${n.id}">${img(portrait(n.id), n.color, n.name[0])}<div><div class="k-nm" style="color:${n.color}">${esc(n.name)}</div><div class="k-ld">${esc(LEADERS[n.id]?.name ?? '')}</div></div></button>`).join('')}</div></div>`;
-        wrap.addEventListener('click', (e) => { const b = e.target.closest('button[data-id]'); if (b) { wrap.remove(); resolve(b.dataset.id); } });
+          <label class="k-difficulty">Сложность: <select data-difficulty><option value="easy">Лёгкая</option><option value="normal" selected>Обычная</option><option value="hard">Сложная</option></select></label><div class="k-nations">${NATIONS.map((n) => `<button data-id="${n.id}">${img(portrait(n.id), n.color, n.name[0])}<div><div class="k-nm" style="color:${esc(n.color)}">${esc(n.name)}</div><div class="k-ld">${esc(LEADERS[n.id]?.name ?? '')}</div></div></button>`).join('')}</div></div>`;
+        wrap.addEventListener('click', (e) => { const b = e.target.closest('button[data-id]'); if (b) { wrap.remove(); resolve({ player: b.dataset.id, difficulty: wrap.querySelector('[data-difficulty]')?.value ?? 'normal' }); } });
         root.appendChild(wrap);
       });
     },

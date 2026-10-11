@@ -2,6 +2,7 @@
 export const ERRORS = Object.freeze({
   NO_GAME: 'Партия не начата',
   GAME_OVER: 'Партия окончена',
+  BATTLE_ACTIVE: 'Сначала завершите тактический бой',
   BAD_COMMAND: 'Неизвестная команда',
   NOT_YOUR_UNIT: 'Это не ваш юнит',
   NOT_YOUR_CITY: 'Это не ваш город',

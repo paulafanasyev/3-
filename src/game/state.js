@@ -19,6 +19,7 @@ import { nuclearView } from './nuclear.js';
 export const STATE_VERSION = 1;
 export const START_GOLD = 30;
 export const START_REPUTATION = 70;
+export const DIFFICULTIES = Object.freeze(new Set(['easy', 'normal', 'hard']));
 
 // ---------- события ----------
 export { pushEvent, nameOf };
@@ -138,6 +139,7 @@ export function createGame({ seed = 1, setup = {}, map = loadMap() } = {}) {
     version: STATE_VERSION,
     mapVersion: map.raw.version,
     seed: seedToInt(seed),
+    difficulty: DIFFICULTIES.has(setup.difficulty) ? setup.difficulty : 'normal',
     rng: seedToInt(seed),
     turn: 1,
     status: 'running',
@@ -300,6 +302,7 @@ export function snapshot(state, nationId, { sinceSeq = 0, map = loadMap() } = {}
     status: state.status,
     result: state.result,
     nationId,
+    difficulty: state.difficulty,
     nations,
     neutrals: Object.values(state.neutrals).map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, relation: Math.round(p.relations[nationId] ?? 0) })),
     relations: Object.fromEntries(me.met.map((id) => [id, Math.round(state.relations[pairKey(nationId, id)])])),

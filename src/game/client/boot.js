@@ -87,12 +87,23 @@ export async function bootKupol() {
   let selection = { cell: null, unitId: null };
   const log = [];
   let firstState = true;
+  let turnBusy = false;
+  let setupStarted = false;
+  let lastSeq = 0; // события с этим и меньшим номером уже в хронике
+  let replaying = false; // снимок после переподключения: старые бои и удары не проигрываем заново
+  let battleWindow = null; // открытое окно тактического боя
+  let tacticalPending = false;
 
   const myUnit = (id) => state?.units.find((u) => u.id === id && u.owner === state.nationId);
 
   const hud = createHud(root, {
     research: (d) => send({ kind: 'research', tech: d.tech }),
-    produce: (d) => send({ kind: 'produce', cityId: d.city, item: d.kind === 'dome' ? { kind: 'dome' } : { kind: d.kind, id: d.id } }),
+    produce: (d) => send({ kind: 'produce', cityId: d.city, append: d.append === '1', item: d.kind === 'dome' ? { kind: 'dome' } : { kind: d.kind, id: d.id } }),
+    gift: (d) => send({ kind: 'gift', target: d.target, gold: Math.max(1, Math.floor(Number(d.amount) || 0)) }),
+    annex: (d) => send({ kind: 'annex', target: d.target }),
+    negotiate: (d) => send({ kind: 'negotiate', target: d.target, deal: { give: { gold: Math.max(1, Math.floor(Number(d.amount) || 0)) }, take: {} } }),
+    demand: (d) => send({ kind: 'demand', target: d.target, take: { gold: Math.max(1, Math.floor(Number(d.amount) || 0)) } }),
+    spy: (d) => send({ kind: 'spy', op: d.op, target: d.target, ...(d.third ? { third: d.third } : {}) }),
     buy: (d) => send({ kind: 'buy', cityId: d.city }),
     fly: (d) => flyToCell(viewer, geometry, Number(d.cell), 9_000),
     selectUnit: (d) => { selection.unitId = d.unit; redraw(); },
@@ -108,16 +119,22 @@ export async function bootKupol() {
     live: (d) => { if (hud.unlocked(d.key)) liveLayers.toggle(d.key); else hud.toast('Прибор ещё не изобретён'); },
     dismantle: (d) => send({ kind: 'dismantle', unitId: d.unit }).then((r) => r.ok && hud.toast(`Боеголовка ушла в щит: +${r.points}`)),
     endTurn: endTurn,
+    newGame: () => { try { sessionStorage.removeItem('kupol.session'); } catch {} location.reload(); },
+    reload: () => location.reload(),
   });
   // настоящие слои GEV (самолёты, спутники, землетрясения, запуски) поверх партии
   const liveLayers = createLiveLayers(viewer, (st) => hud.live(st));
   const net = connectGame({
     onState(next) {
       state = next;
+      const quiet = firstState || replaying;
+      replaying = false;
       for (const e of next.events) {
+        if (Number.isFinite(e.seq)) { if (e.seq <= lastSeq) continue; lastSeq = e.seq; }
         log.push({ turn: e.turn, text: e.text });
-        if (!firstState && e.combat) layers.playCombat(e.combat, next);
-        if (!firstState && (e.key === 'nuclearStrike' || e.key === 'nuclearStrikeField' || e.key === 'nuclearIntercepted')) {
+        if (quiet) continue;
+        if (e.combat) layers.playCombat(e.combat, next);
+        if ((e.key === 'nuclearStrike' || e.key === 'nuclearStrikeField' || e.key === 'nuclearIntercepted')) {
           hud.alarm(e.text, e.key === 'nuclearIntercepted');
           if (e.cell !== undefined) flyToCell(viewer, geometry, e.cell, 900_000, 2.5);
         }
@@ -136,7 +153,15 @@ export async function bootKupol() {
       redraw();
     },
     onError(msg) { hud.toast(msg.message ?? 'Ошибка сервера'); },
+    onResume() { replaying = true; },
+    onResumeFailed() { setupStarted = false; hud.reset(); hud.toast('Прежняя партия не найдена, начните новую'); startNewGame(); },
     onStatus(status) { hud.setStatus(status); if (state) redraw(); },
+  });
+
+  // бой шёл до перезагрузки или обрыва: сервер присылает кадр, окна ещё нет — открываем
+  net.onBattle((m) => {
+    if (battleWindow || tacticalPending || !state || !m.battle || m.finished || m.battle.result) return;
+    showBattle(m.battle);
   });
 
   function selectionView() {
@@ -163,20 +188,33 @@ export async function bootKupol() {
   onImageryChange = (s) => hud.toast(SOURCE_TOAST[s] ?? SOURCE_TOAST.offline);
 
   async function endTurn() {
-    if (!state || state.status !== 'running') return;
+    if (turnBusy || !state || state.status !== 'running') return;
+    turnBusy = true;
     hud.busy(true);
-    const r = await net.endTurn().catch(() => ({ ok: false, message: 'Нет связи с сервером' }));
-    hud.busy(false);
-    if (!r.ok) hud.toast(r.message ?? 'Ход не завершён');
+    try {
+      const r = await net.endTurn().catch(() => ({ ok: false, message: 'Нет связи с сервером' }));
+      if (!r.ok) hud.toast(r.message ?? 'Ход не завершён');
+    } finally {
+      turnBusy = false;
+      hud.busy(false);
+    }
   }
 
   // тактический бой в реальном времени: сервер ведёт часы и шлёт кадры сам
   async function runTactical(unit, cell) {
-    const r = await send({ kind: 'battle', unitId: unit.id, to: cell });
+    if (battleWindow) return null;
+    tacticalPending = true;
+    const r = await send({ kind: 'battle', unitId: unit.id, to: cell }).finally(() => { tacticalPending = false; });
     if (!r.ok) return null;
+    return showBattle(r.battle);
+  }
+
+  /** Окно боя; одно на страницу. Тот же путь — для боя, восстановленного после перезагрузки. */
+  async function showBattle(first) {
     const colorOf = (id) => state.nations.find((n) => n.id === id)?.color ?? state.neutrals.find((n) => n.id === id)?.color ?? '#9a8f7a';
-    const battle = openBattle({ net, first: r.battle, colorOf, iconOf: (type, color) => `<img src="${unitPortrait(type, color, 46)}" alt="">` });
-    const combat = await battle.finished;
+    const battle = openBattle({ net, first, colorOf, iconOf: (type, color) => `<img src="${unitPortrait(type, color, 46)}" alt="">` });
+    battleWindow = battle;
+    const combat = await battle.finished.finally(() => { battleWindow = null; });
     if (combat) hud.toast(combat.won ? (combat.captured ? 'Город взят' : 'Победа в бою') : 'Бой проигран');
     selection.cell = myUnit(selection.unitId)?.cell ?? selection.cell;
     redraw();
@@ -255,8 +293,14 @@ export async function bootKupol() {
     if ((e.key === 'f' || e.key === 'а') && myUnit(selection.unitId)?.type === 'settler') send({ kind: 'found', unitId: selection.unitId });
   });
 
-  const player = await hud.chooseNation();
-  net.newGame({ player });
+  async function startNewGame() {
+    if (setupStarted) return;
+    setupStarted = true;
+    const setup = await hud.chooseNation();
+    hud.toast('Новая партия начинается');
+    net.newGame(setup);
+  }
+  if (!net.hasSession()) startNewGame();
   // ручки для отладки и дымовой проверки в браузере: те же команды, что у мыши и Enter
   window.__kupol = {
     viewer, get state() { return state; },

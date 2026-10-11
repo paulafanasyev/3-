@@ -23,6 +23,11 @@ import { isWater } from './data/terrain.js';
 export const MAX_TURNS = 230;
 export const SHIELD_TECH_BONUS = 0.5; // «Планетарный щит» даёт +50% к вкладу производства в щит
 export const UNIT_UPKEEP_FREE_PER_CITY = 2;
+export const AI_DIFFICULTY_MULTIPLIER = Object.freeze({ easy: 0.85, normal: 1, hard: 1.2 });
+
+function aiMultiplier(state, nation) {
+  return nation.human ? 1 : (AI_DIFFICULTY_MULTIPLIER[state.difficulty] ?? 1);
+}
 
 const sortedValues = (obj) => Object.keys(obj).sort().map((k) => obj[k]);
 
@@ -47,8 +52,10 @@ function spawnCell(state, map, city, unitType) {
 
 function processCity(state, map, city, nation, totals) {
   const y = cityYield(state, map, city);
-  totals.gold += y.gold;
-  totals.science += y.science;
+  const aiMult = aiMultiplier(state, nation);
+  // целые числа: сложность не должна давать дробное золото в интерфейсе
+  totals.gold += Math.round(y.gold * aiMult);
+  totals.science += Math.round(y.science * aiMult);
   totals.influence += 1;
   // рост (в оккупированном городе рост стоит)
   if (isOccupied(state, city)) city.food = Math.min(city.food, growthThreshold(city.pop) - 1);
@@ -77,7 +84,7 @@ function processCity(state, map, city, nation, totals) {
     else totals.gold += y.prod * PROJECTS.gold.rate;
     return;
   }
-  city.prod += y.prod;
+  city.prod += Math.round(y.prod * aiMult);
   const cost = itemCost(state, map, city, item);
   if (city.prod < cost) return;
   if (item.kind === 'unit') {
@@ -185,6 +192,7 @@ function checkVictory(state) {
 }
 
 export function endTurn(state, map = loadMap()) {
+  if (state.battle) return { ok: false, error: 'BATTLE_ACTIVE', state };
   if (state.status !== 'running') return state;
   for (const id of majorIds(state)) {
     const n = state.nations[id];
