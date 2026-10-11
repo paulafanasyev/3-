@@ -1,0 +1,22 @@
+{
+  "commit": "7ab980425a8ff532064efd0a55179de8a8145e91",
+  "at": "2026-10-11T12:51:32.451Z",
+  "ok": true,
+  "steps": [
+    "сборка: Linux-проверка прошла, ход 1",
+    "Wine, вывод в канал: exe работает, страница отвечает",
+    "WebSocket: новая партия, ход 1",
+    "kupol.log: есть, с адресом игры",
+    "создание релиза: 201",
+    "загрузка архива: 201",
+    "пометка на rc.2: 200"
+  ],
+  "zip": {
+    "bytes": 51252549,
+    "sha": "ec4793c887a6c741c3b925dc81f1c9dec5f86e26d342a44429b44dbaaf149971"
+  },
+  "pipeLog": "",
+  "kupolLog": "«Купол» запускается…\n[nuclear-gods-eye] open in browser: http://127.0.0.1:4793\n[nuclear-gods-eye] websocket endpoint: /ws\n[nuclear-gods-eye] API proxies: disabled\n\nИгра открыта в браузере: http://127.0.0.1:4793/kupol\nЕсли браузер не открылся, скопируйте этот адрес в адресную строку.\nЧтобы выйти из игры, закройте это окно.\n",
+  "release": "https://github.com/paulafanasyev/3-/releases/tag/kupol-v1.0.0-rc.3-win",
+  "asset": "https://github.com/paulafanasyev/3-/releases/download/kupol-v1.0.0-rc.3-win/Kupol-win64.zip"
+}
