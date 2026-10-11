@@ -33,7 +33,7 @@ test('CI: Kupol.exe под Wine', { skip: !process.env.GITHUB_ACTIONS || existsS
     const wine = ['wine64', 'wine'].map((w) => { try { return execSync(`command -v ${w}`).toString().trim(); } catch { return null; } }).find(Boolean);
     if (!wine) throw new Error('Wine не установился');
     step(`Wine: ${execSync(`${wine} --version`).toString().trim()} (установка ${Math.round((Date.now() - t0) / 1000)} с)`);
-    const env = { ...process.env, WINEPREFIX: '/tmp/kupol-wineprefix', WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mscoree,mshtml=', KUPOL_NO_BROWSER: '1', PORT: '4791', DISPLAY: '' };
+    const env = { ...process.env, WINEPREFIX: `${process.env.HOME}/.kupol-wineprefix`, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mscoree,mshtml=', KUPOL_NO_BROWSER: '1', PORT: '4791', DISPLAY: '' };
     try { execSync(`${wine} wineboot --init`, { env, stdio: 'ignore', timeout: 180000 }); } catch (e) { step(`wineboot: ${String(e.message).slice(0, 120)}`); }
     let log = '';
     exe = spawn(wine, [`${work}/Kupol/Kupol.exe`], { env, cwd: `${work}/Kupol`, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -92,7 +92,7 @@ test('CI: Kupol.exe под Wine', { skip: !process.env.GITHUB_ACTIONS || existsS
   } finally {
     chrome?.kill('SIGKILL');
     exe?.kill('SIGKILL');
-    try { execSync('wineserver -k || true', { stdio: 'ignore', env: { ...process.env, WINEPREFIX: '/tmp/kupol-wineprefix' } }); } catch {}
+    try { execSync('wineserver -k || true', { stdio: 'ignore', env: { ...process.env, WINEPREFIX: `${process.env.HOME}/.kupol-wineprefix` } }); } catch {}
   }
   writeFileSync(`${out}/report.json`, JSON.stringify(report, null, 2));
   const header = execSync('git config --get http.https://github.com/.extraheader || true', { cwd: root }).toString().trim();
