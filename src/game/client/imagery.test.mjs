@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { addFallbackImagery, dropOnTileErrors, TILE_ERROR_LIMIT, SOURCE_TOAST } from './imagery.js';
 
-function fakeEvent() { const fns = []; return { addEventListener: (f) => fns.push(f), fire: () => fns.forEach((f) => f()) }; }
+function fakeEvent() { const fns = []; return { fns, addEventListener: (f) => { fns.push(f); return () => fns.splice(fns.indexOf(f), 1); }, fire: () => [...fns].forEach((f) => f()) }; }
 function fakeCesium({ natural = true, ion = 'ok', osm = true } = {}) {
   const made = [];
   const C = {
@@ -52,6 +52,17 @@ test('верхний слой с ошибками тайлов снимаетс�
   for (let i = 0; i < TILE_ERROR_LIMIT + 3; i += 1) osm.errorEvent.fire();
   assert.deepEqual(kinds(v), ['natural']);
   assert.deepEqual(changes, ['offline']);
+  assert.equal(osm.errorEvent.fns.length, 0, 'слушатель снят вместе со слоем');
+});
+
+test('ion ответил после таймаута — брошенный провайдер освобождается', async () => {
+  const { withTimeout } = await import('./imagery.js');
+  let destroyed = false; let resolve;
+  const late = new Promise((r) => { resolve = r; });
+  await assert.rejects(withTimeout(late, 10, 'ion timeout'), /ion timeout/);
+  resolve({ destroy: () => { destroyed = true; } });
+  await new Promise((r) => setTimeout(r, 5));
+  assert.ok(destroyed);
 });
 
 test('даже без встроенного снимка глобус не падает', async () => {

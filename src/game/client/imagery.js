@@ -11,20 +11,23 @@ export const TILE_ERROR_LIMIT = 8;
 
 /** Ждём промис не дольше ms, иначе ошибка (ion без сети может висеть долго). */
 export function withTimeout(promise, ms, label = 'timeout') {
-  let timer;
+  let timer; let late = false;
+  // если ответ пришёл уже после таймаута, брошенный провайдер освобождаем
+  const guarded = Promise.resolve(promise).then((value) => { if (late) value?.destroy?.(); return value; });
   return Promise.race([
-    promise,
-    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(label)), ms); }),
+    guarded,
+    new Promise((_, reject) => { timer = setTimeout(() => { late = true; reject(new Error(label)); }, ms); }),
   ]).finally(() => clearTimeout(timer));
 }
 
 /** Снимает слой после TILE_ERROR_LIMIT ошибок тайлов; onDrop вызывается один раз. */
 export function dropOnTileErrors(viewer, layer, provider, onDrop = () => {}) {
   let errors = 0; let dropped = false;
-  provider?.errorEvent?.addEventListener?.(() => {
+  const unsubscribe = provider?.errorEvent?.addEventListener?.(() => {
     errors += 1;
     if (dropped || errors < TILE_ERROR_LIMIT) return;
     dropped = true;
+    if (typeof unsubscribe === 'function') unsubscribe(); // слой уничтожается: слушатель больше не нужен
     viewer.imageryLayers.remove(layer, true);
     onDrop();
   });
