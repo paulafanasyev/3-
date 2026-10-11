@@ -131,7 +131,7 @@ const RIG = [
 ];
 const J = Object.fromEntries(RIG.map(([n, , p]) => [n, p]));
 
-/** Тело-основа: каждая часть окрашена своей одеждой (одна оболочка, без «кожи под ткань»). */
+/** Тело-основа: каждая часть окрашена своей одеждой (одна оболочка, без «кожи под тканью»). */
 function figure(k, o = {}) {
   const c = { skin: 'skin', shirt: 'cloth', sleeve: o.shirt ?? 'cloth', fore: o.sleeve ?? o.shirt ?? 'cloth', pants: 'cloth', shin: o.pants ?? 'cloth', boot: 'leather2', hand: 'skin', belt: 'leather', neck: 'skin', ...o };
   // таз, живот, грудь — профили по высоте
@@ -602,6 +602,8 @@ const VEHICLE = {
     k.add('body', G.side([[1.95, 1.75], [2.55, 1.6], [2.33, 2.22], [1.98, 2.28]], 2.24), 'glass'); // остекление
     k.add('body', G.side([[2.6, 1.72], [2.66, 1.72], [2.46, 2.3], [2.4, 2.3]], 1.9), 'glass'); // лобовое стекло по наклону кабины
     k.add('body', G.box(2.32, 0.08, 4.0, 0, 1.47, -1.0), 'carbon'); // кромка рамы
+    k.pair((s) => { k.add('body', G.box(0.36, 0.14, 0.05, s * 0.75, 1.0, 2.92), 'glow'); k.add('body', G.box(0.08, 0.2, 0.14, s * 1.17, 2.0, 2.2), 'carbon'); }); // фары и зеркала
+    k.add('body', G.box(1.4, 0.08, 0.5, 0, 2.48, 1.95), 'carbon'); k.add('body', G.cyl(0.025, 0.025, 0.7, 0.6, 2.85, 1.7, 6), 'carbon'); // крыша кабины и антенна
     k.pair((s) => { k.add('body', G.box(0.06, 0.5, 2.6, s * 1.18, 1.15, -1.2), 'team'); k.add('body', G.box(0.16, 0.9, 0.16, s * 1.05, 0.55, -3.05), 'carbon'); k.add('body', G.box(0.42, 0.06, 0.42, s * 1.05, 0.03, -3.05), 'carbon'); }); // борта и выдвижные опоры
     for (let i = 0; i < 3; i += 1) { k.add('body', G.box(1.8, 0.4, 0.5, 0, 1.68, -2.6 + i * 0.6), 'carbon'); k.add('body', G.box(1.82, 0.05, 0.08, 0, 1.9, -2.6 + i * 0.6), 'glow'); } // накопители
     k.add('turret', G.cyl(0.85, 0.95, 0.3, 0, 1.6, -0.5, 18), 'armor2'); // поворотный круг
@@ -610,6 +612,7 @@ const VEHICLE = {
     k.add('barrel', G.box(0.1, 0.05, 5.4, 0, 0, 0).rotateX(-0.42).translate(0, 2.55, 1.3), 'glow');
     for (let i = 0; i < 5; i += 1) k.add('barrel', G.box(0.5, 0.32, 0.14, 0, 0, -1.8 + i * 0.95).rotateX(-0.42).translate(0, 2.55, 1.3), 'coil');
     k.add('barrel', G.box(0.4, 0.26, 0.22, 0, 0, 2.78).rotateX(-0.42).translate(0, 2.55, 1.3), 'carbon'); // дульный блок
+    k.pair((s) => k.add('turret', G.seg([s * 0.32, 1.85, -0.2], [s * 0.32, 2.5, 1.15], 0.07, 0.05, 8), 'armor2')); // гидроцилиндры подъёма
   }, { attack: () => [recoil('barrel', [0, 0, 0], 0.5, 2.0, [0, Math.sin(0.42), Math.cos(0.42)])] }, { parent: { barrel: 'turret' }, pivots: { turret: [0, 1.6, -0.5], barrel: [0, 1.6, -0.5] } }),
   gun1: () => machine('gun1', (k) => { // полевое орудие на деревянных колёсах + расчёт
     k.pair((s) => {
@@ -685,6 +688,9 @@ const VEHICLE = {
     k.pair((s) => k.add('body', G.at(G.plan([[-0.75, 0.5], [0.75, 0.15], [0.75, -0.35], [-0.75, -0.6]], 0.06, -0.03), [0, 0, Math.PI / 2 - s * 0.45], [s * 1.0, 0.85, -3.6]), 'ceramic')); // разнесённые кили
     k.pair((s) => { k.add('body', G.cyl(0.42, 0.36, 0.9, 0, 0, 0, 16, true).rotateX(Math.PI / 2).translate(s * 0.5, -0.02, -4.8), 'carbon'); k.add('body', G.cyl(0.32, 0.32, 0.05, 0, 0, 0, 14).rotateX(Math.PI / 2).translate(s * 0.5, -0.02, -4.75), 'glow'); }); // два сопла
     k.pair((s) => k.add('body', G.box(0.03, 0.05, 2.4, s * 3.6, -0.02, -2.6), 'glow')); // навигационные полосы
+    k.pair((s) => { k.add('body', G.cyl(0.1, 0.1, 2.0, 0, 0, 0, 8).rotateX(Math.PI / 2).translate(s * 2.5, -0.3, -1.2), 'carbon'); k.add('body', G.cone(0.1, 0.3, 0, 0, 0, 8).rotateX(Math.PI / 2).translate(s * 2.5, -0.3, -0.05), 'ceramic'); k.add('body', G.box(0.04, 0.14, 0.6, s * 2.5, -0.16, -1.2), 'carbon'); }); // ракеты на пилонах
+    k.add('body', G.box(0.12, 0.03, 3.4, 0, 0.62, -1.5), 'team'); // хребтовая полоса цвета нации
+    k.add('body', G.cone(0.06, 0.5, 0, 0, 0, 8).rotateX(Math.PI / 2).translate(0, 0, 5.9), 'carbon'); // носовой датчик
   }, {}, { kind: 'air', aoFoot: false }),
   biplane: () => machine('biplane', (k) => { // Индустрия: биплан с расчалками
     k.add('body', G.seg([0, 0, -3.6], [0, 0.05, 2.0], 0.22, 0.55, 12), 'khaki');
