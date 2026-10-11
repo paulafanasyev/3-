@@ -308,5 +308,6 @@ export async function bootKupol() {
     viewer, get state() { return state; },
     endTurn,
     tactical: (unitId, cell) => { const u = myUnit(unitId); return u ? runTactical(u, cell) : Promise.resolve(null); },
+    battleSpeed: (speed) => net.battleSpeed(speed),
   };
 }

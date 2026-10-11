@@ -132,7 +132,7 @@ async function playGame(s) {
   if (!g.tanks.length) { g.problems.push('нет танка из сценария battle (dev-сервер без KUPOL_SCENARIO=battle?)'); return g; }
   // бой: перебираем видимые клетки врага, пока сервер не откроет поле
   for (const cell of g.enemies) {
-    await ev(`window.__kbDone = undefined; window.__kupol.tactical(${JSON.stringify(g.tanks[0])}, ${cell}).then((r) => { window.__kbDone = r ? JSON.stringify(r) : 'null'; }, (e) => { window.__kbDone = 'error: ' + e; }); true`);
+    await ev(`window.__kbDone = undefined; window.__kupol.tactical(${JSON.stringify(g.tanks[0])}, ${cell}).then((r) => { window.__kbDone = r ? JSON.stringify(r) : 'null'; }, (e) => { window.__kbDone = 'error: ' + e; }); window.__kupol.battleSpeed(0).catch(() => {}); true`);
     const opened = await waitFor("document.querySelector('.kb-root') ? true : (window.__kbDone !== undefined ? 'no' : null)", 8000);
     if (opened === true) { g.battleCell = cell; break; }
   }
