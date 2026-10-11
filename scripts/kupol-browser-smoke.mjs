@@ -142,9 +142,13 @@ async function playGame(s) {
   if (!g.battleRestored) { g.problems.push('после перезагрузки посреди боя окно боя не вернулось'); return g; }
   await sleep(1000);
   await ev("window.__kbDone = 'resumed'; true");
+  g.autoButton = await ev("(() => { const b = document.querySelector('.kb-root [data-auto]'); return JSON.stringify({ roots: document.querySelectorAll('.kb-root').length, found: !!b, disabled: b ? b.disabled : null, offline: document.querySelector('.kb-disconnect')?.style.display ?? null, status: document.querySelector('.k-status')?.textContent ?? null }); })()");
   await ev("document.querySelector('.kb-root [data-auto]')?.click(); true");
   g.result = await waitFor("(() => { const el = document.querySelector('.kb-result'); return el && el.style.display === 'flex' ? el.innerText.slice(0, 200) : null; })()", 60000);
-  if (!g.result) { g.problems.push('автобой не закончился за 60 с'); return g; }
+  if (!g.result) {
+    g.afterAuto = await ev("JSON.stringify({ roots: document.querySelectorAll('.kb-root').length, time: document.querySelector('.kb-time')?.textContent ?? null, toast: document.querySelector('.kb-toast')?.textContent ?? null, mapToasts: window.__kupolToasts || [] })");
+    g.problems.push('автобой не закончился за 60 с'); return g;
+  }
   await ev("document.querySelector('.kb-root [data-close]')?.click(); true");
   g.closed = await waitFor("window.__kbDone !== undefined && !document.querySelector('.kb-root') ? window.__kbDone : null", 10000);
   if (!g.closed) g.problems.push('окно боя не закрылось');
