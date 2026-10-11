@@ -72,13 +72,18 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
     '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1280,720', `--user-data-dir=/tmp/kupol-smoke-chrome-${port}`];
   if (offline) args.push('--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>;localhost;127.0.0.1');
   const proc = spawn(chrome, args, { stdio: 'ignore' });
-  const report = { offline, url, exceptions: [], consoleErrors: [], natural: { ok: 0, fail: 0 }, toasts: [], canvas: false, bootError: null, waitedMs: 0 };
+  const report = { offline, url, ws: [], exceptions: [], consoleErrors: [], natural: { ok: 0, fail: 0 }, toasts: [], canvas: false, bootError: null, waitedMs: 0 };
   try {
     const s = await cdp(port);
     s.on((m) => {
       if (m.method === 'Runtime.exceptionThrown') report.exceptions.push(String(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 500));
       if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') report.consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 500));
       if (m.method === 'Network.responseReceived' && /NaturalEarthII\/\d/.test(m.params.response.url)) report.natural[m.params.response.status < 400 ? 'ok' : 'fail'] += 1;
+      // журнал сокета партии: тип сообщения и важные поля (для разбора падений после перезагрузки)
+      if (m.method === 'Network.webSocketFrameReceived' || m.method === 'Network.webSocketFrameSent') {
+        let t = '?'; try { const x = JSON.parse(m.params.response.payloadData); t = `${x.type}${x.ok !== undefined ? `:${x.ok}` : ''}${x.battle ? `:t${x.battle.tick}` : ''}${x.command?.kind ? `:${x.command.kind}` : ''}`; } catch { /* не JSON */ }
+        report.ws.push(`${m.method.endsWith('Sent') ? '>' : '<'}${t}`); if (report.ws.length > 80) report.ws.splice(0, report.ws.length - 80);
+      }
     });
     await s.send('Runtime.enable'); await s.send('Network.enable'); await s.send('Page.enable');
     await s.send('Page.addScriptToEvaluateOnNewDocument', { source: "window.__kupolToasts=[];new MutationObserver(()=>{const t=document.querySelector('.k-toast');const a=window.__kupolToasts;if(t&&t.textContent&&a[a.length-1]!==t.textContent)a.push(t.textContent);}).observe(document,{subtree:true,childList:true,characterData:true});" });
@@ -141,7 +146,10 @@ async function playGame(s) {
   await ev('window.__kupolOld = 1; true');
   await s.send('Page.reload', {});
   g.battleRestored = await waitFor("!window.__kupolOld && document.querySelector('.kb-root .kb-scene canvas') && !document.querySelector('.k-start') ? true : null", 60000);
-  if (!g.battleRestored) { g.problems.push('после перезагрузки посреди боя окно боя не вернулось'); return g; }
+  if (!g.battleRestored) {
+    g.afterReload = await ev("JSON.stringify({ old: !!window.__kupolOld, kupol: !!window.__kupol, turn: window.__kupol?.state?.turn ?? null, start: !!document.querySelector('.k-start'), roots: document.querySelectorAll('.kb-root').length, scene: !!document.querySelector('.kb-scene'), canvas: !!document.querySelector('.kb-root canvas'), status: document.querySelector('.k-status')?.textContent ?? null, reconnect: document.querySelector('.k-reconnect')?.style.display ?? null, token: (() => { try { return !!sessionStorage.getItem('kupol.session'); } catch { return 'err'; } })(), body: document.body.innerText.slice(0, 300) })");
+    g.problems.push('после перезагрузки посреди боя окно боя не вернулось'); return g;
+  }
   await sleep(1000);
   await ev("window.__kbDone = 'resumed'; true");
   g.autoButton = await ev("(() => { const b = document.querySelector('.kb-root [data-auto]'); return JSON.stringify({ roots: document.querySelectorAll('.kb-root').length, found: !!b, disabled: b ? b.disabled : null, offline: document.querySelector('.kb-disconnect')?.style.display ?? null, status: document.querySelector('.k-status')?.textContent ?? null }); })()");
