@@ -8,8 +8,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 
 const FLAG = '/tmp/kupol-fetch-release.done';
-const URL_ = 'https://u312853940.p.clickup-attachments.com/u312853940/000be6e5-4ae6-5c0c-b54f-255d3788c18e/kupol-release.tgz?view=open';
-const SHA = 'e5c3df5166ad4d4b15cbeadffdaa4f19139ac367594eee6f0aa7fed5c49541be';
+const URL_ = 'https://u312853940.p.clickup-attachments.com/u312853940/481fcfb8-c7d8-59f5-b3de-c99533391d8f/kupol-release-2.tgz?view=open';
+const SHA = '668a0a069a1417598cbb490d66821372ca25c769707013485eeabdf6f70b0464';
 
 function pushReport(root, report) {
   const out = '/tmp/kupol-fetch-out'; mkdirSync(out, { recursive: true });
