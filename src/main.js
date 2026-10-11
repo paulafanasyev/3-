@@ -33,7 +33,11 @@ import {
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 
-initLogoGaze();
+// «Купол»: стратегия на той же Земле, что и God's Eye View. Открывается по адресу /kupol
+// (или ?kupol); всё остальное приложение остаётся как было.
+const isKupolRoute = /^\/kupol\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('kupol');
+
+if (!isKupolRoute) initLogoGaze();
 
 /**
  * Extract a human-readable error message from any thrown value.
@@ -333,4 +337,13 @@ async function init() {
   }
 }
 
-init();
+if (isKupolRoute) {
+  import('./game/client/boot.js')
+    .then((module) => module.bootKupol())
+    .catch((error) => {
+      console.error('[Купол] запуск не удался:', error);
+      document.body.textContent = `Купол: ошибка запуска — ${describeError(error)}`;
+    });
+} else {
+  init();
+}

@@ -7,6 +7,10 @@ import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { createSessionRegistry, createSessionConnection } from './src/game/sessions.js';
+
+// Партии переживают обрыв связи и перезагрузку страницы: 10 минут по токену (game:resume).
+const gameSessions = createSessionRegistry();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -263,6 +267,14 @@ wss.on('connection', (socket) => {
 
   send(socket, { type: 'runtime:ready', version: 1 });
 
+  // «Купол»: одна партия на соединение, вся логика на сервере (src/game/session.js).
+  const game = createSessionConnection({
+    socket,
+    registry: gameSessions,
+    onUnknown: () => send(socket, { type: 'error', code: 'UNKNOWN_GAME_MESSAGE' }),
+  });
+  socket.on('close', () => game.close());
+
   socket.on('message', (raw, isBinary) => {
     if (isBinary) {
       send(socket, { type: 'error', code: 'BINARY_NOT_SUPPORTED' });
@@ -287,7 +299,12 @@ wss.on('connection', (socket) => {
       return;
     }
 
-    // Stage 1 only verifies transport. Gameplay state is added in later stages.
+    if (message.type.startsWith('game:')) {
+      game.message(raw, false);
+      return;
+    }
+
+    // Остальные сообщения пока только подтверждают транспорт.
     send(socket, { type: 'runtime:ack', messageType: message.type });
   });
 });
@@ -315,6 +332,7 @@ function shutdown(signal) {
   shuttingDown = true;
   console.log(`[nuclear-gods-eye] ${signal} received, shutting down`);
   clearInterval(heartbeat);
+  gameSessions.dispose();
   for (const socket of wss.clients) socket.terminate();
   wss.close();
   Promise.resolve(vite?.close())

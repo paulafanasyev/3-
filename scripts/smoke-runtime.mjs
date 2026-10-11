@@ -67,6 +67,21 @@ for (const route of ['/', '/some/deep/route']) {
   pass('unknown /api route returns 404');
 }
 
+{
+  const res = await fetch(`${BASE}/kupol`);
+  const body = await res.text();
+  const entryMatch = body.match(/<script[^>]+src=[\"']([^\"']+\.js)[\"']/i);
+  if (res.status !== 200 || !/<html/i.test(body) || !entryMatch) {
+    fail(`/kupol did not serve game entry HTML (status ${res.status})`);
+  }
+  // код игры грузится лениво (import() в src/main.js), поэтому проверяем, что входной бандл отдаётся
+  const entryRes = await fetch(new URL(entryMatch[1], BASE));
+  await entryRes.text();
+  if (!entryRes.ok) fail(`/kupol entry bundle is not served (status ${entryRes.status})`);
+  pass('/kupol serves game entry HTML and its bundle');
+}
+
+let sessionToken = null;
 await new Promise((resolve, reject) => {
   const ws = new WebSocket(WS_URL);
   const seen = [];
@@ -79,6 +94,15 @@ await new Promise((resolve, reject) => {
     } else if (message.type === 'error' && message.code === 'INVALID_JSON') {
       ws.send(JSON.stringify({ type: 'smoke:ping' }));
     } else if (message.type === 'runtime:ack' && message.messageType === 'smoke:ping') {
+      ws.send(JSON.stringify({ type: 'game:new', setup: { player: 'borea' } }));
+    } else if (message.type === 'game:session') {
+      sessionToken = message.token;
+    } else if (message.type === 'game:state') {
+      if (message.state?.turn !== 1) {
+        clearTimeout(timer);
+        reject(new Error(`game state turn was ${message.state?.turn}, expected 1`));
+        return;
+      }
       clearTimeout(timer);
       ws.close();
       resolve();
@@ -89,7 +113,30 @@ await new Promise((resolve, reject) => {
     reject(error);
   });
 }).catch((error) => fail(error.message));
-pass('/ws: runtime:ready -> INVALID_JSON handled -> runtime:ack');
+pass('/ws: runtime checks and game:new -> game:state turn 1');
+
+// Обрыв связи: новая вкладка/сокет возвращается в ту же партию по токену.
+if (typeof sessionToken !== 'string' || sessionToken.length < 16) fail('game:new did not send game:session token');
+await new Promise((resolve, reject) => {
+  const ws = new WebSocket(WS_URL);
+  let resumed = false;
+  const timer = setTimeout(() => reject(new Error('resume timeout')), 10_000);
+  ws.on('open', () => ws.send(JSON.stringify({ type: 'game:resume', token: sessionToken })));
+  ws.on('message', (data) => {
+    const message = JSON.parse(data.toString());
+    if (message.type === 'game:resumed') {
+      if (!message.ok) { clearTimeout(timer); reject(new Error('resume rejected a live session')); return; }
+      resumed = true;
+    } else if (message.type === 'game:state' && resumed) {
+      clearTimeout(timer);
+      ws.close();
+      if (message.state?.turn !== 1) reject(new Error(`resumed state turn was ${message.state?.turn}`));
+      else resolve();
+    }
+  });
+  ws.on('error', (error) => { clearTimeout(timer); reject(error); });
+}).catch((error) => fail(error.message));
+pass('/ws: game:resume returns the same game after reconnect');
 
 {
   const res = await fetch(`${BASE}/api/health`);

@@ -1,0 +1,88 @@
+# Proposal only: Paul must copy this file to .github/workflows/ himself.
+# The release token cannot create or modify workflow files.
+name: Kupol release verification
+
+on:
+  push:
+    branches: [feat/game-design, main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kupol-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout the triggering revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Refresh package lockfile
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit lockfile on feature push only
+        if: github.event_name == 'push' && github.ref == 'refs/heads/feat/game-design'
+        run: |
+          if ! git diff --quiet -- package-lock.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "build: update lockfile for Kupol release"
+            git push origin HEAD:feat/game-design
+          else
+            echo "package-lock.json already up to date"
+          fi
+
+      - name: Install reproducibly
+        run: npm ci
+
+      - name: Generate leader portraits
+        run: npm run game:portraits
+
+      - name: Export forged game units
+        run: npm run game:units
+
+      - name: Run application tests
+        run: npm test
+
+      - name: Run Kupol tests
+        run: npm run test:game
+
+      - name: Build production client (postbuild validates artifacts)
+        run: npm run build
+
+      - name: Start production server
+        env:
+          GEV_API_PROXIES: '0'
+          PORT: '4173'
+        run: |
+          npm start > "$RUNNER_TEMP/kupol-server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/kupol-server.pid"
+          sleep 2
+
+      - name: Run runtime smoke
+        run: npm run smoke
+
+      - name: Stop production server
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/kupol-server.pid"; then
+            kill "$(cat "$RUNNER_TEMP/kupol-server.pid")" || true
+          fi
+          cat "$RUNNER_TEMP/kupol-server.log" 2>/dev/null || true
