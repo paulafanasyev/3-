@@ -1,0 +1,89 @@
+
+> nuclear-gods-eye@1.0.0-rc.1 prebuild
+> npm run game:portraits && npm run game:units
+
+
+> nuclear-gods-eye@1.0.0-rc.1 game:portraits
+> node scripts/game-portraits.mjs
+
+портреты готовы
+
+> nuclear-gods-eye@1.0.0-rc.1 game:units
+> node scripts/game-units.mjs
+
+Древность              ashigaru_yari    4524 треуг. 418 КБ
+Древность              ashigaru_yumi    4484 треуг. 392 КБ
+Древность              samurai          5486 треуг. 492 КБ
+Древность              peasant          3578 треуг. 302 КБ
+Индустрия              militia1         3582 треуг. 296 КБ
+Индустрия              infantry1        4058 треуг. 326 КБ
+Индустрия              gun1             4509 треуг. 245 КБ
+Индустрия              tank1            3206 треуг. 248 КБ
+Индустрия              biplane           540 треуг. 43 КБ
+Информационная эпоха   militia2         3844 треуг. 306 КБ
+Информационная эпоха   infantry2        4742 треуг. 353 КБ
+Информационная эпоха   gun2             4499 треуг. 242 КБ
+Информационная эпоха   tank2            3278 треуг. 290 КБ
+Информационная эпоха   helicopter       1788 треуг. 90 КБ
+Информационная эпоха   drone            1448 треуг. 82 КБ
+Информационная эпоха   fighter          1064 треуг. 61 КБ
+Космическая эпоха      militia3         4756 треуг. 368 КБ
+Космическая эпоха      infantry3        5176 треуг. 376 КБ
+Космическая эпоха      gun3             1616 треуг. 140 КБ
+Космическая эпоха      tank3            3400 треуг. 305 КБ
+Космическая эпоха      fighter3         1582 треуг. 98 КБ
+
+> nuclear-gods-eye@1.0.0-rc.1 build
+> vite build
+
+[36mvite v6.4.3 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 198 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                              [39m[1m[2m   53.48 kB[22m[1m[22m[2m │ gzip:    11.46 kB[22m
+[2mdist/[22m[2massets/[22m[32msan-francisco-DAzZI0CW.json      [39m[1m[2m  222.17 kB[22m[1m[22m[2m │ gzip:    54.75 kB[22m
+[2mdist/[22m[2massets/[22m[32mlanding-point-geo-CiAWPhfe.json  [39m[1m[2m  359.27 kB[22m[1m[22m[2m │ gzip:    72.57 kB[22m
+[2mdist/[22m[2massets/[22m[32mmarine-DXAJTUe1.json             [39m[1m[2m  633.34 kB[22m[1m[22m[2m │ gzip:   223.15 kB[22m
+[2mdist/[22m[2massets/[22m[32mcable-geo-i2PzBJi6.json          [39m[1m[2m  728.31 kB[22m[1m[22m[2m │ gzip:   242.78 kB[22m
+[2mdist/[22m[2massets/[22m[32mdams-B2lCjFgp.geojsonl           [39m[1m[2m  730.28 kB[22m[1m[22m
+[2mdist/[22m[2massets/[22m[32mregions-B5_P_EZ3.json            [39m[1m[2m1,987.10 kB[22m[1m[22m[2m │ gzip:   683.45 kB[22m
+[2mdist/[22m[2massets/[22m[32mdatacenters-CtzejECr.geojsonl    [39m[1m[2m2,561.98 kB[22m[1m[22m
+[2mdist/[22m[2massets/[22m[35mboot-CqOrbOx8.css                [39m[1m[2m   16.97 kB[22m[1m[22m[2m │ gzip:     4.35 kB[22m
+[2mdist/[22m[2massets/[22m[35mindex-BXEHkSo0.css               [39m[1m[2m  183.83 kB[22m[1m[22m[2m │ gzip:    32.06 kB[22m
+[2mdist/[22m[2massets/[22m[36msan-francisco-B-TUYeaR.js        [39m[1m[2m  222.26 kB[22m[1m[22m[2m │ gzip:    54.87 kB[22m
+[2mdist/[22m[2massets/[22m[36mmarine-BJ61ZZ9E.js               [39m[1m[2m  633.39 kB[22m[1m[22m[2m │ gzip:   223.23 kB[22m
+[2mdist/[22m[2massets/[22m[36mboot-TFHZHzXR.js                 [39m[1m[2m  876.49 kB[22m[1m[22m[2m │ gzip:   245.52 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-DL8sSo6j.js                [39m[1m[2m1,366.68 kB[22m[1m[22m[2m │ gzip:   425.40 kB[22m
+[2mdist/[22m[2massets/[22m[36mregions-RPMKg9pq.js              [39m[1m[33m1,987.15 kB[39m[22m[2m │ gzip:   683.53 kB[22m
+[2mdist/[22m[2massets/[22m[36megm96-universal.esm-D6y_VLZc.js  [39m[1m[33m2,770.50 kB[39m[22m[2m │ gzip: 1,849.99 kB[22m
+[32m✓ built in 5.14s[39m
+
+> nuclear-gods-eye@1.0.0-rc.1 postbuild
+> node scripts/check-game-build.mjs
+
+ПРОВЕРКА СБОРКИ: артефакты «Купола» и Cesium на месте
+
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+THREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.
+[33m[plugin vite:resolve] Module "node:fs" has been externalized for browser compatibility, imported by "/home/runner/work/3-/3-/src/data/neighborhoodPolygons.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.[39m
+[33m[plugin vite:resolve] Module "node:fs" has been externalized for browser compatibility, imported by "/home/runner/work/3-/3-/src/data/naturalEarthRegions.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.[39m
+[33m
+(!) Some chunks are larger than 1500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m

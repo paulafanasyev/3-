@@ -1,0 +1,91 @@
+{
+  "at": "2026-10-11T07:53:22.998Z",
+  "commit": "8134e4f209bf428b0761ec69b0e4372640aebbcf",
+  "browser": {
+    "offline": true,
+    "url": "http://localhost:5174",
+    "ws": [
+      "<connected",
+      ">game:new",
+      "<game:session",
+      "<game:state",
+      ">game:command:battle",
+      ">game:battleSpeed",
+      "<game:command:result:true:t0",
+      "<game:command:result:true",
+      ">ping",
+      ">game:battleSpeed",
+      "<game:command:result:true",
+      "<connected",
+      ">game:resume",
+      "<game:session",
+      "<game:resumed:true",
+      "<game:state",
+      "<game:battle:t0",
+      ">game:battleSpeed",
+      "<game:command:result:true",
+      ">game:command:battleAdvance",
+      "<game:command:result:true:t37",
+      "<game:state",
+      ">ping",
+      ">game:endTurn",
+      "<game:command:result:true",
+      "<game:state",
+      "<connected",
+      ">game:resume",
+      "<game:session",
+      "<game:resumed:true",
+      "<game:state"
+    ],
+    "exceptions": [],
+    "consoleErrors": [],
+    "natural": {
+      "ok": 19,
+      "fail": 0
+    },
+    "toasts": [
+      "Без ключа Google: карта OpenStreetMap поверх встроенного снимка",
+      "Офлайн-глобус: встроенный снимок Natural Earth, ключи и интернет не нужны"
+    ],
+    "canvas": true,
+    "bootError": null,
+    "waitedMs": 21500,
+    "game": {
+      "problems": [],
+      "nation": "borea",
+      "turn": 1,
+      "me": "borea",
+      "tanks": [
+        "u277"
+      ],
+      "enemies": [
+        6216
+      ],
+      "battleCell": 6216,
+      "pausedActive": true,
+      "regiments": 1,
+      "battleCanvas": true,
+      "battleRestored": true,
+      "autoButton": "{\"roots\":1,\"found\":true,\"disabled\":false,\"offline\":\"none\",\"status\":\"сервер на связи\"}",
+      "result": "Победа\n      Бой длился 0:07. Потери: ваши 0, противника 30.\n      К карте",
+      "closed": "resumed",
+      "turnAfter": 2,
+      "turnSettled": 2,
+      "resumedTurn": 2
+    },
+    "problems": [],
+    "ok": true
+  },
+  "build": {
+    "status": 0,
+    "signal": null,
+    "tail": "1m\u001b[33m2,770.50 kB\u001b[39m\u001b[22m\u001b[2m │ gzip: 1,849.99 kB\u001b[22m\n\u001b[32m✓ built in 5.14s\u001b[39m\n\n> nuclear-gods-eye@1.0.0-rc.1 postbuild\n> node scripts/check-game-build.mjs\n\nПРОВЕРКА СБОРКИ: артефакты «Купола» и Cesium на месте\n\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\nTHREE.GLTFExporter: Creating normalized normal attribute from the non-normalized one.\n\u001b[33m[plugin vite:resolve] Module \"node:fs\" has been externalized for browser compatibility, imported by \"/home/runner/work/3-/3-/src/data/neighborhoodPolygons.js\". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.\u001b[39m\n\u001b[33m[plugin vite:resolve] Module \"node:fs\" has been externalized for browser compatibility, imported by \"/home/runner/work/3-/3-/src/data/naturalEarthRegions.js\". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.\u001b[39m\n\u001b[33m\n(!) Some chunks are larger than 1500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.\u001b[39m\n"
+  },
+  "smoke": {
+    "status": 0,
+    "signal": null,
+    "tail": "\n> nuclear-gods-eye@1.0.0-rc.1 smoke\n> node scripts/smoke-runtime.mjs\n\n[nuclear-gods-eye] open in browser: http://127.0.0.1:4199\n[nuclear-gods-eye] websocket endpoint: /ws\n[nuclear-gods-eye] API proxies: disabled\nok - /api/health ok (apiProxies=false)\nok - / serves index.html\nok - /some/deep/route serves index.html\nok - missing asset returns 404\nok - unknown /api route returns 404\nok - /kupol serves game entry HTML and its bundle\nok - /ws: runtime checks and game:new -> game:state turn 1\nok - /ws: game:resume returns the same game after reconnect\nok - server alive after invalid JSON\nok - /ws rejects foreign Origin\n[nuclear-gods-eye] SIGTERM received, shutting down\nSMOKE PASS\n\n"
+  },
+  "ok": true,
+  "devLog": "Port 5173 is in use, trying another one...\n  ➜  Local:   http://localhost:5174/\n[Купол] игра: /kupol, сокет партии: /ws\n"
+}

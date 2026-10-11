@@ -1,0 +1,20 @@
+
+> nuclear-gods-eye@1.0.0-rc.1 smoke
+> node scripts/smoke-runtime.mjs
+
+[nuclear-gods-eye] open in browser: http://127.0.0.1:4199
+[nuclear-gods-eye] websocket endpoint: /ws
+[nuclear-gods-eye] API proxies: disabled
+ok - /api/health ok (apiProxies=false)
+ok - / serves index.html
+ok - /some/deep/route serves index.html
+ok - missing asset returns 404
+ok - unknown /api route returns 404
+ok - /kupol serves game entry HTML and its bundle
+ok - /ws: runtime checks and game:new -> game:state turn 1
+ok - /ws: game:resume returns the same game after reconnect
+ok - server alive after invalid JSON
+ok - /ws rejects foreign Origin
+[nuclear-gods-eye] SIGTERM received, shutting down
+SMOKE PASS
+
