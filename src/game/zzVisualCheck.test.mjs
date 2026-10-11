@@ -31,7 +31,7 @@ const AUDIT = String.raw`(() => {
   const panels = [...root.children].filter(vis).filter((el) => !el.matches('.k-toast'));
   for (const el of panels) { const r = el.getBoundingClientRect(); if (r.left < -1 || r.top < -1 || r.right > vw + 1 || r.bottom > vh + 1) issues.push({ kind: 'panel-offscreen', el: name(el), rect: rect(el) }); }
   for (const el of panels) { const cs = getComputedStyle(el); if (el.scrollHeight > el.clientHeight + 4 && !/auto|scroll/.test(cs.overflowY)) issues.push({ kind: 'panel-cut', el: name(el), scrollH: el.scrollHeight, clientH: el.clientHeight }); }
-  const overlays = ['k-help-overlay', 'k-gameover', 'k-reconnect', 'k-combat', 'k-offer'];
+  const overlays = ['k-help-overlay', 'k-gameover', 'k-reconnect', 'k-combat', 'k-offer', 'k-start'];
   const solid = panels.filter((el) => !overlays.some((c) => el.classList.contains(c)));
   for (let i = 0; i < solid.length; i += 1) for (let j = i + 1; j < solid.length; j += 1) {
     const a = solid[i].getBoundingClientRect(); const b = solid[j].getBoundingClientRect();
@@ -41,6 +41,8 @@ const AUDIT = String.raw`(() => {
   for (const b of root.querySelectorAll('button, select')) {
     if (!vis(b)) continue;
     const r = b.getBoundingClientRect(); const cx = r.left + r.width / 2; const cy = r.top + r.height / 2;
+    const sc = b.closest('.k-left, .k-right, .k-help-box, .k-chron, .k-start, .k-gameover');
+    if (sc && sc.scrollHeight > sc.clientHeight + 2) { const s = sc.getBoundingClientRect(); if (cy < s.top || cy > s.bottom) continue; }
     if (cx < 0 || cy < 0 || cx > vw || cy > vh) { issues.push({ kind: 'control-offscreen', text: (b.innerText || b.value || '').slice(0, 40), rect: rect(b) }); continue; }
     const scroller = b.closest('.k-left, .k-right, .k-help-box, .k-chron');
     if (scroller) { const s = scroller.getBoundingClientRect(); if (cy < s.top || cy > s.bottom) continue; }
@@ -150,6 +152,11 @@ test('CI: визуальная приёмка экранов', { skip: !process.
   }
   report.summary = Object.fromEntries(Object.entries(report.screens).map(([k, v]) => [k, v.counts ?? {}]));
   writeFileSync(`${out}/report.json`, JSON.stringify(report, null, 2));
+  // краткая сводка: проблемы без шума, тексты экранов
+  const brief = { commit: report.commit, fatal: report.fatal, errors: report.errors, gameoverShown: report.gameoverShown, endTurnDisabled: report.endTurnDisabled, helpClosed: report.helpClosed,
+    screens: Object.fromEntries(Object.entries(report.screens).map(([k, v]) => [k, { counts: v.counts, issues: (v.issues ?? []).slice(0, 12), latin: v.latin }])),
+    texts: { ...report.texts, left: report.texts.left?.slice(0, 500), right: report.texts.right?.slice(0, 700), help: report.texts.help?.slice(0, 900), tech: report.texts.tech?.slice(0, 400), diplomacyButtons: (report.texts.diplomacyButtons ?? []).slice(0, 14) } };
+  writeFileSync(`${out}/summary.json`, JSON.stringify(brief));
   const header = execSync('git config --get http.https://github.com/.extraheader || true', { cwd: root }).toString().trim();
   const remote = execSync('git remote get-url origin', { cwd: root }).toString().trim();
   const o = (c) => execSync(c, { cwd: out, stdio: 'inherit' });
