@@ -145,6 +145,9 @@ async function playGame(s) {
   g.regiments = await ev("document.querySelectorAll('.kb-cards > *').length");
   g.battleCanvas = await ev("!!document.querySelector('.kb-scene canvas')");
   if (!g.battleCanvas) g.problems.push('у боя нет холста three.js');
+  // окно боя должно быть видно игроку, а не только лежать в DOM (стили карты прячут чужие слои body)
+  g.battleVisible = await ev("(() => { const r = document.querySelector('.kb-root'); if (!r || getComputedStyle(r).display === 'none') return false; const b = r.getBoundingClientRect(); return b.width > 0 && b.height > 0; })()");
+  if (!g.battleVisible) g.problems.push('окно боя скрыто: игрок его не видит');
   // перезагрузка посреди боя: сессия на сервере жива, окно боя возвращается само
   // метка живёт только в старом документе: так ждём именно новую страницу, а не успеваем проверить старую
   await ev('window.__kupolOld = 1; true');

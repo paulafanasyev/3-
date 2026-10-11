@@ -1,6 +1,6 @@
 /* Интерфейс «Купола» поверх Cesium. Стеклянные панели, тёмная тема, шрифты из системы. */
 body.kupol { margin: 0; overflow: hidden; background: #000; }
-body.kupol > *:not(#kupol-globe):not(#kupol-root):not(#cesium-credits):not(script):not(style):not(link) { display: none !important; }
+body.kupol > *:not(#kupol-globe):not(#kupol-root):not(.kb-root):not(#cesium-credits):not(script):not(style):not(link) { display: none !important; }
 #kupol-globe { position: fixed; inset: 0; }
 #kupol-root { --glass: rgba(8, 14, 24, .66); --line: rgba(160, 200, 255, .16); --txt: #e8eef6; --dim: #93a4b8; --gold: #f0c46a;
   position: fixed; inset: 0; pointer-events: none; color: var(--txt); font-family: "Noto Sans", "Segoe UI", system-ui, sans-serif; font-size: 14px; z-index: 10; }
