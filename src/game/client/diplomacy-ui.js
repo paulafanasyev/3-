@@ -60,7 +60,7 @@ export function diplomacyActions(snapshot, targetId) {
         const costs = Math.round(baseCosts[type] * (1 - discount));
         const enough = influence >= costs;
         add(TREATY_NAMES[type] ?? type, { kind: 'propose', target: targetId, treaty: type }, {
-          action: 'propose', treaty: type, title: `Цена: ${costs[type]} влияния.`, ...reason(enough, 'Недостаточно влияния.'),
+          action: 'propose', treaty: type, title: `Цена: ${costs} влияния.`, ...reason(enough, 'Недостаточно влияния.'),
         });
       }
     }

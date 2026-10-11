@@ -30,3 +30,9 @@ test('нейтральный народ доступен для подарка �
   assert.ok(actions.some((a) => a.action === 'gift'));
   assert.ok(actions.some((a) => a.action === 'annex'));
 });
+
+test('подсказка договора называет цену в влиянии', () => {
+  const titles = diplomacyActions(base(), 'cartel').filter((a) => a.action === 'propose').map((a) => a.title);
+  assert.ok(titles.length > 0);
+  for (const t of titles) assert.match(t, /^Цена: \d+ влияния\.$/);
+});
