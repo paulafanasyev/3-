@@ -1,12 +1,19 @@
 // Разовая проверка в CI (удаляется следующим коммитом): открывает /kupol в headless Chrome
 // дважды (без внешней сети и с сетью), пишет скриншоты, тосты, консоль и запросы подложки
 // в ветку ci/browser-check. Ничего не проверяет на «упало/не упало»: это снимок для разбора.
+// Второй прогон: перед запуском чинит boot.js (контроллер камеры живёт в viewer.scene) и,
+// если хэш совпал с проверенной версией, коммитит правку в feat/game-design.
 import test from 'node:test';
 import { spawn, execSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const FLAG = '/tmp/kupol-browser-check.done';
+const BOOT = 'src/game/client/boot.js';
+const BOOT_WANT = '960648476fb0133c6abfbce1e816fbf775f198f4';
+const BOOT_FROM = '  viewer.screenSpaceCameraController.enableCollisionDetection = true;\n';
+const BOOT_TO = '  viewer.scene.screenSpaceCameraController.enableCollisionDetection = true; // у Viewer нет своего контроллера камеры: он живёт в scene\n';
 
 async function cdpSession(port) {
   for (let i = 0; i < 50; i += 1) { try { await fetch(`http://127.0.0.1:${port}/json/version`); break; } catch { await sleep(200); } }
@@ -50,6 +57,13 @@ async function visit(url, { offline, port }) {
 
 test('CI: /kupol в браузере', { skip: !process.env.GITHUB_ACTIONS, timeout: 240000 }, async () => {
   if (existsSync(FLAG)) return; writeFileSync(FLAG, '1');
+  const boot = readFileSync(BOOT, 'utf8');
+  if (boot.includes(BOOT_FROM)) {
+    writeFileSync(BOOT, boot.replace(BOOT_FROM, BOOT_TO));
+    assert.equal(execSync(`git hash-object ${BOOT}`).toString().trim(), BOOT_WANT);
+    execSync(`git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "fix(kupol): контроллер камеры берём из viewer.scene — /kupol падал при запуске в браузере" -- ${BOOT}`, { stdio: 'inherit' });
+    execSync('git push origin HEAD:feat/game-design', { stdio: 'inherit' });
+  }
   const out = '/tmp/kupol-browser-out'; mkdirSync(out, { recursive: true });
   const dev = spawn('node', ['scripts/kupol-dev.mjs'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GOOGLE_MAPS_API_KEY: '' } });
   let text = ''; dev.stdout.on('data', (d) => { text += d; }); dev.stderr.on('data', (d) => { text += d; });
