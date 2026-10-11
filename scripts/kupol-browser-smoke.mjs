@@ -137,8 +137,10 @@ async function playGame(s) {
   g.battleCanvas = await ev("!!document.querySelector('.kb-scene canvas')");
   if (!g.battleCanvas) g.problems.push('у боя нет холста three.js');
   // перезагрузка посреди боя: сессия на сервере жива, окно боя возвращается само
+  // метка живёт только в старом документе: так ждём именно новую страницу, а не успеваем проверить старую
+  await ev('window.__kupolOld = 1; true');
   await s.send('Page.reload', {});
-  g.battleRestored = await waitFor("document.querySelector('.kb-root .kb-scene canvas') && !document.querySelector('.k-start') ? true : null", 40000);
+  g.battleRestored = await waitFor("!window.__kupolOld && document.querySelector('.kb-root .kb-scene canvas') && !document.querySelector('.k-start') ? true : null", 60000);
   if (!g.battleRestored) { g.problems.push('после перезагрузки посреди боя окно боя не вернулось'); return g; }
   await sleep(1000);
   await ev("window.__kbDone = 'resumed'; true");
@@ -161,8 +163,9 @@ async function playGame(s) {
   g.turnSettled = await ev('window.__kupol.state?.turn ?? null');
   if (g.turnSettled !== g.turn + 1) g.problems.push(`двойной конец хода: ход ${g.turn} → ${g.turnSettled}, ожидался ${g.turn + 1}`);
   // перезагрузка страницы: партия возвращается по токену сессии, без окна выбора нации
+  await ev('window.__kupolOld = 1; true');
   await s.send('Page.reload', {});
-  g.resumedTurn = await waitFor("(() => { const st = window.__kupol?.state; return st && !document.querySelector('.k-start') ? st.turn : null; })()", 40000);
+  g.resumedTurn = await waitFor("(() => { const st = window.__kupol?.state; return !window.__kupolOld && st && !document.querySelector('.k-start') ? st.turn : null; })()", 60000);
   if (g.resumedTurn !== g.turnSettled) g.problems.push(`после перезагрузки партия не вернулась (ход ${g.resumedTurn ?? '—'} вместо ${g.turnSettled})`);
   return g;
 }
