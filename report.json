@@ -1,0 +1,226 @@
+{
+  "at": "2026-10-11T11:31:49.615Z",
+  "commit": "2780353ab340570780ab663fc7bd5288101b7f11",
+  "shots": {
+    "b1-start": {
+      "bytes": 271756,
+      "mean": 64,
+      "stdev": 25
+    },
+    "b2-mid": {
+      "bytes": 271954,
+      "mean": 64,
+      "stdev": 25
+    },
+    "b3-result": {
+      "bytes": 182810,
+      "mean": 35,
+      "stdev": 15
+    }
+  },
+  "diag": {
+    "paused": {
+      "root": true,
+      "inBody": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "z": "50",
+      "pos": "fixed",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "left": 0
+      },
+      "canvas": {
+        "w": 1920,
+        "h": 1080,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "left": 0
+        }
+      },
+      "cards": 1,
+      "time": "0:00 / 15:00 · ПАУЗА",
+      "pts": [
+        {
+          "x": 960,
+          "y": 540,
+          "top": [
+            "canvas[z=auto,pos=absolute]",
+            ".kb-scene[z=auto,pos=absolute]",
+            ".kb-root[z=50,pos=fixed]",
+            ".kupol[z=auto,pos=static]"
+          ]
+        },
+        {
+          "x": 200,
+          "y": 200,
+          "top": [
+            "canvas[z=auto,pos=absolute]",
+            ".kb-scene[z=auto,pos=absolute]",
+            ".kb-root[z=50,pos=fixed]",
+            ".kupol[z=auto,pos=static]"
+          ]
+        },
+        {
+          "x": 1700,
+          "y": 300,
+          "top": [
+            "canvas[z=auto,pos=absolute]",
+            ".kb-scene[z=auto,pos=absolute]",
+            ".kb-root[z=50,pos=fixed]",
+            ".kupol[z=auto,pos=static]"
+          ]
+        },
+        {
+          "x": 960,
+          "y": 1000,
+          "top": [
+            "canvas[z=auto,pos=absolute]",
+            ".kb-scene[z=auto,pos=absolute]",
+            ".kb-root[z=50,pos=fixed]",
+            ".kupol[z=auto,pos=static]"
+          ]
+        }
+      ],
+      "bodyChildren": [
+        "#cesiumContainerdiv[z=auto,pos=absolute]",
+        "#world-overlay-rootdiv[z=6,pos=absolute]",
+        "#world-overlay-actions.world-overlay-accessibility[z=auto,pos=fixed]",
+        "#title-bardiv[z=100,pos=fixed]",
+        "#style-indicatordiv[z=100,pos=fixed]",
+        "#top-center-actionsnav[z=100,pos=fixed]",
+        "#global-loading-statusdiv[z=102,pos=fixed]",
+        "#traffic-sync-chipdiv[z=101,pos=fixed]",
+        "#cctv-sync-chipdiv[z=101,pos=fixed]",
+        "#toastdiv[z=200,pos=fixed]",
+        "#safe-frame-overlaydiv[z=95,pos=fixed]",
+        "#cockpit-hudsection[z=145,pos=fixed]",
+        "#view-switchernav[z=146,pos=fixed]",
+        "#pp-toggles.panel-collapsible.collapsed[z=110,pos=relative]",
+        "#clean-view-exitbutton[z=300,pos=fixed]",
+        "#command-dockdiv[z=145,pos=fixed]",
+        "#left-panel-stackdiv[z=100,pos=fixed]",
+        "#right-context-railaside[z=110,pos=fixed]",
+        "#scene-runtimediv[z=105,pos=fixed]",
+        "#first-run-launcheraside[z=175,pos=fixed]"
+      ]
+    },
+    "mid": {
+      "root": true,
+      "inBody": true,
+      "display": "block",
+      "visibility": "visible",
+      "opacity": "1",
+      "z": "50",
+      "pos": "fixed",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080,
+        "top": 0,
+        "right": 1920,
+        "bottom": 1080,
+        "left": 0
+      },
+      "canvas": {
+        "w": 1920,
+        "h": 1080,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "top": 0,
+          "right": 1920,
+          "bottom": 1080,
+          "left": 0
+        }
+      },
+      "cards": 1,
+      "time": "0:02 / 15:00 · ПАУЗА",
+      "pts": [
+        {
+          "x": 960,
+          "y": 540,
+          "top": [
+            "canvas[z=auto,pos=absolute]",
+            ".kb-scene[z=auto,pos=absolute]",
+            ".kb-root[z=50,pos=fixed]",
+            ".kupol[z=auto,pos=static]"
+          ]
+        },
+        {
+          "x": 200,
+          "y": 200,
+          "top": [
+            "canvas[z=auto,pos=absolute]",
+            ".kb-scene[z=auto,pos=absolute]",
+            ".kb-root[z=50,pos=fixed]",
+            ".kupol[z=auto,pos=static]"
+          ]
+        },
+        {
+          "x": 1700,
+          "y": 300,
+          "top": [
+            "canvas[z=auto,pos=absolute]",
+            ".kb-scene[z=auto,pos=absolute]",
+            ".kb-root[z=50,pos=fixed]",
+            ".kupol[z=auto,pos=static]"
+          ]
+        },
+        {
+          "x": 960,
+          "y": 1000,
+          "top": [
+            "canvas[z=auto,pos=absolute]",
+            ".kb-scene[z=auto,pos=absolute]",
+            ".kb-root[z=50,pos=fixed]",
+            ".kupol[z=auto,pos=static]"
+          ]
+        }
+      ],
+      "bodyChildren": [
+        "#cesiumContainerdiv[z=auto,pos=absolute]",
+        "#world-overlay-rootdiv[z=6,pos=absolute]",
+        "#world-overlay-actions.world-overlay-accessibility[z=auto,pos=fixed]",
+        "#title-bardiv[z=100,pos=fixed]",
+        "#style-indicatordiv[z=100,pos=fixed]",
+        "#top-center-actionsnav[z=100,pos=fixed]",
+        "#global-loading-statusdiv[z=102,pos=fixed]",
+        "#traffic-sync-chipdiv[z=101,pos=fixed]",
+        "#cctv-sync-chipdiv[z=101,pos=fixed]",
+        "#toastdiv[z=200,pos=fixed]",
+        "#safe-frame-overlaydiv[z=95,pos=fixed]",
+        "#cockpit-hudsection[z=145,pos=fixed]",
+        "#view-switchernav[z=146,pos=fixed]",
+        "#pp-toggles.panel-collapsible.collapsed[z=110,pos=relative]",
+        "#clean-view-exitbutton[z=300,pos=fixed]",
+        "#command-dockdiv[z=145,pos=fixed]",
+        "#left-panel-stackdiv[z=100,pos=fixed]",
+        "#right-context-railaside[z=110,pos=fixed]",
+        "#scene-runtimediv[z=105,pos=fixed]",
+        "#first-run-launcheraside[z=175,pos=fixed]"
+      ]
+    }
+  },
+  "notes": [],
+  "errors": [],
+  "result": "Победа\n\nБой длился 0:25. Потери: ваши 0, противника 84.\n\nК карте",
+  "visible": true,
+  "gallery": "обновлена"
+}
