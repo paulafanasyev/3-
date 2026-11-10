@@ -33,6 +33,15 @@ const PROFILE_FOR_BOMB = Object.freeze({
   'grapple-x': 'rds37', 'grapple-y': 'rds37',
   b41: 'test219', tsar: 'tsar', b53: 'b83', 'china-test-6': 'rds37', canopus: 'rds37',
 });
+const CITY_ALIASES = Object.freeze({
+  Moscow: ['москва'], 'Saint Petersburg': ['санкт-петербург', 'петербург'], Hanoi: ['ханой'],
+  'Ho Chi Minh City': ['хошимин', 'сайгон'], 'Da Nang': ['дананг'], Bangkok: ['бангкок'],
+  Beijing: ['пекин'], Shanghai: ['шанхай'], Tokyo: ['токио'], Seoul: ['сеул'],
+  'New York': ['нью-йорк'], 'Los Angeles': ['лос-анджелес'], London: ['лондон'], Paris: ['париж'],
+  Berlin: ['берлин'], Rome: ['рим'], Kyiv: ['киев', 'київ'], Minsk: ['минск'],
+  Tashkent: ['ташкент'], Almaty: ['алматы'], Astana: ['астана'], Dubai: ['дубай'],
+  Cairo: ['каир'], Istanbul: ['стамбул'], Delhi: ['дели'], Mumbai: ['мумбаи'],
+});
 const CITIES = populatedPlaces.places;
 const formatYield = (kt) => kt >= 1000 ? `${(kt / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} Мт` : `${kt.toLocaleString('ru-RU')} кт`;
 
@@ -125,7 +134,8 @@ export function createNuclearRange({ root, viewer, layers }) {
     matches = [];
     if (query.length < 2) return;
     matches = CITIES
-      .filter((city) => city[0].toLocaleLowerCase().includes(query))
+      .filter((city) => city[0].toLocaleLowerCase().includes(query)
+        || (CITY_ALIASES[city[0]] ?? []).some((alias) => alias.includes(query)))
       .sort((a, b) => {
         const ap = a[0].toLocaleLowerCase().startsWith(query) ? 1 : 0;
         const bp = b[0].toLocaleLowerCase().startsWith(query) ? 1 : 0;
