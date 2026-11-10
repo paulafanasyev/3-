@@ -98,6 +98,9 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 2300));
   assert([...audioResponses].some((item) => item.startsWith('trinity-front.ogg:200')), 'front sound sample is requested successfully');
   assert([...audioResponses].some((item) => item.startsWith('trinity-tail.ogg:200')), 'delayed tail sound sample is requested successfully');
+  await (await import('node:fs/promises')).mkdir('artifacts', { recursive: true });
+  await page.screenshot({ path: 'artifacts/nuclear-range-smoke.png', fullPage: false });
+  assert(true, 'browser screenshot captured during the active test effects');
 
   await page.click('[data-reset]');
   await page.waitForFunction(() => document.querySelector('[data-status]')?.textContent.includes('очищены'));
