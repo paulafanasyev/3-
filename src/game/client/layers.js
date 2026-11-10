@@ -5,6 +5,7 @@ import * as Cesium from 'cesium';
 import { borderEdges, chainSegments, unwrapRing } from './geometry.js';
 import { cityIcon, unitIcon } from './icons.js';
 import { UNITS } from '../data/units.js';
+import { createNuclearVisuals } from './nuclearEffects.js';
 
 /** Ниже этой высоты камеры заливка территорий гаснет, остаются границы: видно сами снимки. */
 export const FILL_FADE_HEIGHT = 120_000;
@@ -282,6 +283,7 @@ export function createWorldLayers(viewer, geometry) {
       ellipse: { semiMajorAxis: radius, semiMinorAxis: radius, material: new Cesium.ColorMaterialProperty(alpha), classificationType: Cesium.ClassificationType.BOTH },
       point: st.intercepted ? undefined : { pixelSize: 26, color: Cesium.Color.WHITE.withAlpha(0.9), disableDepthTestDistance: Number.POSITIVE_INFINITY },
     }));
+    added.push(...createNuclearVisuals(entities.entities, to, start, Boolean(st.intercepted)));
     if (!st.intercepted) added.push(...mushroom(to, start));
     setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 12000);
   }
