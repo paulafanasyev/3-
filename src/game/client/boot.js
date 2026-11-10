@@ -12,6 +12,7 @@ import { createLiveLayers } from './liveLayers.js';
 import { openBattle } from './battle/hud.js';
 import { unitPortrait } from './icons.js';
 import { addFallbackImagery, SOURCE_TOAST } from './imagery.js';
+import { createNuclearRange } from './nuclear-range.js';
 
 const START_VIEW = { lon: -98, lat: 22, height: 7_500_000 };
 /** Кому сообщить, что верхний слой подложки отвалился уже после старта (ставит bootKupol). */
@@ -123,6 +124,8 @@ export async function bootKupol() {
     newGame: () => { try { sessionStorage.removeItem('kupol.session'); } catch {} location.reload(); },
     reload: () => location.reload(),
   });
+  // Создаём отдельную панель после HUD: createHud заменяет содержимое root целиком.
+  createNuclearRange({ root, viewer, layers });
   // настоящие слои GEV (самолёты, спутники, землетрясения, запуски) поверх партии
   const liveLayers = createLiveLayers(viewer, (st) => hud.live(st));
   const net = connectGame({
