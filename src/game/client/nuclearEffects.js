@@ -12,7 +12,7 @@ const easeOut = (value) => 1 - (1 - clamp01(value)) ** 3;
  * Это только декоративная анимация на карте: она не рассчитывает реальные зоны
  * поражения и не меняет игровую логику, состояние мира или сетевой протокол.
  */
-export function createNuclearVisuals(entities, at, startedAt, intercepted = false) {
+export function createNuclearVisuals(entities, at, startedAt, intercepted = false, scale = 1) {
   const added = [];
   const elapsed = () => Math.max(0, (performance.now() - startedAt) / 1000);
   const tint = intercepted
@@ -23,9 +23,9 @@ export function createNuclearVisuals(entities, at, startedAt, intercepted = fals
   const waves = intercepted
     ? [{ delay: 0.08, duration: 2.2, max: 52_000 }]
     : [
-      { delay: 0.10, duration: 3.2, max: 105_000 },
-      { delay: 0.48, duration: 4.4, max: 178_000 },
-      { delay: 0.92, duration: 5.4, max: 245_000 },
+      { delay: 0.10, duration: 3.2, max: 105_000 * scale },
+      { delay: 0.48, duration: 4.4, max: 178_000 * scale },
+      { delay: 0.92, duration: 5.4, max: 245_000 * scale },
     ];
 
   for (const wave of waves) {
@@ -63,9 +63,9 @@ export function createNuclearVisuals(entities, at, startedAt, intercepted = fals
     const flashRadius = new Cesium.CallbackProperty(() => {
       const t = clamp01(elapsed() / 1.1);
       return new Cesium.Cartesian3(
+        (7_000 + 32_000 * easeOut(t)) * scale,
         7_000 + 32_000 * easeOut(t),
-        7_000 + 32_000 * easeOut(t),
-        5_000 + 19_000 * easeOut(t),
+        (5_000 + 19_000 * easeOut(t)) * scale,
       );
     }, false);
     added.push(entities.add({
@@ -86,7 +86,7 @@ export function createNuclearVisuals(entities, at, startedAt, intercepted = fals
     }, false);
     const dustRadius = new Cesium.CallbackProperty(() => {
       const t = clamp01((elapsed() - 0.7) / 6.5);
-      return 12_000 + 88_000 * easeOut(t);
+      return (12_000 + 88_000 * easeOut(t)) * scale;
     }, false);
     added.push(entities.add({
       position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 900),
