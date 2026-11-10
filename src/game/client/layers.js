@@ -21,6 +21,15 @@ const hashOf = (text) => { let h = 2166136261; for (let i = 0; i < text.length; 
 export function createWorldLayers(viewer, geometry) {
   const scene = viewer.scene;
   const nuclearDamage = createNuclearDamageLayer(viewer);
+  const nuclearTestEffects = new Set();
+  const nuclearTestTimers = new Set();
+
+  function clearNuclearTestEffects() {
+    for (const timer of nuclearTestTimers) clearTimeout(timer);
+    nuclearTestTimers.clear();
+    for (const entity of nuclearTestEffects) entities.entities.remove(entity);
+    nuclearTestEffects.clear();
+  }
   const entities = new Cesium.CustomDataSource('kupol');
   viewer.dataSources.add(entities);
   let fill = null; let fog = null; let borders = null;
@@ -302,8 +311,16 @@ export function createWorldLayers(viewer, geometry) {
     added.push(...createNuclearVisuals(entities.entities, at, start, false, scale));
     const sourceProfile = sourceBombProfiles.bombs.find((item) => item.id === options.profileId) ?? null;
     added.push(...mushroom(at, start, scale, sourceProfile));
+    for (const entity of added) nuclearTestEffects.add(entity);
     playNuclearAudio({ intercepted: false, yieldMt, soundId: options.soundId });
-    setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 18000);
+    const timer = setTimeout(() => {
+      for (const entity of added) {
+        entities.entities.remove(entity);
+        nuclearTestEffects.delete(entity);
+      }
+      nuclearTestTimers.delete(timer);
+    }, 18000);
+    nuclearTestTimers.add(timer);
     const damage = options.damage === false
       ? null
       : await nuclearDamage.apply(at, yieldMt, options.cityName || 'Выбранный город');
@@ -464,7 +481,10 @@ export function createWorldLayers(viewer, geometry) {
     },
     playCombat,
     playNuclearTest,
-    resetNuclearDamage: () => nuclearDamage.reset(),
+    resetNuclearDamage() {
+      clearNuclearTestEffects();
+      nuclearDamage.reset();
+    },
     /** Что под курсором: город, стек юнитов или ячейка. */
     pick(position) {
       const picked = scene.pick(position);
