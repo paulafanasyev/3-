@@ -7,6 +7,7 @@ import { cityIcon, unitIcon } from './icons.js';
 import { UNITS } from '../data/units.js';
 import { createNuclearVisuals } from './nuclearEffects.js';
 import { playNuclearAudio } from './nuclearAudio.js';
+import { createNuclearDamageLayer } from './nuclearDamage.js';
 
 /** Ниже этой высоты камеры заливка территорий гаснет, остаются границы: видно сами снимки. */
 export const FILL_FADE_HEIGHT = 120_000;
@@ -18,6 +19,7 @@ const hashOf = (text) => { let h = 2166136261; for (let i = 0; i < text.length; 
 
 export function createWorldLayers(viewer, geometry) {
   const scene = viewer.scene;
+  const nuclearDamage = createNuclearDamageLayer(viewer);
   const entities = new Cesium.CustomDataSource('kupol');
   viewer.dataSources.add(entities);
   let fill = null; let fog = null; let borders = null;
@@ -291,16 +293,19 @@ export function createWorldLayers(viewer, geometry) {
   }
 
   /** Декоративный запуск с полигона: не вызывает игровые команды и не меняет состояние партии. */
-  function playNuclearTest(at, yieldMt) {
-    if (!at || !Number.isFinite(at.lon) || !Number.isFinite(at.lat)) return false;
+  async function playNuclearTest(at, yieldMt, options = {}) {
+    if (!at || !Number.isFinite(at.lon) || !Number.isFinite(at.lat)) return { ok: false };
     const start = performance.now();
     const added = [];
     const scale = Math.max(0.55, Math.min(2.4, (yieldMt / 1.6) ** 0.22));
     added.push(...createNuclearVisuals(entities.entities, at, start, false, scale));
     added.push(...mushroom(at, start, scale));
-    playNuclearAudio({ intercepted: false, yieldMt });
-    setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 12000);
-    return true;
+    playNuclearAudio({ intercepted: false, yieldMt, soundId: options.soundId });
+    setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 18000);
+    const damage = options.damage === false
+      ? null
+      : await nuclearDamage.apply(at, yieldMt, options.cityName || 'Выбранный город');
+    return { ok: true, damage };
   }
 
   /** Грибовидное облако: огненный столб и шапка растут, остывают от оранжевого к серому. */
@@ -410,6 +415,7 @@ export function createWorldLayers(viewer, geometry) {
     },
     playCombat,
     playNuclearTest,
+    resetNuclearDamage: () => nuclearDamage.reset(),
     /** Что под курсором: город, стек юнитов или ячейка. */
     pick(position) {
       const picked = scene.pick(position);
