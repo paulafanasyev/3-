@@ -137,7 +137,8 @@ export function createNuclearDamageLayer(viewer) {
       const lon = at.lon + Math.cos(angle) * distance / (111320 * Math.max(0.15, Math.cos(at.lat * Math.PI / 180)));
       const lat = at.lat + Math.sin(angle) * distance / 111320;
       const delay = 2 + random() * 5;
-      const rise = new Cesium.CallbackProperty(() => clamp((performance.now() - start) / 1000 - delay, 0, 1) * (900 + random() * 1500), false);
+      const riseHeight = 900 + random() * 1500;
+      const rise = new Cesium.CallbackProperty(() => clamp((performance.now() - start) / 1000 - delay, 0, 1) * riseHeight, false);
       add({
         position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(lon, lat, baseHeight + rise.getValue()), false),
         ellipsoid: {
