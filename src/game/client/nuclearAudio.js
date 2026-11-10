@@ -1,6 +1,5 @@
 // Nuclear test-range audio library.
-// Original front/tail OGG samples are served from the source project's public repository.
-// The three frequently used samples are also mirrored locally in public/audio/nuclear/.
+// All 20 original front/tail OGG sample pairs are bundled locally in public/audio/nuclear/.
 const SAMPLES = [
   ['mk82', 'Mk 82', '01_mk82'],
   ['mk84', 'Mk 84', '02_mk84'],
