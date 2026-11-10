@@ -1,7 +1,6 @@
 // Nuclear test-range audio library.
 // Original front/tail OGG samples are served from the source project's public repository.
 // The three frequently used samples are also mirrored locally in public/audio/nuclear/.
-const SOURCE = 'https://raw.githubusercontent.com/Prokopiy8247/Opus5-5-Atomic-Bombs/main/assets/audio/samples/blast/';
 const SAMPLES = [
   ['mk82', 'Mk 82', '01_mk82'],
   ['mk84', 'Mk 84', '02_mk84'],
@@ -27,10 +26,10 @@ const SAMPLES = [
   id, name,
   front: id === 'rds37' ? '/audio/nuclear/16-rds37-front.ogg'
     : id === 'castle-bravo' ? '/audio/nuclear/18-castle-bravo-front.ogg'
-      : id === 'tsar' ? '/audio/nuclear/20-tsar-front.ogg' : `${SOURCE}${prefix}_front.ogg`,
+      : id === 'tsar' ? '/audio/nuclear/20-tsar-front.ogg' : `/audio/nuclear/${id}-front.ogg`,
   tail: id === 'rds37' ? '/audio/nuclear/16-rds37-tail.ogg'
     : id === 'castle-bravo' ? '/audio/nuclear/18-castle-bravo-tail.ogg'
-      : id === 'tsar' ? '/audio/nuclear/20-tsar-tail.ogg' : `${SOURCE}${prefix}_tail.ogg`,
+      : id === 'tsar' ? '/audio/nuclear/20-tsar-tail.ogg' : `/audio/nuclear/${id}-tail.ogg`,
 }));
 
 const DEFAULT_SOUND = Object.freeze({
