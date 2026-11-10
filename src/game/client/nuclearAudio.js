@@ -23,12 +23,8 @@ const SAMPLES = [
   ['tsar', 'Царь-бомба', '20_tsar'],
 ].map(([id, name, prefix]) => Object.freeze({
   id, name,
-  front: id === 'rds37' ? '/audio/nuclear/16-rds37-front.ogg'
-    : id === 'castle-bravo' ? '/audio/nuclear/18-castle-bravo-front.ogg'
-      : id === 'tsar' ? '/audio/nuclear/20-tsar-front.ogg' : `/audio/nuclear/${id}-front.ogg`,
-  tail: id === 'rds37' ? '/audio/nuclear/16-rds37-tail.ogg'
-    : id === 'castle-bravo' ? '/audio/nuclear/18-castle-bravo-tail.ogg'
-      : id === 'tsar' ? '/audio/nuclear/20-tsar-tail.ogg' : `/audio/nuclear/${id}-tail.ogg`,
+  front: `/audio/nuclear/${id}-front.ogg`,
+  tail: `/audio/nuclear/${id}-tail.ogg`,
 }));
 
 const DEFAULT_SOUND = Object.freeze({
