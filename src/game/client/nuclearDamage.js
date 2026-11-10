@@ -18,6 +18,7 @@ export function createNuclearDamageLayer(viewer) {
   viewer.dataSources.add(source);
   const entities = source.entities;
   const zones = [];
+  let generation = 0;
 
   async function groundHeight(lon, lat) {
     const position = Cesium.Cartographic.fromDegrees(lon, lat);
@@ -41,7 +42,9 @@ export function createNuclearDamageLayer(viewer) {
     };
     const radiusKm = clamp(1.4 + Math.pow(Math.max(0.01, yieldMt), 0.27) * 2.3, 1.8, 24);
     const radiusM = radiusKm * 1000;
+    const activeGeneration = generation;
     const baseHeight = await groundHeight(at.lon, at.lat);
+    if (activeGeneration !== generation) return null;
     const start = performance.now();
     const zone = { cityName, at: { ...at }, yieldMt, radiusKm, ids: [] };
     const add = (definition) => {
@@ -164,6 +167,7 @@ export function createNuclearDamageLayer(viewer) {
   }
 
   function reset() {
+    generation += 1;
     entities.removeAll();
     zones.length = 0;
   }
