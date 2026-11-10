@@ -86,7 +86,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     <select id="k-nrange-bomb">${BOMBS.map((bomb) => `<option value="${bomb.id}">${bomb.name} · ${formatYield(bomb.yieldKt)} · ${bomb.year}</option>`).join('')}</select>
     <div class="k-nrange-status" data-bomb-info aria-live="polite"></div>
     <label for="k-nrange-profile">Визуальный профиль из исходного репозитория</label>
-    <select id="k-nrange-profile">\${SOURCE_PROFILES.map((profile) => `<option value="\${profile.id}">\${profile.name.ru} · \${formatYield(profile.yield_kt)}</option>`).join('')}</select>
+    <select id="k-nrange-profile">${SOURCE_PROFILES.map((profile) => `<option value="${profile.id}">${profile.name.ru} · ${formatYield(profile.yield_kt)}</option>`).join('')}</select>
     <div class="k-nrange-muted">Доступны все 20 исходных профилей; по умолчанию выбран ближайший профиль к историческому устройству.</div>
     <label for="k-nrange-sound">Звуковая дорожка — библиотека источника</label>
     <select id="k-nrange-sound">${NUCLEAR_AUDIO_SAMPLES.map((sample) => `<option value="${sample.id}">${sample.name}</option>`).join('')}</select>
