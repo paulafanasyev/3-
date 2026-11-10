@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import places from '../data/populated_places.json' with { type: 'json' };
+import sourceProfiles from '../data/source-bomb-profiles.json' with { type: 'json' };
 
 test('God’s Eye View offline city catalogue keeps source provenance and global coverage', () => {
   assert.equal(places.meta.source, 'ne_10m_populated_places_simple');
@@ -15,4 +16,11 @@ test('God’s Eye View offline city catalogue keeps source provenance and global
     assert.ok(scalerank >= 0 && scalerank <= 10);
     assert.ok(rankMax >= 0 && rankMax <= 14);
   }
+});
+
+test('all source explosion art profiles are available to the test range', () => {
+  assert.equal(sourceProfiles.bombs.length, 20);
+  assert.ok(sourceProfiles.bombs.some((bomb) => bomb.id === 'little_boy'));
+  assert.ok(sourceProfiles.bombs.some((bomb) => bomb.id === 'castle_bravo'));
+  assert.ok(sourceProfiles.bombs.some((bomb) => bomb.id === 'tsar'));
 });
