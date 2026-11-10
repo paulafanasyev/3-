@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import places from '../data/populated_places.json';
+import places from '../data/populated_places.json' with { type: 'json' };
 
 test('God’s Eye View offline city catalogue keeps source provenance and global coverage', () => {
   assert.equal(places.meta.source, 'ne_10m_populated_places_simple');
