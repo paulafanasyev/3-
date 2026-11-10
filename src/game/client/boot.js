@@ -12,6 +12,7 @@ import { createLiveLayers } from './liveLayers.js';
 import { openBattle } from './battle/hud.js';
 import { unitPortrait } from './icons.js';
 import { addFallbackImagery, SOURCE_TOAST } from './imagery.js';
+import { createNuclearRange } from './nuclear-range.js';
 
 const START_VIEW = { lon: -98, lat: 22, height: 7_500_000 };
 /** Кому сообщить, что верхний слой подложки отвалился уже после старта (ставит bootKupol). */
@@ -82,6 +83,7 @@ export async function bootKupol() {
   const { viewer, source } = await createViewer(globe);
   viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(START_VIEW.lon, START_VIEW.lat, START_VIEW.height) });
   const layers = createWorldLayers(viewer, geometry);
+  createNuclearRange({ root, viewer, layers });
 
   let state = null;
   let selection = { cell: null, unitId: null };
