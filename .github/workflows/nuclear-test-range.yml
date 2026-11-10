@@ -31,3 +31,5 @@ jobs:
       - run: npm run test:game
       - name: Bundle Cesium application
         run: npx vite build
+      - name: Browser smoke test — city selection, effects, audio and reset
+        run: node scripts/nuclear-range-browser-smoke.mjs
