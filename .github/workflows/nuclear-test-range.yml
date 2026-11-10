@@ -31,3 +31,9 @@ jobs:
         run: npx vite build
       - name: Browser smoke test — city selection, effects, audio and reset
         run: node scripts/nuclear-range-browser-smoke.mjs
+      - name: Upload browser evidence screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuclear-range-browser-evidence
+          path: artifacts/nuclear-range-smoke.png
+          if-no-files-found: error
