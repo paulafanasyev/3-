@@ -54,6 +54,18 @@ function safePlay(audio) {
   if (result && typeof result.catch === 'function') result.catch(() => {});
 }
 
+export function stopNuclearAudio() {
+  if (tailTimer !== null) clearTimeout(tailTimer);
+  tailTimer = null;
+  for (const audio of [activeFront, activeTail]) {
+    if (!audio) continue;
+    audio.pause();
+    audio.currentTime = 0;
+  }
+  activeFront = null;
+  activeTail = null;
+}
+
 export function playNuclearAudio(strike = {}) {
   if (typeof Audio === 'undefined' || strike.intercepted) return false;
   if (activeFront) { activeFront.pause(); activeFront.currentTime = 0; }
