@@ -1,0 +1,24 @@
+name: Nuclear test range checks
+
+on:
+  pull_request:
+    branches: [feat/game-design]
+    paths:
+      - 'src/game/client/**'
+      - 'src/game/data/**'
+      - 'public/audio/nuclear/**'
+      - 'THIRD_PARTY_NOTICES.md'
+  push:
+    branches: [feat/nuclear-explosion-effects]
+
+jobs:
+  game-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.14.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:game
