@@ -8,8 +8,6 @@ on:
       - 'src/game/data/**'
       - 'public/audio/nuclear/**'
       - 'THIRD_PARTY_NOTICES.md'
-  push:
-    branches: [feat/nuclear-explosion-effects]
 
 jobs:
   game-tests:
