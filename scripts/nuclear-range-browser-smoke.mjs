@@ -3,10 +3,10 @@ import puppeteer from 'puppeteer';
 
 const port = Number(process.env.NUCLEAR_BROWSER_PORT || 4188);
 const base = `http://127.0.0.1:${port}`;
-const server = spawn(process.execPath, [
-  'node_modules/vite/bin/vite.js', 'preview',
-  '--host', '127.0.0.1', '--port', String(port), '--strictPort',
-], { stdio: ['ignore', 'pipe', 'pipe'] });
+const server = spawn(process.execPath, ['server.js'], {
+  env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', GOOGLE_MAPS_API_KEY: '' },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
 let serverOutput = '';
 server.stdout.on('data', (chunk) => { serverOutput += chunk.toString(); });
 server.stderr.on('data', (chunk) => { serverOutput += chunk.toString(); });
@@ -20,8 +20,11 @@ function assert(condition, message) {
 async function waitForServer() {
   for (let attempt = 0; attempt < 120; attempt += 1) {
     try {
-      const response = await fetch(`${base}/kupol`);
-      if (response.ok) return;
+      const response = await fetch(`${base}/api/health`);
+      if (response.ok) {
+        const gamePage = await fetch(`${base}/kupol`);
+        if (gamePage.ok) return;
+      }
     } catch { /* preview server is still starting */ }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -63,8 +66,12 @@ try {
   try {
     await page.waitForSelector('.k-nrange-trigger', { timeout: 60000 });
   } catch {
-    const body = await page.$eval('body', (element) => element.innerText.slice(0, 2500));
-    throw new Error(`Nuclear range button did not appear. body=${body} pageErrors=${JSON.stringify(pageErrors)} consoleErrors=${JSON.stringify(consoleErrors.slice(-12))} failedRequests=${JSON.stringify(failedRequests.slice(-12))}`);
+    const diagnostic = await page.evaluate(() => ({
+      body: document.body?.innerText.slice(0, 2500),
+      kupolRoot: document.querySelector('#kupol-root')?.innerHTML.slice(0, 1600) ?? null,
+      nuclearNodes: [...document.querySelectorAll('[class*=nrange]')].map((node) => node.className),
+    }));
+    throw new Error(`Nuclear range button did not appear. diagnostic=${JSON.stringify(diagnostic)} pageErrors=${JSON.stringify(pageErrors)} consoleErrors=${JSON.stringify(consoleErrors.slice(-12))} failedRequests=${JSON.stringify(failedRequests.slice(-12))}`);
   }
   assert(true, 'game booted and Nuclear Test Range tab is present');
 
