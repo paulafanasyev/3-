@@ -77,6 +77,11 @@ try {
 
   await page.click('.k-nrange-trigger');
   await page.waitForSelector('.k-nrange-panel:not([hidden])');
+  const startChoice = await page.$('.k-start button[data-id]');
+  if (startChoice) {
+    await startChoice.click();
+    await page.waitForFunction(() => !document.querySelector('.k-start') || getComputedStyle(document.querySelector('.k-start')).display === 'none', { timeout: 15000 });
+  }
   await page.type('#k-nrange-city-query', 'Hanoi');
   await page.waitForFunction(() => {
     const select = document.querySelector('#k-nrange-city-results');
@@ -99,9 +104,11 @@ try {
   assert([...audioResponses].some((item) => item.startsWith('trinity-front.ogg:200')), 'front sound sample is requested successfully');
   assert([...audioResponses].some((item) => item.startsWith('trinity-tail.ogg:200')), 'delayed tail sound sample is requested successfully');
   await (await import('node:fs/promises')).mkdir('artifacts', { recursive: true });
+  await page.click('.k-nrange-close');
   await page.screenshot({ path: 'artifacts/nuclear-range-smoke.png', fullPage: false });
-  assert(true, 'browser screenshot captured during the active test effects');
+  assert(true, 'browser screenshot captured during the active test effects with the game setup modal dismissed');
 
+  await page.click('.k-nrange-trigger');
   await page.click('[data-reset]');
   await page.waitForFunction(() => document.querySelector('[data-status]')?.textContent.includes('очищены'));
   assert(true, 'reset action completes and reports cleared effects');
