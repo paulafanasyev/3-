@@ -53,6 +53,7 @@ export function createNuclearDamageLayer(viewer) {
       const t = Math.max(0, (performance.now() - start) / 1000 - delay);
       return from * clamp(1 - t / duration, 0, 1);
     }, false);
+    const scorchFade = fade(0.55, 16, 1.5);
 
     // Charred ground footprint; intentionally an illustrative game effect, not a physical damage contour.
     add({
@@ -65,7 +66,7 @@ export function createNuclearDamageLayer(viewer) {
           false,
         )),
         outline: true,
-        outlineColor: new Cesium.CallbackProperty(() => Cesium.Color.fromCssColorString('#ff7b36').withAlpha(fade(0.55, 16, 1.5).getValue()), false),
+        outlineColor: new Cesium.CallbackProperty(() => Cesium.Color.fromCssColorString('#ff7b36').withAlpha(scorchFade.getValue()), false),
         outlineWidth: 2,
         height: baseHeight + 8,
       },
@@ -116,12 +117,13 @@ export function createNuclearDamageLayer(viewer) {
       });
       if (i % 13 === 0) {
         const fireDelay = 1.3 + random() * 2.5;
+        const fireFade = fade(0.92, 90, fireDelay);
         add({
           position: Cesium.Cartesian3.fromDegrees(lon, lat, ground + 12),
           point: {
-            pixelSize: new Cesium.CallbackProperty(() => 4 + 11 * Math.abs(Math.sin((performance.now() - start) / 210 + i)) * fade(1, 90, fireDelay).getValue(),
+            pixelSize: new Cesium.CallbackProperty(() => 4 + 11 * Math.abs(Math.sin((performance.now() - start) / 210 + i)) * fireFade.getValue(),
             false),
-            color: new Cesium.CallbackProperty(() => Cesium.Color.fromCssColorString('#ff6a22').withAlpha(fade(0.92, 90, fireDelay).getValue()), false),
+            color: new Cesium.CallbackProperty(() => Cesium.Color.fromCssColorString('#ff6a22').withAlpha(fireFade.getValue()), false),
             outlineColor: Cesium.Color.fromCssColorString('#ffd27a'),
             outlineWidth: 1,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -137,6 +139,7 @@ export function createNuclearDamageLayer(viewer) {
       const lon = at.lon + Math.cos(angle) * distance / (111320 * Math.max(0.15, Math.cos(at.lat * Math.PI / 180)));
       const lat = at.lat + Math.sin(angle) * distance / 111320;
       const delay = 2 + random() * 5;
+      const smokeFade = fade(0.48, 55, delay);
       const riseHeight = 900 + random() * 1500;
       const rise = new Cesium.CallbackProperty(() => clamp((performance.now() - start) / 1000 - delay, 0, 1) * riseHeight, false);
       add({
@@ -147,7 +150,7 @@ export function createNuclearDamageLayer(viewer) {
             return new Cesium.Cartesian3(r, r, r * 1.55);
           }, false),
           material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(() =>
-            Cesium.Color.fromCssColorString('#514b45').withAlpha(fade(0.48, 55, delay).getValue()), false)),
+            Cesium.Color.fromCssColorString('#514b45').withAlpha(smokeFade.getValue()), false)),
         },
       });
     }
