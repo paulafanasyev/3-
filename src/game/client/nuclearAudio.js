@@ -38,7 +38,7 @@ const DEFAULT_SOUND = Object.freeze({
   'rds-1': 'rds37', 'rds-2': 'rds37', 'rds-3': 'rds37', 'rds-4': 'rds37', 'rds-5': 'rds37',
   'rds-6s': 'rds37', 'rds-37': 'rds37', 'ivy-mike': 'ivy-mike',
   'castle-bravo': 'castle-bravo', 'castle-romeo': 'castle-bravo', 'castle-yankee': 'castle-bravo',
-  mk17: 'castle-bravo', grapple-x: 'test219', grapple-y: 'test219',
+  mk17: 'castle-bravo', 'grapple-x': 'test219', 'grapple-y': 'test219',
   b41: 'tsar', tsar: 'tsar', b53: 'b83', 'china-test-6': 'test219', canopus: 'test219',
 });
 
