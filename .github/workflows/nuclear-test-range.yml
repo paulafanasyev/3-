@@ -29,3 +29,5 @@ jobs:
           node --check src/game/client/nuclearDamage.js
           node --check src/game/client/layers.js
       - run: npm run test:game
+      - name: Bundle Cesium application
+        run: npx vite build
