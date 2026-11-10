@@ -25,6 +25,14 @@ const BOMBS = [
   { id: 'china-test-6', name: 'Испытание № 6', country: 'Китай', year: '1967', yieldKt: 3300, kind: 'Термоядерное испытание' },
   { id: 'canopus', name: 'Canopus', country: 'Франция', year: '1968', yieldKt: 2600, kind: 'Термоядерное испытание' },
 ];
+const PROFILE_FOR_BOMB = Object.freeze({
+  'fat-man': 'trinity', 'little-boy': 'little_boy',
+  'rds-1': 'rds37', 'rds-2': 'rds37', 'rds-3': 'rds37', 'rds-4': 'rds37', 'rds-5': 'rds37', 'rds-6s': 'rds37', 'rds-37': 'rds37',
+  'ivy-mike': 'ivy_mike',
+  'castle-bravo': 'castle_bravo', 'castle-romeo': 'castle_bravo', 'castle-yankee': 'castle_bravo', mk17: 'castle_bravo',
+  'grapple-x': 'rds37', 'grapple-y': 'rds37',
+  b41: 'test219', tsar: 'tsar', b53: 'b83', 'china-test-6': 'rds37', canopus: 'rds37',
+});
 const CITIES = populatedPlaces.places;
 const formatYield = (kt) => kt >= 1000 ? `${(kt / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} Мт` : `${kt.toLocaleString('ru-RU')} кт`;
 
@@ -196,6 +204,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     try {
       const result = await layers.playNuclearTest(target, bomb.yieldKt / 1000, {
         bombId: bomb.id,
+        profileId: PROFILE_FOR_BOMB[bomb.id],
         soundId: soundSelect.value,
         cityName: targetName,
         damage: damageToggle.checked,
