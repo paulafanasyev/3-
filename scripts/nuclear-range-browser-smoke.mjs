@@ -37,6 +37,8 @@ try {
       '--disable-setuid-sandbox',
       '--enable-webgl',
       '--ignore-gpu-blocklist',
+      '--enable-unsafe-swiftshader',
+      '--disable-dev-shm-usage',
       '--use-gl=angle',
       '--use-angle=swiftshader',
       '--autoplay-policy=no-user-gesture-required',
@@ -45,8 +47,12 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 960 });
   const pageErrors = [];
+  const consoleErrors = [];
+  const failedRequests = [];
   const audioResponses = new Set();
   page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  page.on('requestfailed', (request) => failedRequests.push(`${request.url()}: ${request.failure()?.errorText || 'failed'}`));
   page.on('response', (response) => {
     if (response.url().includes('/audio/nuclear/')) {
       audioResponses.add(`${response.url().split('/').pop()}:${response.status()}`);
@@ -54,7 +60,12 @@ try {
   });
 
   await page.goto(`${base}/kupol`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForSelector('.k-nrange-trigger', { timeout: 60000 });
+  try {
+    await page.waitForSelector('.k-nrange-trigger', { timeout: 60000 });
+  } catch {
+    const body = await page.$eval('body', (element) => element.innerText.slice(0, 2500));
+    throw new Error(`Nuclear range button did not appear. body=${body} pageErrors=${JSON.stringify(pageErrors)} consoleErrors=${JSON.stringify(consoleErrors.slice(-12))} failedRequests=${JSON.stringify(failedRequests.slice(-12))}`);
+  }
   assert(true, 'game booted and Nuclear Test Range tab is present');
 
   await page.click('.k-nrange-trigger');
