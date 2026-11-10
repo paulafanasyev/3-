@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import populatedPlaces from '../data/populated_places.json';
+import sourceBombProfiles from '../data/source-bomb-profiles.json';
 import { NUCLEAR_AUDIO_SAMPLES, defaultNuclearSound } from './nuclearAudio.js';
 
 const BOMBS = [
@@ -43,6 +44,7 @@ const CITY_ALIASES = Object.freeze({
   Cairo: ['каир'], Istanbul: ['стамбул'], Delhi: ['дели'], Mumbai: ['мумбаи'],
 });
 const CITIES = populatedPlaces.places;
+const SOURCE_PROFILES = sourceBombProfiles.bombs;
 const formatYield = (kt) => kt >= 1000 ? `${(kt / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} Мт` : `${kt.toLocaleString('ru-RU')} кт`;
 
 export function createNuclearRange({ root, viewer, layers }) {
@@ -83,6 +85,9 @@ export function createNuclearRange({ root, viewer, layers }) {
     <label for="k-nrange-bomb">Модель испытания</label>
     <select id="k-nrange-bomb">${BOMBS.map((bomb) => `<option value="${bomb.id}">${bomb.name} · ${formatYield(bomb.yieldKt)} · ${bomb.year}</option>`).join('')}</select>
     <div class="k-nrange-status" data-bomb-info aria-live="polite"></div>
+    <label for="k-nrange-profile">Визуальный профиль из исходного репозитория</label>
+    <select id="k-nrange-profile">\${SOURCE_PROFILES.map((profile) => `<option value="\${profile.id}">\${profile.name.ru} · \${formatYield(profile.yield_kt)}</option>`).join('')}</select>
+    <div class="k-nrange-muted">Доступны все 20 исходных профилей; по умолчанию выбран ближайший профиль к историческому устройству.</div>
     <label for="k-nrange-sound">Звуковая дорожка — библиотека источника</label>
     <select id="k-nrange-sound">${NUCLEAR_AUDIO_SAMPLES.map((sample) => `<option value="${sample.id}">${sample.name}</option>`).join('')}</select>
     <div class="k-nrange-muted">20 пар исходных OGG: фронт взрыва и отложенный гул. Для исторических моделей по умолчанию выбрана наиболее близкая доступная запись.</div>
@@ -102,6 +107,7 @@ export function createNuclearRange({ root, viewer, layers }) {
   const bombInfo = panel.querySelector('[data-bomb-info]');
   const bombSelect = panel.querySelector('#k-nrange-bomb');
   const soundSelect = panel.querySelector('#k-nrange-sound');
+  const profileSelect = panel.querySelector('#k-nrange-profile');
   const cityQuery = panel.querySelector('#k-nrange-city-query');
   const cityResults = panel.querySelector('#k-nrange-city-results');
   const damageToggle = panel.querySelector('[data-damage]');
@@ -116,6 +122,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
     bombInfo.textContent = `${bomb.country} · ${bomb.year} · ${formatYield(bomb.yieldKt)} · ${bomb.kind}`;
     soundSelect.value = defaultNuclearSound(bomb.id);
+    profileSelect.value = PROFILE_FOR_BOMB[bomb.id] ?? 'rds37';
   };
   bombSelect.addEventListener('change', updateBombInfo);
   updateBombInfo();
@@ -214,7 +221,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     try {
       const result = await layers.playNuclearTest(target, bomb.yieldKt / 1000, {
         bombId: bomb.id,
-        profileId: PROFILE_FOR_BOMB[bomb.id],
+        profileId: profileSelect.value,
         soundId: soundSelect.value,
         cityName: targetName,
         damage: damageToggle.checked,
