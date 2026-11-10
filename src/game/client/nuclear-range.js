@@ -38,14 +38,27 @@ const CITY_ALIASES = Object.freeze({
   Moscow: ['москва'], 'Saint Petersburg': ['санкт-петербург', 'петербург'], Hanoi: ['ханой'],
   'Ho Chi Minh City': ['хошимин', 'сайгон'], 'Da Nang': ['дананг'], Bangkok: ['бангкок'],
   Beijing: ['пекин'], Shanghai: ['шанхай'], Tokyo: ['токио'], Seoul: ['сеул'],
-  'New York': ['нью-йорк'], 'Los Angeles': ['лос-анджелес'], London: ['лондон'], Paris: ['париж'],
-  Berlin: ['берлин'], Rome: ['рим'], Kyiv: ['киев', 'київ'], Minsk: ['минск'],
+  'Los Angeles': ['лос-анджелес'], Rome: ['рим'], Kyiv: ['киев', 'київ'], Minsk: ['минск'],
   Tashkent: ['ташкент'], Almaty: ['алматы'], Astana: ['астана'], Dubai: ['дубай'],
   Cairo: ['каир'], Istanbul: ['стамбул'], Delhi: ['дели'], Mumbai: ['мумбаи'],
+  'Washington,  D.C.': ['вашингтон', 'washington', 'washington d.c.', 'washington dc'],
+  'New York': ['нью-йорк', 'new york', 'nyc'], London: ['лондон', 'london'],
+  Paris: ['париж', 'paris'], Berlin: ['берлин', 'berlin'],
 });
 const CITIES = populatedPlaces.places;
 const SOURCE_PROFILES = sourceBombProfiles.bombs;
 const formatYield = (kt) => kt >= 1000 ? `${(kt / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} Мт` : `${kt.toLocaleString('ru-RU')} кт`;
+const formatDistance = (km) => km >= 1 ? `${km.toLocaleString('ru-RU', { maximumFractionDigits: km < 10 ? 1 : 0 })} км` : `${Math.round(km * 1000)} м`;
+const formatDamage = (d) => {
+  const parts = [];
+  if (d.craterDiameterM > 0) parts.push(`воронка ⌀${Math.round(d.craterDiameterM)} м`);
+  parts.push(`огненный шар ${formatDistance(d.fireballKm)}`);
+  parts.push(`полное разрушение ${formatDistance(d.severeKm)}`);
+  parts.push(`разрушение жилых районов ${formatDistance(d.heavyKm)}`);
+  parts.push(`выбитые окна ${formatDistance(d.lightKm)}`);
+  if (Number.isFinite(d.cloudTopKm)) parts.push(`гриб на ${Math.round(d.cloudTopKm)} км`);
+  return `Разрушения по реальным зонам поражения: ${parts.join(', ')}.`;
+};
 
 export function createNuclearRange({ root, viewer, layers }) {
   const style = document.createElement('style');
@@ -227,7 +240,7 @@ export function createNuclearRange({ root, viewer, layers }) {
         damage: damageToggle.checked,
       });
       status.textContent = result?.ok
-        ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. Игровая зона разрушений: ${result.damage.radiusKm.toFixed(1)} км, объектов: ${result.damage.buildingCount}.` : '. Без разрушений.'}`
+        ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. ${formatDamage(result.damage)} Разрушено строений: ${result.damage.buildingCount}.` : '. Без разрушений.'}`
         : 'Не удалось запустить визуализацию.';
     } catch (error) {
       status.textContent = `Ошибка испытания: ${String(error?.message || error)}`;

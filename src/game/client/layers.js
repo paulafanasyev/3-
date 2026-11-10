@@ -323,7 +323,7 @@ export function createWorldLayers(viewer, geometry) {
     nuclearTestTimers.add(timer);
     const damage = options.damage === false
       ? null
-      : await nuclearDamage.apply(at, yieldMt, options.cityName || 'Выбранный город');
+      : await nuclearDamage.apply(at, yieldMt, options.cityName || 'Выбранный город', sourceProfile);
     return { ok: true, damage };
   }
 
