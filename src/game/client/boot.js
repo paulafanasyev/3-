@@ -83,7 +83,6 @@ export async function bootKupol() {
   const { viewer, source } = await createViewer(globe);
   viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(START_VIEW.lon, START_VIEW.lat, START_VIEW.height) });
   const layers = createWorldLayers(viewer, geometry);
-  createNuclearRange({ root, viewer, layers });
 
   let state = null;
   let selection = { cell: null, unitId: null };
@@ -125,6 +124,8 @@ export async function bootKupol() {
     newGame: () => { try { sessionStorage.removeItem('kupol.session'); } catch {} location.reload(); },
     reload: () => location.reload(),
   });
+  // Создаём отдельную панель после HUD: createHud заменяет содержимое root целиком.
+  createNuclearRange({ root, viewer, layers });
   // настоящие слои GEV (самолёты, спутники, землетрясения, запуски) поверх партии
   const liveLayers = createLiveLayers(viewer, (st) => hud.live(st));
   const net = connectGame({
