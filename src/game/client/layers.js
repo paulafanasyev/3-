@@ -6,7 +6,7 @@ import { borderEdges, chainSegments, unwrapRing } from './geometry.js';
 import { cityIcon, unitIcon } from './icons.js';
 import { UNITS } from '../data/units.js';
 import { createNuclearVisuals } from './nuclearEffects.js';
-import { playNuclearAudio } from './nuclearAudio.js';
+import { playNuclearAudio, stopNuclearAudio } from './nuclearAudio.js';
 import { createNuclearDamageLayer } from './nuclearDamage.js';
 import sourceBombProfiles from '../data/source-bomb-profiles.json';
 
@@ -483,6 +483,7 @@ export function createWorldLayers(viewer, geometry) {
     playNuclearTest,
     resetNuclearDamage() {
       clearNuclearTestEffects();
+      stopNuclearAudio();
       nuclearDamage.reset();
     },
     /** Что под курсором: город, стек юнитов или ячейка. */
