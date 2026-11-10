@@ -295,31 +295,32 @@ export function createWorldLayers(viewer, geometry) {
     if (!at || !Number.isFinite(at.lon) || !Number.isFinite(at.lat)) return false;
     const start = performance.now();
     const added = [];
-    added.push(...createNuclearVisuals(entities.entities, at, start, false));
-    added.push(...mushroom(at, start));
+    const scale = Math.max(0.55, Math.min(2.4, (yieldMt / 1.6) ** 0.22));
+    added.push(...createNuclearVisuals(entities.entities, at, start, false, scale));
+    added.push(...mushroom(at, start, scale));
     playNuclearAudio({ intercepted: false, yieldMt });
     setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 12000);
     return true;
   }
 
   /** Грибовидное облако: огненный столб и шапка растут, остывают от оранжевого к серому. */
-  function mushroom(at, start) {
+  function mushroom(at, start, scale = 1) {
     const t = () => Math.min(1, (performance.now() - start) / 6000);
     const ease = () => 1 - (1 - t()) ** 3;
     const fire = Cesium.Color.fromCssColorString('#ff8a2a');
     const ash = Cesium.Color.fromCssColorString('#8d8478');
     const tint = (a) => new Cesium.CallbackProperty(() => Cesium.Color.lerp(fire, ash, Math.min(1, t() * 1.4), new Cesium.Color()).withAlpha(a * (1 - Math.max(0, t() - 0.75) * 2)), false);
-    const H = 60_000;
+    const H = 60_000 * scale;
     const stemLen = new Cesium.CallbackProperty(() => Math.max(1000, H * ease()), false);
     const stemPos = new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, Math.max(500, H * ease()) / 2), false);
     const capPos = new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, H * ease()), false);
-    const capR = new Cesium.CallbackProperty(() => { const r = 4000 + 30_000 * ease(); return new Cesium.Cartesian3(r, r, r * 0.55); }, false);
-    const ringR = new Cesium.CallbackProperty(() => { const r = 6000 + 40_000 * ease(); return new Cesium.Cartesian3(r, r, r * 0.18); }, false);
+    const capR = new Cesium.CallbackProperty(() => { const r = (4000 + 30_000 * ease()) * scale; return new Cesium.Cartesian3(r, r, r * 0.55); }, false);
+    const ringR = new Cesium.CallbackProperty(() => { const r = (6000 + 40_000 * ease()) * scale; return new Cesium.Cartesian3(r, r, r * 0.18); }, false);
     return [
       entities.entities.add({ position: stemPos, cylinder: { length: stemLen, topRadius: 5000, bottomRadius: 9000, material: new Cesium.ColorMaterialProperty(tint(0.85)) } }),
       entities.entities.add({ position: capPos, ellipsoid: { radii: capR, material: new Cesium.ColorMaterialProperty(tint(0.9)) } }),
       entities.entities.add({ position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, H * ease() * 0.55), false), ellipsoid: { radii: ringR, material: new Cesium.ColorMaterialProperty(tint(0.6)) } }),
-      entities.entities.add({ position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat), ellipsoid: { radii: new Cesium.CallbackProperty(() => { const r = 8000 + 45_000 * ease(); return new Cesium.Cartesian3(r, r, r * 0.25); }, false), material: new Cesium.ColorMaterialProperty(tint(0.55)) } }),
+      entities.entities.add({ position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat), ellipsoid: { radii: new Cesium.CallbackProperty(() => { const r = (8000 + 45_000 * ease()) * scale; return new Cesium.Cartesian3(r, r, r * 0.25); }, false), material: new Cesium.ColorMaterialProperty(tint(0.55)) } }),
     ];
   }
 
