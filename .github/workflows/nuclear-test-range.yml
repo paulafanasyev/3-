@@ -21,4 +21,11 @@ jobs:
           node-version: '24.14.0'
           cache: npm
       - run: npm ci
+      - name: Check nuclear client syntax
+        run: |
+          node --check src/game/client/nuclear-range.js
+          node --check src/game/client/nuclearAudio.js
+          node --check src/game/client/nuclearEffects.js
+          node --check src/game/client/nuclearDamage.js
+          node --check src/game/client/layers.js
       - run: npm run test:game
