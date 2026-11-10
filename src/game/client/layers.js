@@ -8,6 +8,7 @@ import { UNITS } from '../data/units.js';
 import { createNuclearVisuals } from './nuclearEffects.js';
 import { playNuclearAudio } from './nuclearAudio.js';
 import { createNuclearDamageLayer } from './nuclearDamage.js';
+import sourceBombProfiles from '../data/source-bomb-profiles.json';
 
 /** Ниже этой высоты камеры заливка территорий гаснет, остаются границы: видно сами снимки. */
 export const FILL_FADE_HEIGHT = 120_000;
@@ -299,7 +300,8 @@ export function createWorldLayers(viewer, geometry) {
     const added = [];
     const scale = Math.max(0.55, Math.min(2.4, (yieldMt / 1.6) ** 0.22));
     added.push(...createNuclearVisuals(entities.entities, at, start, false, scale));
-    added.push(...mushroom(at, start, scale));
+    const sourceProfile = sourceBombProfiles.bombs.find((item) => item.id === options.profileId) ?? null;
+    added.push(...mushroom(at, start, scale, sourceProfile));
     playNuclearAudio({ intercepted: false, yieldMt, soundId: options.soundId });
     setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 18000);
     const damage = options.damage === false
@@ -308,25 +310,72 @@ export function createWorldLayers(viewer, geometry) {
     return { ok: true, damage };
   }
 
-  /** Грибовидное облако: огненный столб и шапка растут, остывают от оранжевого к серому. */
-  function mushroom(at, start, scale = 1) {
-    const t = () => Math.min(1, (performance.now() - start) / 6000);
+  /** Порт последовательности source FX: fireball → rising stem → cap → condensation skirt. */
+  function mushroom(at, start, scale = 1, sourceProfile = null) {
+    const art = sourceProfile?.profile ?? {};
+    const profileScale = sourceProfile ? 1 : scale;
+    const t = () => Math.min(1, (performance.now() - start) / 9000);
     const ease = () => 1 - (1 - t()) ** 3;
+    const fade = () => 1 - Math.max(0, t() - 0.72) / 0.28;
+    const color = (values, fallback) => {
+      const v = Array.isArray(values) && values.length >= 3 ? values : fallback;
+      return new Cesium.Color(Number(v[0]), Number(v[1]), Number(v[2]), 1);
+    };
     const fire = Cesium.Color.fromCssColorString('#ff8a2a');
-    const ash = Cesium.Color.fromCssColorString('#8d8478');
-    const tint = (a) => new Cesium.CallbackProperty(() => Cesium.Color.lerp(fire, ash, Math.min(1, t() * 1.4), new Cesium.Color()).withAlpha(a * (1 - Math.max(0, t() - 0.75) * 2)), false);
-    const H = 60_000 * scale;
-    const stemLen = new Cesium.CallbackProperty(() => Math.max(1000, H * ease()), false);
-    const stemPos = new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, Math.max(500, H * ease()) / 2), false);
-    const capPos = new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, H * ease()), false);
-    const capR = new Cesium.CallbackProperty(() => { const r = (4000 + 30_000 * ease()) * scale; return new Cesium.Cartesian3(r, r, r * 0.55); }, false);
-    const ringR = new Cesium.CallbackProperty(() => { const r = (6000 + 40_000 * ease()) * scale; return new Cesium.Cartesian3(r, r, r * 0.18); }, false);
-    return [
-      entities.entities.add({ position: stemPos, cylinder: { length: stemLen, topRadius: 5000, bottomRadius: 9000, material: new Cesium.ColorMaterialProperty(tint(0.85)) } }),
-      entities.entities.add({ position: capPos, ellipsoid: { radii: capR, material: new Cesium.ColorMaterialProperty(tint(0.9)) } }),
-      entities.entities.add({ position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, H * ease() * 0.55), false), ellipsoid: { radii: ringR, material: new Cesium.ColorMaterialProperty(tint(0.6)) } }),
-      entities.entities.add({ position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat), ellipsoid: { radii: new Cesium.CallbackProperty(() => { const r = (8000 + 45_000 * ease()) * scale; return new Cesium.Cartesian3(r, r, r * 0.25); }, false), material: new Cesium.ColorMaterialProperty(tint(0.55)) } }),
+    const ashEarly = color(art.head_color_early, [0.34, 0.17, 0.08]);
+    const ashLate = color(art.head_color_late, [0.62, 0.56, 0.50]);
+    const stemTint = color(art.stem_color, [0.27, 0.20, 0.14]);
+    const skirtTint = color(art.skirt_color, [0.52, 0.46, 0.38]);
+    const cloudHeight = Math.max(500, Number(art.cloud_top_m) || 60_000 * scale) * profileScale;
+    const capRadius = Math.max(150, Number(art.cap_radius_m) || 30_000 * scale) * profileScale;
+    const stemRadius = Math.max(80, Number(art.stem_radius_m) || capRadius * 0.17) * profileScale;
+    const fireballRadius = Math.max(80, Number(art.fireball_r_m) || capRadius * 0.42) * profileScale;
+    const capHalf = Math.max(80, Number(art.cap_half_m) || capRadius * 0.42) * profileScale;
+    const cloudColor = (alpha) => new Cesium.CallbackProperty(() => {
+      const mixed = Cesium.Color.lerp(ashEarly, ashLate, Math.min(1, t() * 1.4), new Cesium.Color());
+      return mixed.withAlpha(alpha * Math.max(0, fade()));
+    }, false);
+    const stemColor = new Cesium.CallbackProperty(() => stemTint.withAlpha(0.82 * Math.max(0, fade())), false);
+    const skirtColor = new Cesium.CallbackProperty(() => skirtTint.withAlpha(0.48 * Math.max(0, fade())), false);
+    const stemLen = new Cesium.CallbackProperty(() => Math.max(100, cloudHeight * ease()), false);
+    const stemPos = new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, Math.max(50, cloudHeight * ease()) / 2), false);
+    const capPos = new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, cloudHeight * ease()), false);
+    const capR = new Cesium.CallbackProperty(() => {
+      const r = capRadius * (0.12 + 0.88 * ease());
+      return new Cesium.Cartesian3(r, r, Math.max(60, capHalf * (0.16 + 0.84 * ease())));
+    }, false);
+    const ringR = new Cesium.CallbackProperty(() => {
+      const r = capRadius * (0.2 + 1.08 * ease());
+      return new Cesium.Cartesian3(r, r, Math.max(40, r * 0.16));
+    }, false);
+    const fireballR = new Cesium.CallbackProperty(() => {
+      const r = fireballRadius * (0.18 + 0.82 * Math.min(1, ease() * 1.5));
+      return new Cesium.Cartesian3(r, r, r * 0.72);
+    }, false);
+    const added = [
+      entities.entities.add({ position: stemPos, cylinder: { length: stemLen, topRadius: stemRadius * 0.72, bottomRadius: stemRadius, material: new Cesium.ColorMaterialProperty(stemColor) } }),
+      entities.entities.add({ position: capPos, ellipsoid: { radii: capR, material: new Cesium.ColorMaterialProperty(cloudColor(0.88)) } }),
+      entities.entities.add({ position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, cloudHeight * ease() * 0.58), false), ellipsoid: { radii: ringR, material: new Cesium.ColorMaterialProperty(skirtColor) } }),
+      entities.entities.add({ position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, fireballRadius * 0.6 * ease()), false), ellipsoid: { radii: fireballR, material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(() => fire.withAlpha(0.72 * Math.max(0, 1 - t())), false)) } }),
     ];
+    // Billowing cap lobes reproduce the source profile's multi-lobed mushroom silhouette.
+    for (let i = 0; i < 7; i += 1) {
+      const angle = (i / 7) * Math.PI * 2;
+      const offset = capRadius * 0.58;
+      const lon = at.lon + Math.cos(angle) * offset / (111320 * Math.max(0.15, Math.cos(at.lat * Math.PI / 180)));
+      const lat = at.lat + Math.sin(angle) * offset / 111320;
+      added.push(entities.entities.add({
+        position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(lon, lat, cloudHeight * ease() * 0.98), false),
+        ellipsoid: {
+          radii: new Cesium.CallbackProperty(() => {
+            const r = capRadius * (0.16 + 0.34 * ease());
+            return new Cesium.Cartesian3(r, r * 0.9, Math.max(50, r * 0.48));
+          }, false),
+          material: new Cesium.ColorMaterialProperty(cloudColor(0.68)),
+        },
+      }));
+    }
+    return added;
   }
 
   // ---------- анимация боя ----------
