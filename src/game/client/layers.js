@@ -290,6 +290,18 @@ export function createWorldLayers(viewer, geometry) {
     setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 12000);
   }
 
+  /** Декоративный запуск с полигона: не вызывает игровые команды и не меняет состояние партии. */
+  function playNuclearTest(at, yieldMt) {
+    if (!at || !Number.isFinite(at.lon) || !Number.isFinite(at.lat)) return false;
+    const start = performance.now();
+    const added = [];
+    added.push(...createNuclearVisuals(entities.entities, at, start, false));
+    added.push(...mushroom(at, start));
+    playNuclearAudio({ intercepted: false, yieldMt });
+    setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 12000);
+    return true;
+  }
+
   /** Грибовидное облако: огненный столб и шапка растут, остывают от оранжевого к серому. */
   function mushroom(at, start) {
     const t = () => Math.min(1, (performance.now() - start) / 6000);
@@ -396,6 +408,7 @@ export function createWorldLayers(viewer, geometry) {
       syncStrikes(state);
     },
     playCombat,
+    playNuclearTest,
     /** Что под курсором: город, стек юнитов или ячейка. */
     pick(position) {
       const picked = scene.pick(position);
