@@ -1,5 +1,8 @@
 import * as Cesium from 'cesium';
 
+const BOMBS = [{"id":"little-boy","name":"Малыш (Little Boy)","country":"США","year":"1945","yieldKt":15,"kind":"Урановая атомная бомба","sound":"rds37"},{"id":"fat-man","name":"Толстяк (Fat Man)","country":"США","year":"1945","yieldKt":21,"kind":"Плутониевая атомная бомба","sound":"rds37"},{"id":"rds-1","name":"РДС-1","country":"СССР","year":"1949","yieldKt":22,"kind":"Атомная бомба","sound":"rds37"},{"id":"rds-2","name":"РДС-2","country":"СССР","year":"1951","yieldKt":38,"kind":"Атомная бомба","sound":"rds37"},{"id":"rds-3","name":"РДС-3","country":"СССР","year":"1951","yieldKt":41,"kind":"Атомная бомба","sound":"rds37"},{"id":"rds-4","name":"РДС-4","country":"СССР","year":"1953","yieldKt":28,"kind":"Тактическая атомная бомба","sound":"rds37"},{"id":"rds-5","name":"РДС-5","country":"СССР","year":"1953","yieldKt":10,"kind":"Атомная бомба","sound":"rds37"},{"id":"rds-6s","name":"РДС-6с","country":"СССР","year":"1953","yieldKt":400,"kind":"Термоядерное устройство","sound":"rds37"},{"id":"ivy-mike","name":"Ivy Mike","country":"США","year":"1952","yieldKt":10400,"kind":"Термоядерное устройство","sound":"castle"},{"id":"rds-37","name":"РДС-37","country":"СССР","year":"1955","yieldKt":1600,"kind":"Термоядерная бомба","sound":"rds37"},{"id":"castle-bravo","name":"Castle Bravo","country":"США","year":"1954","yieldKt":15000,"kind":"Термоядерная бомба","sound":"castle"},{"id":"castle-romeo","name":"Castle Romeo","country":"США","year":"1954","yieldKt":11000,"kind":"Термоядерная бомба","sound":"castle"},{"id":"castle-yankee","name":"Castle Yankee","country":"США","year":"1954","yieldKt":13500,"kind":"Термоядерная бомба","sound":"castle"},{"id":"b53","name":"B53","country":"США","year":"1962","yieldKt":9000,"kind":"Стратегическая термоядерная бомба","sound":"castle"},{"id":"b41","name":"B41","country":"США","year":"1961","yieldKt":25000,"kind":"Стратегическая термоядерная бомба (расчётная)","sound":"tsar"},{"id":"canopus","name":"Canopus","country":"Франция","year":"1968","yieldKt":2600,"kind":"Термоядерное испытание","sound":"castle"},{"id":"tsar","name":"Царь-бомба (АН602)","country":"СССР","year":"1961","yieldKt":50000,"kind":"Термоядерная авиабомба","sound":"tsar"}];
+const formatYield = (kt) => kt >= 1000 ? `${(kt / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} Мт` : `${kt.toLocaleString('ru-RU')} кт`;
+
 /**
  * «Ядерный полигон» — визуальный sandbox. Не отправляет команды на сервер,
  * не расходует боеголовки и не меняет состояние партии.
@@ -33,11 +36,10 @@ export function createNuclearRange({ root, viewer, layers }) {
     <h3>Ядерный полигон</h3>
     <p>Демонстрация эффектов на глобусе. Испытание не влияет на игровую партию.</p>
     <label for="k-nrange-bomb">Модель испытания</label>
-    <select id="k-nrange-bomb">
-      <option value="1.6">РДС-37 · 1,6 Мт</option>
-      <option value="15">Castle Bravo · 15 Мт</option>
-      <option value="50">Царь-бомба · 50 Мт</option>
+    <select id="k-nrange-bomb" size="1">
+      ${BOMBS.map((bomb) => `<option value="${bomb.id}">${bomb.name} · ${formatYield(bomb.yieldKt)} · ${bomb.year}</option>`).join('')}
     </select>
+    <div class="k-nrange-status" data-bomb-info aria-live="polite"></div>
     <div class="k-nrange-status" data-status>Точка: центр текущего вида карты</div>
     <div class="k-nrange-actions">
       <button type="button" data-pick>Выбрать точку</button>
@@ -47,6 +49,14 @@ export function createNuclearRange({ root, viewer, layers }) {
   root.appendChild(panel);
 
   const status = panel.querySelector('[data-status]');
+  const bombInfo = panel.querySelector('[data-bomb-info]');
+  const bombSelect = panel.querySelector('#k-nrange-bomb');
+  const updateBombInfo = () => {
+    const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
+    bombInfo.textContent = `${bomb.country} · ${bomb.year} · ${formatYield(bomb.yieldKt)} · ${bomb.kind}. Звуковая дорожка — доступный эффект из библиотеки, не архивная запись именно этого боеприпаса.`;
+  };
+  bombSelect.addEventListener('change', updateBombInfo);
+  updateBombInfo();
   const pickButton = panel.querySelector('[data-pick]');
   let target = null;
   let selecting = false;
@@ -101,10 +111,11 @@ export function createNuclearRange({ root, viewer, layers }) {
       status.textContent = 'Не удалось определить точку. Нажмите «Выбрать точку» и укажите место на карте.';
       return;
     }
-    const yieldMt = Number(panel.querySelector('#k-nrange-bomb').value);
+    const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
+    const yieldMt = bomb.yieldKt / 1000;
     const ok = layers.playNuclearTest(point, yieldMt);
     status.textContent = ok
-      ? `Тест запущен: ${yieldMt.toLocaleString('ru-RU')} Мт · ${point.lat.toFixed(2)}°, ${point.lon.toFixed(2)}°`
+      ? `Тест запущен: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${point.lat.toFixed(2)}°, ${point.lon.toFixed(2)}°`
       : 'Не удалось запустить визуализацию.';
   });
 
