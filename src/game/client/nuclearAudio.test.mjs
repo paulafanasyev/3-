@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { stat } from 'node:fs/promises';
 import { NUCLEAR_AUDIO_SAMPLES, defaultNuclearSound } from './nuclearAudio.js';
 
 test('the test range exposes all 20 source front/tail recordings', () => {
@@ -18,4 +19,14 @@ test('historical bomb presets resolve to a source sound', () => {
   assert.equal(defaultNuclearSound('ivy-mike'), 'ivy-mike');
   assert.equal(defaultNuclearSound('tsar'), 'tsar');
   assert.ok(NUCLEAR_AUDIO_SAMPLES.some((sample) => sample.id === defaultNuclearSound('castle-bravo')));
+});
+
+test('every source audio front/tail asset is bundled locally', async () => {
+  for (const sample of NUCLEAR_AUDIO_SAMPLES) {
+    for (const side of ['front', 'tail']) {
+      const path = new URL(`../../../public${sample[side]}`, import.meta.url);
+      const file = await stat(path);
+      assert.ok(file.size > 1000, `${sample.id} ${side} audio is missing or empty`);
+    }
+  }
 });
