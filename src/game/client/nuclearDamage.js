@@ -11,7 +11,7 @@ const hash = (text) => {
   for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
   return h >>> 0;
 };
-const PALETTE = ['#8e877d', '#aaa195', '#6d6963', '#b3a99b', '#77736d', '#938b80'];
+const PALETTE = ['#b7ada0', '#c6bcac', '#9c9384', '#d0c6b6', '#a59c8f', '#beb2a2'];
 
 /**
  * Persistent, physically-scaled city-damage layer for the in-game test range.
@@ -84,9 +84,9 @@ export function createNuclearDamageLayer(viewer) {
 
     // --- Scorch: concentric damage contours, darkest toward ground zero. ------
     const scorchRings = [
-      { radius: R.severe, css: '#0d0b0a', alpha: 0.5, duration: 22 },
-      { radius: R.heavy, css: '#201a15', alpha: 0.34, duration: 18 },
-      { radius: R.light, css: '#3a2f22', alpha: 0.2, duration: 14 },
+      { radius: R.severe, css: '#151210', alpha: 0.68, duration: 22 },
+      { radius: R.heavy, css: '#241d17', alpha: 0.5, duration: 18 },
+      { radius: R.light, css: '#3f3325', alpha: 0.3, duration: 14 },
     ];
     for (const ring of scorchRings) {
       if (ring.radius < 20) continue;
@@ -133,14 +133,25 @@ export function createNuclearDamageLayer(viewer) {
       });
     }
 
-    // --- Buildings: density set by the collapse-front area; skyline by range. ---
+    // --- Buildings: only inside the collapse front. ----------------------------
+    // The light zone is window/door overpressure: buildings stay standing there,
+    // so the real tile city is left alone and only the scorch contour marks it.
+    // Fabricating rubble out to 43 km of a 50 Mt burst would put ruins on open
+    // countryside, which is exactly what does not happen.
     const areaM2 = Math.PI * collapseRadius * collapseRadius;
-    // Only the core (severe→heavy) is animated as it collapses; the outer
-    // damaged band is placed as static blocks so per-frame cost stays bounded.
-    const count = Math.round(clamp(areaM2 / 12_000, 0, 460));
-    const farCount = count > 0 ? Math.round(clamp((areaM2 / 12_000) * 0.5, 40, 220)) : 0;
+    const coreRadius = Math.max(1, Math.min(R.severe, collapseRadius));
+    const coreAreaM2 = Math.PI * coreRadius * coreRadius;
+    // Only the innermost ring is animated while it falls; everything farther out
+    // is placed already ruined as static geometry, which Cesium batches and so
+    // costs no per-frame work.
+    const count = Math.round(clamp(coreAreaM2 / 9_000, 0, 520));
+    const infillCount = count > 0 ? Math.round(clamp((areaM2 - coreAreaM2) / 6_000, 0, 2_200)) : 0;
+    // Each proxy stands for a whole city cell, so its footprint grows with the
+    // cell instead of leaving a levelled 500 km² district dotted with specks.
+    const coreCell = Math.sqrt(coreAreaM2 / Math.max(1, count));
+    const infillCell = Math.sqrt(Math.max(0, areaM2 - coreAreaM2) / Math.max(1, infillCount));
 
-    const makeCoreBuilding = (distance, angle) => {
+    const makeCoreBuilding = (distance, angle, cell) => {
       const tier = damageTierAt(model, distance);
       if (tier === 'vaporized') return; // removed by fireball; scorch/crater covers it
       const profile = COLLAPSE[tier];
@@ -149,14 +160,14 @@ export function createNuclearDamageLayer(viewer) {
       const { lat, lon } = offset(at, east, north);
 
       const centralness = 1 - clamp(distance / damageRadius, 0, 1);
-      const footprint = 40 + random() * 95 + centralness * 40;
+      const footprint = clamp(cell * (0.45 + random() * 0.6), 22, 260);
       const originalHeight = 14 + Math.pow(random(), 0.6) * 60 + centralness * centralness * 190;
       // Blast wave arrives later the farther out it travels → expanding front.
       const arrival = 0.3 + (distance / damageRadius) * 2.4;
       const collapseDelay = arrival + random() * 0.9;
       const collapseDuration = 1.4 + random() * 2.6;
       const targetHeight = Math.max(1.2, originalHeight * profile.heightFraction);
-      const spreadBoost = 1 + (1 - profile.heightFraction) * 0.7;
+      const spreadBoost = 1 + (1 - profile.heightFraction) * 0.25;
 
       const cartographic = Cesium.Cartographic.fromDegrees(lon, lat);
       const terrain = viewer.scene.globe?.getHeight(cartographic);
@@ -213,56 +224,61 @@ export function createNuclearDamageLayer(viewer) {
       }
     };
 
-    for (let i = 0; i < count; i += 1) {
-      const distance = Math.sqrt(random()) * collapseRadius; // uniform over the disc
-      makeCoreBuilding(distance, random() * Math.PI * 2);
-    }
-    // Outer damaged band: cracked-but-standing structures placed static (no
-    // per-frame animation), tapering the destruction toward the light zone while
-    // the real tile city shows beyond it.
-    for (let i = 0; i < farCount; i += 1) {
-      const distance = collapseRadius + random() * (damageRadius - collapseRadius);
+    // A building placed already ruined: no per-frame callbacks, so Cesium
+    // batches it with the rest of the static city fabric.
+    const placeStaticBuilding = (distance, angle, cell) => {
       const tier = damageTierAt(model, distance);
-      if (tier === 'vaporized') continue;
+      if (tier === 'vaporized') return;
       const profile = COLLAPSE[tier];
-      const angle = random() * Math.PI * 2;
       const { lat, lon } = offset(at, Math.cos(angle) * distance, Math.sin(angle) * distance);
       const centralness = 1 - clamp(distance / damageRadius, 0, 1);
-      const footprint = 40 + random() * 95 + centralness * 40;
+      const footprint = clamp(cell * (0.45 + random() * 0.6), 22, 260);
       const originalHeight = 14 + Math.pow(random(), 0.6) * 60 + centralness * centralness * 190;
       const h = Math.max(2, originalHeight * profile.heightFraction + 1);
-      const spread = 1 + (1 - profile.heightFraction) * 0.7;
+      const spread = 1 + (1 - profile.heightFraction) * 0.25;
       const cartographic = Cesium.Cartographic.fromDegrees(lon, lat);
       const terrain = viewer.scene.globe?.getHeight(cartographic);
       const ground = Number.isFinite(terrain) ? terrain : baseHeight;
       const intact = Cesium.Color.fromCssColorString(PALETTE[Math.floor(random() * PALETTE.length)]);
-      const charred = Cesium.Color.fromCssColorString(tier === 'light' ? '#4a4038' : '#3a352f');
+      const charred = Cesium.Color.fromCssColorString('#2b2620');
       add({
         position: Cesium.Cartesian3.fromDegrees(lon, lat, ground + h / 2),
         box: {
           dimensions: new Cesium.Cartesian3(footprint * spread, footprint * spread, h),
           material: new Cesium.ColorMaterialProperty(
-            Cesium.Color.lerp(intact, charred, 0.5, new Cesium.Color()).withAlpha(0.96),
+            Cesium.Color.lerp(intact, charred, 1 - profile.heightFraction, new Cesium.Color()).withAlpha(0.96),
           ),
           outline: true,
           outlineColor: Cesium.Color.fromCssColorString('#100f0e').withAlpha(0.5),
         },
       });
+    };
+
+    for (let i = 0; i < count; i += 1) {
+      const distance = Math.sqrt(random()) * coreRadius; // uniform over the disc
+      makeCoreBuilding(distance, random() * Math.PI * 2, coreCell);
+    }
+    // Ruined fabric out to the collapse front, sampled uniformly by area.
+    for (let i = 0; i < infillCount; i += 1) {
+      const distance = Math.sqrt(coreRadius ** 2 + random() * (collapseRadius ** 2 - coreRadius ** 2));
+      placeStaticBuilding(distance, random() * Math.PI * 2, infillCell);
     }
 
-    // --- Residual smoke: height and width track the researched cloud. ----------
+    // --- Остаточный дым горящего города. Гриб рисует объёмный проход, и эти
+    // тела не должны его подменять: низкие медленные струи над зоной
+    // обрушения, а не шары, взлетающие к куполу за одну секунду.
     const cloudTopM = (model.cloudTopKm ? model.cloudTopKm * 1000 : 6000) * 0.45;
-    const capM = (model.cloudCapKm ? model.cloudCapKm * 1000 : collapseRadius * 1.6) / 2;
-    const smokeCount = clamp(Math.round(collapseRadius / 900), 8, 16);
+    const smokeCount = clamp(Math.round(collapseRadius / 220), 14, 44);
     for (let i = 0; i < smokeCount; i += 1) {
       const angle = (i / smokeCount) * Math.PI * 2 + random();
-      const distance = collapseRadius * (0.12 + random() * 0.7);
+      const distance = collapseRadius * (0.15 + random() * 0.8);
       const { lat, lon } = offset(at, Math.cos(angle) * distance, Math.sin(angle) * distance);
-      const delay = 2 + random() * 5;
-      const smokeFade = fade(0.5, 70, delay);
-      const riseHeight = cloudTopM * (0.55 + random() * 0.6);
+      const delay = 3 + random() * 12;
+      const smokeFade = fade(0.26, 150, delay);
+      const riseHeight = cloudTopM * (0.1 + random() * 0.16);
+      const riseRate = 70 + random() * 50;
       const rise = new Cesium.CallbackProperty(
-        () => clamp(seconds() - delay, 0, 1) * riseHeight,
+        () => clamp((seconds() - delay) / riseRate, 0, 1) * riseHeight,
         false,
       );
       add({
@@ -272,11 +288,11 @@ export function createNuclearDamageLayer(viewer) {
         ),
         ellipsoid: {
           radii: new Cesium.CallbackProperty(() => {
-            const r = 80 + rise.getValue() * 0.13 + capM * 0.04;
-            return new Cesium.Cartesian3(r, r, r * 1.6);
+            const r = 120 + rise.getValue() * 0.22;
+            return new Cesium.Cartesian3(r, r, r * 1.15);
           }, false),
           material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(
-            () => Cesium.Color.fromCssColorString('#514b45').withAlpha(smokeFade.getValue()),
+            () => Cesium.Color.fromCssColorString('#3a332c').withAlpha(smokeFade.getValue()),
             false,
           )),
         },
@@ -294,7 +310,8 @@ export function createNuclearDamageLayer(viewer) {
       lightKm: R.light / 1000,
       craterDiameterM: model.craterDiameterM,
       cloudTopKm: model.cloudTopKm,
-      buildingCount: count + farCount,
+      buildingCount: count + infillCount,
+      levelledAreaKm2: areaM2 / 1_000_000,
     };
   }
 

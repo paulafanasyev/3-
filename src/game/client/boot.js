@@ -12,6 +12,7 @@ import { createLiveLayers } from './liveLayers.js';
 import { openBattle } from './battle/hud.js';
 import { unitPortrait } from './icons.js';
 import { addFallbackImagery, SOURCE_TOAST } from './imagery.js';
+import { attachCameraFlight } from './cameraFlight.js';
 import { createNuclearRange } from './nuclear-range.js';
 
 const START_VIEW = { lon: -98, lat: 22, height: 7_500_000 };
@@ -39,6 +40,15 @@ async function createViewer(container) {
   viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
   viewer.scene.skyAtmosphere.saturationShift = -0.12;
   viewer.scene.skyAtmosphere.brightnessShift = -0.08;
+  // Солнце и луна Cesium — это спрайты, show=true по умолчанию. Луна при этом
+  // рисуется диском чистого нуля (замер ближнего кадра: 39-45 пикселей
+  // rgb[0,0,0] в окне 7x3; с moon.show=false кластер исчезает совсем). Солнце
+  // спорит с освещением гриба: у объёмного прохода своё направление STUDY_SUN,
+  // а не астрономическое, и яркий диск в небе против теней в объёме читается
+  // как брак. Освещать глобус эти два флага не перестают: globe.enableLighting
+  // в игре нигде не включён.
+  viewer.scene.sun.show = false;
+  viewer.scene.moon.show = false;
   viewer.scene.screenSpaceCameraController.enableCollisionDetection = true; // у Viewer нет своего контроллера камеры: он живёт в scene
   viewer.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
@@ -82,8 +92,8 @@ export async function bootKupol() {
   const geometry = createCellGeometry();
   const { viewer, source } = await createViewer(globe);
   viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(START_VIEW.lon, START_VIEW.lat, START_VIEW.height) });
+  const flight = attachCameraFlight(viewer);
   const layers = createWorldLayers(viewer, geometry);
-  createNuclearRange({ root, viewer, layers });
 
   let state = null;
   let selection = { cell: null, unitId: null };
@@ -125,6 +135,9 @@ export async function bootKupol() {
     newGame: () => { try { sessionStorage.removeItem('kupol.session'); } catch {} location.reload(); },
     reload: () => location.reload(),
   });
+  // Полигон монтируется после createHud: тот перезаписывает innerHTML root и
+  // стёр бы кнопку полигона.
+  createNuclearRange({ root, viewer, layers });
   // настоящие слои GEV (самолёты, спутники, землетрясения, запуски) поверх партии
   const liveLayers = createLiveLayers(viewer, (st) => hud.live(st));
   const net = connectGame({
@@ -219,7 +232,8 @@ export async function bootKupol() {
     const colorOf = (id) => state.nations.find((n) => n.id === id)?.color ?? state.neutrals.find((n) => n.id === id)?.color ?? '#9a8f7a';
     const battle = openBattle({ net, first, colorOf, iconOf: (type, color) => `<img src="${unitPortrait(type, color, 46)}" alt="">` });
     battleWindow = battle;
-    const combat = await battle.finished.finally(() => { battleWindow = null; });
+    flight.setEnabled(false); // в бою WASD принадлежит тактической камере
+    const combat = await battle.finished.finally(() => { battleWindow = null; flight.setEnabled(true); });
     if (combat) hud.toast(combat.won ? (combat.captured ? 'Город взят' : 'Победа в бою') : 'Бой проигран');
     selection.cell = myUnit(selection.unitId)?.cell ?? selection.cell;
     redraw();
@@ -309,6 +323,7 @@ export async function bootKupol() {
   // ручки для отладки и дымовой проверки в браузере: те же команды, что у мыши и Enter
   window.__kupol = {
     viewer, get state() { return state; },
+    flight,
     endTurn,
     tactical: (unitId, cell) => { const u = myUnit(unitId); return u ? runTactical(u, cell) : Promise.resolve(null); },
     battleSpeed: (speed) => net.battleSpeed(speed),

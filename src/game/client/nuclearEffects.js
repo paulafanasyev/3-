@@ -1,129 +1,158 @@
-// Cesium port of the source project's layered explosion sequence:
-// flash, fireball, expanding shock fronts, Wilson condensation ring, dust wall and ejecta.
-// Godot shaders are engine-specific; their timing/profile data is adapted to Cesium entities.
+// Картографический слой ядерного удара: то, что видно на карте, когда объёмный
+// гриб (nuclearVolumetrics.js) слишком мелок для марша — фронт ударной волны,
+// пылевой лист и кольцо Вильсона. Все радиусы берутся из реальной кинематики
+// фронта (кривая DNA), поэтому линия пыли на карте и пылевой вал в объёме
+// бегут с одной и той же скоростью.
 import * as Cesium from 'cesium';
+import { overpressurePsi, shockArrivalSeconds, shockRadiusM } from './nuclearBlastModel.js';
 
-const clamp01 = (value) => Math.max(0, Math.min(1, value));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const clamp01 = (value) => clamp(value, 0, 1);
 const easeOut = (value) => 1 - (1 - clamp01(value)) ** 3;
 const color = (hex, alpha = 1) => Cesium.Color.fromCssColorString(hex).withAlpha(alpha);
 
-export function createNuclearVisuals(entities, at, startedAt, intercepted = false, scale = 1) {
+// Cesium reads an ellipse's semiMajorAxis and semiMinorAxis in two separate
+// calls. A property that samples the wall clock can therefore hand back a
+// *larger* value for the minor axis than for the major one, and
+// EllipseOutlineGeometry throws "semiMajorAxis must be greater than or equal to
+// the semiMinorAxis", which stops the whole scene. These fronts only ever grow,
+// so the minor axis reuses the last value the major axis produced (scaled by the
+// flattening) and can never overtake it.
+function axisPair(compute, flatten = 1) {
+  let last = compute();
+  return {
+    major: new Cesium.CallbackProperty(() => {
+      last = compute();
+      return last;
+    }, false),
+    minor: new Cesium.CallbackProperty(() => last * flatten, false),
+  };
+}
+
+export function createNuclearVisuals(entities, at, startedAt, intercepted = false, scale = 1, zones = null) {
   const added = [];
   const elapsed = () => Math.max(0, (performance.now() - startedAt) / 1000);
   const tint = intercepted ? color('#6bd8ff') : color('#ffb33d');
-  const waves = intercepted
-    ? [{ delay: 0.08, duration: 2.2, max: 52_000 }]
-    : [
-      { delay: 0.10, duration: 3.2, max: 105_000 * scale },
-      { delay: 0.48, duration: 4.4, max: 178_000 * scale },
-      { delay: 0.92, duration: 5.4, max: 245_000 * scale },
-    ];
+  // Без расчётных зон остаётся условный масштаб ~1 Мт: удары боёвки не выбирают
+  // модель заряда, и им хватает одного кольца осколков.
+  const kt = Number(zones?.yieldKt) > 0 ? Number(zones.yieldKt) : 1000;
+  const cbrt = Math.cbrt(kt);
+  const surface = /SURFACE|GROUND|SUBSURFACE|BURIED/i.test(String(zones?.burstType ?? ''));
+  const lightM = Number(zones?.radiiM?.light);
+  const unit = Number.isFinite(lightM) ? Math.max(0.01, lightM / 245_000) : scale;
 
-  // Multiple shock fronts, each with its own propagation timing.
-  for (const wave of waves) {
+  if (intercepted) {
+    const wave = { delay: 0.08, duration: 2.2, max: 52_000 * unit };
     const progress = () => clamp01((elapsed() - wave.delay) / wave.duration);
-    const radius = new Cesium.CallbackProperty(() => Math.max(250, wave.max * easeOut(progress())), false);
-    const opacity = new Cesium.CallbackProperty(() => tint.withAlpha((intercepted ? 0.58 : 0.42) * (1 - progress())), false);
+    const { major, minor } = axisPair(() => Math.max(250, wave.max * easeOut(progress())));
     added.push(entities.add({
       position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat),
       ellipse: {
-        semiMajorAxis: radius,
-        semiMinorAxis: radius,
+        semiMajorAxis: major,
+        semiMinorAxis: minor,
         material: new Cesium.ColorMaterialProperty(Cesium.Color.TRANSPARENT),
         outline: true,
-        outlineColor: opacity,
-        outlineWidth: intercepted ? 2 : 3,
+        outlineColor: new Cesium.CallbackProperty(() => tint.withAlpha(0.58 * (1 - progress())), false),
+        outlineWidth: 2,
         height: 80,
       },
     }));
+    return added;
   }
 
-  if (intercepted) return added;
+  // Фронт живёт, пока не выйдет за пределы зоны лёгких повреждений: дальше его
+  // уже не разобрать, и рисовать нечего.
+  const showR = Math.max(Number.isFinite(lightM) ? lightM * 2.2 : 245_000 * unit, 4_000 * cbrt);
+  const lifeS = Math.max(1.2, shockArrivalSeconds(kt, showR, surface) * 1.3);
+  const frontR = () => Math.max(200, shockRadiusM(kt, Math.min(elapsed(), lifeS), surface));
+  const frontAge = () => clamp01(elapsed() / lifeS);
 
-  // Thermal flash / fireball glow.
-  const flashAlpha = new Cesium.CallbackProperty(() => {
-    const t = elapsed();
-    if (t < 0.12) return 0.92;
-    if (t > 1.35) return 0;
-    return 0.92 * (1 - (t - 0.12) / 1.23) ** 1.7;
-  }, false);
-  const flashRadius = new Cesium.CallbackProperty(() => {
-    const t = easeOut(elapsed() / 1.1);
-    return new Cesium.Cartesian3((7_000 + 32_000 * t) * scale, (7_000 + 32_000 * t) * scale, (5_000 + 19_000 * t) * scale);
-  }, false);
+  // 1. Пылевой лист: диск до самого фронта, прозрачность — по давлению за
+  // фронтом (тот же закон, что у DustLayer в источнике).
+  const { major: dustMajor, minor: dustMinor } = axisPair(frontR, 0.995);
   added.push(entities.add({
-    position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 18_000 * scale), false),
-    ellipsoid: {
-      radii: flashRadius,
-      material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(
-        () => Cesium.Color.lerp(Cesium.Color.WHITE, tint, clamp01(elapsed() / 0.8), new Cesium.Color()).withAlpha(flashAlpha.getValue()),
-        false,
-      )),
+    position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 40),
+    ellipse: {
+      semiMajorAxis: dustMajor,
+      semiMinorAxis: dustMinor,
+      height: 40,
+      material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(() => {
+        const psi = overpressurePsi(kt, frontR());
+        return color('#b9a18a', clamp(clamp01((psi - 0.6) / 2.5) * 0.3 * (1 - frontAge() ** 1.6), 0, 0.34));
+      }, false)),
     },
   }));
 
-  // Low dust sheet and a second, broader dust-wall front.
-  const dustAlpha = new Cesium.CallbackProperty(() => {
-    const t = elapsed();
-    return t < 0.7 || t > 15 ? 0 : 0.28 * Math.min(1, (t - 0.7) / 1.2) * (1 - (t - 0.7) / 14.3);
-  }, false);
-  const dustRadius = new Cesium.CallbackProperty(() => 12_000 + 88_000 * scale * easeOut((elapsed() - 0.7) / 7.5), false);
+  // 2. Линия фронта поверх пыли — бледная нитка, пока давление ещё различимо.
+  const { major: frontMajor, minor: frontMinor } = axisPair(frontR, 0.999);
   added.push(entities.add({
-    position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 900),
+    position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat),
     ellipse: {
-      semiMajorAxis: dustRadius,
-      semiMinorAxis: new Cesium.CallbackProperty(() => dustRadius.getValue() * 0.72, false),
-      material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(
-        () => color('#b9a18a', Math.max(0, dustAlpha.getValue())),
-        false,
-      )),
-      height: 900,
-    },
-  }));
-
-  // Wilson condensation ring: a short-lived pale ring above the ground.
-  const wilsonRadius = new Cesium.CallbackProperty(() => (2_000 + 34_000 * scale * easeOut((elapsed() - 0.25) / 4.8)), false);
-  const wilsonAlpha = new Cesium.CallbackProperty(() => {
-    const t = elapsed();
-    return color('#d8e9ed', t < 0.3 || t > 7 ? 0 : 0.62 * (1 - (t - 0.3) / 6.7));
-  }, false);
-  added.push(entities.add({
-    position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 1_800 * scale), false),
-    ellipse: {
-      semiMajorAxis: wilsonRadius,
-      semiMinorAxis: new Cesium.CallbackProperty(() => wilsonRadius.getValue() * 0.88, false),
+      semiMajorAxis: frontMajor,
+      semiMinorAxis: frontMinor,
       material: new Cesium.ColorMaterialProperty(Cesium.Color.TRANSPARENT),
       outline: true,
-      outlineColor: wilsonAlpha,
+      outlineColor: new Cesium.CallbackProperty(() => color('#e8f2ff', 0.5 * (1 - frontAge())), false),
+      outlineWidth: 3,
+      height: 120,
+    },
+  }));
+
+  // 3. Кольцо Вильсона: конденсация во фронте у воздушных взрывов. По источнику
+  // живёт 1,5·(W/20)^⅓ секунд и схлопывается задолго до конца фронта.
+  const wilsonLife = 1.5 * (kt / 20) ** (1 / 3) + 0.4;
+  const wilsonPeak = 7_000 * cbrt;
+  const wilsonProgress = () => clamp01(elapsed() / wilsonLife);
+  const { major: wilsonMajor, minor: wilsonMinor } = axisPair(
+    () => Math.max(200, wilsonPeak * easeOut(wilsonProgress())),
+    0.88,
+  );
+  added.push(entities.add({
+    position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 1_800 * cbrt), false),
+    ellipse: {
+      semiMajorAxis: wilsonMajor,
+      semiMinorAxis: wilsonMinor,
+      material: new Cesium.ColorMaterialProperty(Cesium.Color.TRANSPARENT),
+      outline: true,
+      outlineColor: new Cesium.CallbackProperty(() => color('#d8e9ed', 0.62 * (1 - wilsonProgress())), false),
       outlineWidth: 2,
     },
   }));
 
-  // Stylized ejecta / hot fragments, following deterministic radial trajectories.
-  for (let i = 0; i < 36; i += 1) {
-    const angle = (i / 36) * Math.PI * 2;
-    const reach = (18_000 + ((i * 7919) % 31_000)) * scale;
-    const peak = (1_500 + ((i * 3571) % 8_000)) * scale;
-    const delay = 0.25 + (i % 7) * 0.07;
-    const duration = 2.8 + (i % 5) * 0.32;
+  // 4. Раскалённые обломки: только внутри зоны сильных разрушений и только
+  // первые секунды — потом их уже не видно за пылью.
+  const heavyM = Math.max(600, Number(zones?.radiiM?.heavy) || 22_000 * unit);
+  for (let i = 0; i < 24; i += 1) {
+    // Угол и дальность берём из хеша, а не из арифметической прогрессии: ровная
+    // окружность из одинаковых точек читается как часовой циферблат, а не как
+    // веер выброса.
+    const angle = ((i * 2654435761) % 1000) / 1000 * Math.PI * 2;
+    const reach = heavyM * (0.18 + ((i * 7919) % 1000) / 1000 * 0.8);
+    const peak = Math.max(200, heavyM * 0.12) + ((i * 3571) % 4_000);
+    const delay = 0.2 + (i % 7) * 0.05;
+    const duration = 2.4 + (i % 5) * 0.3;
     const progress = () => clamp01((elapsed() - delay) / duration);
     const lon = at.lon + Math.cos(angle) * reach / (111320 * Math.max(0.15, Math.cos(at.lat * Math.PI / 180)));
     const lat = at.lat + Math.sin(angle) * reach / 111320;
     added.push(entities.add({
       position: new Cesium.CallbackProperty(() => {
-        const p = progress();
+        const p = easeOut(progress());
         return Cesium.Cartesian3.fromDegrees(
-          at.lon + (lon - at.lon) * easeOut(p),
-          at.lat + (lat - at.lat) * easeOut(p),
-          Math.max(0, peak * Math.sin(Math.PI * p)),
+          at.lon + (lon - at.lon) * p,
+          at.lat + (lat - at.lat) * p,
+          Math.max(0, peak * Math.sin(Math.PI * progress())),
         );
       }, false),
       point: {
-        pixelSize: 3 + (i % 4),
-        color: new Cesium.CallbackProperty(() => color('#ff9a42', 0.9 * (1 - progress())), false),
-        outlineColor: color('#fff0c0', 0.8),
-        outlineWidth: 1,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        // Метры, не пиксели: осколок в 30 м с 30 км — доли пикселя, и он обязан
+        // исчезать, а не висеть жёлтыми пузырями над городом. Крупным он станет,
+        // когда к нему подлетят.
+        pixelSize: 18 + (i % 4) * 14,
+        sizeInMeters: true,
+        color: new Cesium.CallbackProperty(() => color(
+          progress() < 0.35 ? '#ffcf82' : '#c2551d', 0.75 * (1 - progress())), false),
+        outlineWidth: 0,
+        disableDepthTestDistance: 0,
       },
     }));
   }

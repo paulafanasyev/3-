@@ -75,6 +75,12 @@ try {
   }
   assert(true, 'game booted and Nuclear Test Range tab is present');
 
+  // Стартовый оверлей перекрывает интерфейс — сначала выбираем державу.
+  await page.waitForSelector('.k-start .k-nations button[data-id]', { timeout: 30000 });
+  await page.click('.k-start .k-nations button[data-id]');
+  await page.waitForSelector('.k-start', { hidden: true, timeout: 30000 });
+  assert(true, 'starting a party clears the overlay and keeps the range tab mounted');
+
   await page.click('.k-nrange-trigger');
   await page.waitForSelector('.k-nrange-panel:not([hidden])');
   await page.type('#k-nrange-city-query', 'Hanoi');
@@ -94,7 +100,9 @@ try {
   await page.click('[data-test]');
   await page.waitForFunction(() => document.querySelector('[data-status]')?.textContent.includes('Испытание выполнено'), { timeout: 45000 });
   const status = await page.$eval('[data-status]', (element) => element.textContent);
-  assert(status.includes('объектов: 190'), 'strike renders the city-damage proxy set');
+  assert(/Снесено застройки: [1-9]/.test(status), 'strike reports the levelled built-up area');
+  assert(/строений в сцене: [1-9]/.test(status), 'strike renders the city-damage proxy set');
+  assert(/полное разрушение/.test(status), 'status reports real per-zone overpressure distances');
   await new Promise((resolve) => setTimeout(resolve, 2300));
   assert([...audioResponses].some((item) => item.startsWith('trinity-front.ogg:200')), 'front sound sample is requested successfully');
   assert([...audioResponses].some((item) => item.startsWith('trinity-tail.ogg:200')), 'delayed tail sound sample is requested successfully');

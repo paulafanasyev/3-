@@ -6,6 +6,11 @@ import {
   damageTierAt,
   zonesForBomb,
   burstCoupling,
+  overpressurePsi,
+  positivePhaseSeconds,
+  radiusForPressurePsi,
+  shockArrivalSeconds,
+  shockRadiusM,
   OVERPRESSURE,
 } from './nuclearBlastModel.js';
 
@@ -68,4 +73,79 @@ test('overpressure coefficients and outer footprint stay within sane bounds', ()
   assert.ok(tiny.radiiM.outer >= 2200); // always show a plausible small city field
   const huge = computeBlastZones({ yieldKt: 50000 });
   assert.ok(huge.radiiM.outer <= 70000); // bounded for rendering performance
+});
+
+test('shock arrival matches the DNA curve checkpoints the source cites', () => {
+  const mile = 1609.34;
+  // 20 kt surface burst, 1 mi: исходник ожидает ~3,1 c.
+  assert.ok(Math.abs(shockArrivalSeconds(20, mile, true) - 3.1) < 0.15, shockArrivalSeconds(20, mile, true));
+  // 1 Mt surface burst, 2 mi: ~4,5 c.
+  assert.ok(Math.abs(shockArrivalSeconds(1000, 2 * mile, true) - 4.5) < 0.25, shockArrivalSeconds(1000, 2 * mile, true));
+  // Воздушный взрыв в той же точке приходит позже поверхностного (We = 2W).
+  assert.ok(shockArrivalSeconds(1000, 2 * mile, false) > shockArrivalSeconds(1000, 2 * mile, true));
+});
+
+test('the front radius inverts the arrival time both ways', () => {
+  for (const kt of [0.5, 15, 400, 10400, 50000]) {
+    for (const surface of [true, false]) {
+      for (const r of [300, 5000, 90_000, 1_200_000]) {
+        const t = shockArrivalSeconds(kt, r, surface);
+        const back = shockRadiusM(kt, t, surface);
+        assert.ok(Math.abs(back - r) / r < 0.01, `${kt} kt ${surface} ${r}: обратно ${back}`);
+      }
+      assert.ok(shockRadiusM(kt, 0, surface) === 0, 'нулевое время — нулевой радиус');
+      assert.ok(shockRadiusM(kt, 1, surface) < shockRadiusM(kt, 10, surface), 'фронт монотонен');
+    }
+  }
+});
+
+test('overpressure falls off as the researched near-field law', () => {
+  // 1 kt на 100 м: (2200·1/100)^1.5 = 22^1.5 ≈ 103 psi.
+  assert.ok(Math.abs(overpressurePsi(1, 100) / 103.2 - 1) < 0.02, overpressurePsi(1, 100));
+  assert.ok(overpressurePsi(1, 200) < overpressurePsi(1, 100));
+  // Порог выбитых окон ~0,6 psi обязан лежать дальше порога обрушения.
+  const r = (psi) => {
+    let lo = 1; let hi = 1e7;
+    for (let i = 0; i < 60; i += 1) {
+      const mid = Math.sqrt(lo * hi);
+      if (overpressurePsi(20, mid) > psi) lo = mid; else hi = mid;
+    }
+    return Math.sqrt(lo * hi);
+  };
+  assert.ok(r(0.6) > r(10) * 5, `0,6 psi на ${r(0.6)} м, 10 psi на ${r(10)} м`);
+});
+
+test('positive phase duration follows the Brode table and cube-root scaling', () => {
+  // Таблица blast_physics.gd::positive_phase для взрыва в воздухе.
+  const ps = [1.0, 2.5, 5.0, 10.0, 20.0, 50.0, 100.0];
+  const cs = [0.505, 0.401, 0.331, 0.267, 0.208, 0.139, 0.097];
+  ps.forEach((p, i) => {
+    assert.ok(Math.abs(positivePhaseSeconds(1, p) - cs[i]) < 1e-9, `${p} psi: ${positivePhaseSeconds(1, p)} ≠ ${cs[i]}`);
+  });
+  // Метка между узлами — по логарифму давления, как в источнике.
+  assert.ok(Math.abs(positivePhaseSeconds(1, Math.sqrt(5 * 10)) - (0.331 + 0.267) / 2) < 1e-9);
+  // Кубический масштаб: 1 Мт живёт в 10 раз дольше 1 кт на том же давлении.
+  assert.ok(Math.abs(positivePhaseSeconds(1000, 1) / positivePhaseSeconds(1, 1) - 10) < 1e-9);
+  // Наземный взрыв — отдельная степенная ветка (0,569·p^-0,381); ниже 2,5 psi она не продолжается.
+  assert.ok(Math.abs(positivePhaseSeconds(1, 20, true) - 0.569 * 20 ** -0.381) < 1e-9);
+  assert.equal(positivePhaseSeconds(1, 1, true), positivePhaseSeconds(1, 2.5, true));
+  // Длительность обязана убывать с давлением: именно из неё считается толщина сжатого слоя.
+  assert.ok(positivePhaseSeconds(500, 50) < positivePhaseSeconds(500, 5));
+});
+
+test('the pressure radius inverts the near-field law and applies the surface factor', () => {
+  for (const p of [1, 3, 5, 10, 20, 50, 100]) {
+    const r = radiusForPressurePsi(1000, p);
+    assert.ok(Math.abs(overpressurePsi(1000, r) / p - 1) < 1e-6, `${p} psi -> ${r} м`);
+    // Наземный взрыв даёт то же давление ближе: множитель 0.55…0.90 по
+    // таблице surface_factor() из blast_physics.gd.
+    const rs = radiusForPressurePsi(1000, p, true);
+    assert.ok(rs < r && rs > r * 0.5, `${p} psi: наземный ${rs} против воздушного ${r}`);
+  }
+  // 1 Мт у земли: 3 psi примерно на 6,3 км — ближе к G&D, чем 10,6 км в воздухе.
+  assert.ok(Math.abs(radiusForPressurePsi(1000, 3, true) / 6300 - 1) < 0.02);
+  // Кубический масштаб: в 8 раз больший заряд — вдвое дальше то же давление.
+  assert.ok(Math.abs(radiusForPressurePsi(8000, 3) / radiusForPressurePsi(1000, 3) - 2) < 1e-9);
+  // Давление убывает с дальностью монотонно, без ступенек на узлах таблицы.
+  assert.ok(radiusForPressurePsi(500, 4) < radiusForPressurePsi(500, 3));
 });

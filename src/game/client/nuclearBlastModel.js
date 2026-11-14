@@ -132,3 +132,89 @@ export function zonesForBomb(bomb, yieldKt) {
     research: bomb ? bomb.research : null,
   });
 }
+
+// ------------------------------------------------------------------ кинематика фронта
+// Время прихода ударной волны по стандартной кривой DNA: t₁(r) для 1 kt,
+// масштабированное на W^⅓. та же кривая, что в исходном проекте
+// (scripts/physics/blast_physics.gd::arrival_time), поэтому пыль, кольцо
+// конденсации и линии фронта в сцене бегут с реальной скоростью.
+const dnaArrival1 = (r) => r * r * (6.7 + r) / (7.12e6 + 7.32e4 * r + 340.5 * r * r);
+
+/** Секунды до прихода фронта на наклонную дальность `radiusM`. */
+export function shockArrivalSeconds(yieldKt, radiusM, surface = false) {
+  const kt = Math.max(1e-6, num(yieldKt) ?? 0);
+  if (!(radiusM > 0)) return 0;
+  const scale = cbrt(kt * (surface ? 2 : 1));
+  return scale * dnaArrival1(radiusM / scale);
+}
+
+/** Наклонный радиус фронта в момент `seconds` (обратная задача к shockArrivalSeconds). */
+export function shockRadiusM(yieldKt, seconds, surface = false) {
+  const t = num(seconds) ?? 0;
+  if (t <= 0) return 0;
+  const kt = Math.max(1e-6, num(yieldKt) ?? 0);
+  const scale = cbrt(kt * (surface ? 2 : 1));
+  const target = t / scale;
+  // t₁(r) монотонна: 24 шагов двоичного поиска хватает на метр точности на 1000 км.
+  let lo = 0.01;
+  let hi = 4e7;
+  for (let i = 0; i < 24; i += 1) {
+    const mid = Math.sqrt(lo * hi);
+    if (dnaArrival1(mid) < target) lo = mid;
+    else hi = mid;
+  }
+  return Math.sqrt(lo * hi) * scale;
+}
+
+/** Избыточное давление (psi) на наклонной дальности — ближняя зона, (2200·W^⅓/r)^1.5. */
+export function overpressurePsi(yieldKt, radiusM) {
+  const kt = Math.max(1e-6, num(yieldKt) ?? 0);
+  const r = Math.max(1, num(radiusM) ?? 1);
+  return (2200 * cbrt(kt) / r) ** 1.5;
+}
+
+/** Логарифмическая интерполяция по узловым таблицам Brode/Sublette. */
+function interpLog(x, xs, ys) {
+  const v = Math.min(xs[xs.length - 1], Math.max(xs[0], x));
+  for (let i = 1; i < xs.length; i += 1) {
+    if (v <= xs[i]) {
+      const t = (Math.log(v) - Math.log(xs[i - 1])) / (Math.log(xs[i]) - Math.log(xs[i - 1]));
+      return ys[i - 1] + (ys[i] - ys[i - 1]) * t;
+    }
+  }
+  return ys[ys.length - 1];
+}
+
+const SURFACE_PSI = [1.0, 3.0, 5.0, 10.0, 20.0, 50.0, 100.0];
+const SURFACE_FACTOR = [0.55, 0.60, 0.64, 0.70, 0.77, 0.85, 0.90];
+
+/**
+ * Дальность (метры), на которой пиковое избыточное давление ещё не упало ниже
+ * `pPsi`. Обратная задача к overpressurePsi и тот же ключ, которым источник
+ * ограничивает пыль у земли (explosion_profile.gd::skirt_state берёт
+ * radius_for_pressure(W, 3 psi)·0.9); множитель наземного взрыва — таблица
+ * surface_factor() из blast_physics.gd.
+ */
+export function radiusForPressurePsi(yieldKt, pPsi, surface = false) {
+  const kt = Math.max(1e-6, num(yieldKt) ?? 0);
+  const p = Math.max(1, num(pPsi) ?? 1);
+  const r = 2200 * cbrt(kt) * p ** (-2 / 3);
+  return surface ? r * interpLog(p, SURFACE_PSI, SURFACE_FACTOR) : r;
+}
+
+/**
+ * Длительность положительной фазы (секунды): время, пока давление держится
+ * выше атмосферного. Та же таблица Brode, что в исходном проекте
+ * (scripts/physics/blast_physics.gd::positive_phase) — из неё считается и
+ * оптическая толщина сжатого слоя на ударном фронте.
+ */
+export function positivePhaseSeconds(yieldKt, pPsi, surface = false) {
+  const kt = Math.max(1e-6, num(yieldKt) ?? 0);
+  const p = num(pPsi) ?? 0;
+  if (surface) {
+    return 0.569 * (Math.min(90, Math.max(2.5, p)) ** -0.381) * cbrt(kt);
+  }
+  const ps = [1.0, 2.5, 5.0, 10.0, 20.0, 50.0, 100.0];
+  const cs = [0.505, 0.401, 0.331, 0.267, 0.208, 0.139, 0.097];
+  return interpLog(p, ps, cs) * cbrt(kt);
+}

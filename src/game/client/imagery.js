@@ -1,13 +1,20 @@
 // Подложка глобуса без ключа Google. Порядок:
 //  1. Natural Earth II — снимок, который поставляется вместе с CesiumJS (Assets/Textures/NaturalEarthII):
 //     грузится с нашего же сервера, без ключей и без интернета. Кладётся всегда, снизу.
-//  2. Спутниковые снимки Cesium ion (asset 2) поверх, если токен ion рабочий.
-//  3. Иначе OpenStreetMap поверх (без ключа, но нужен интернет).
+//  2. Фото-подложка ArcGIS World Imagery: настоящий спутник до уровня улицы, ключа не требует.
+//  3. Спутниковые снимки Cesium ion (asset 2) — только если ArcGIS недоступен.
+//  4. И только потом OpenStreetMap (векторная карта, без ключа, но нужен интернет).
 // Если верхний слой не грузится (нет сети, токен отозван), он снимается — под ним остаётся Natural Earth.
 // Cesium передаётся параметром, чтобы логику можно было проверить в Node без браузера.
+//
+// ion стоит ниже ArcGIS не из-за надёжности, а из-за разрешения: asset 2 — это
+// глобальный композит Blue Marble (~500 м/пиксель), и над городом он выглядит
+// раскрашенной картой, а не снимком. Игрок требует «спутниковую карту как у
+// God's Eye View», поэтому первым пробуем слой с реальным разрешением улицы.
 
 export const ION_WORLD_IMAGERY_ASSET = 2;
 export const TILE_ERROR_LIMIT = 8;
+export const ESRI_WORLD_IMAGERY_URL = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
 /** Ждём промис не дольше ms, иначе ошибка (ion без сети может висеть долго). */
 export function withTimeout(promise, ms, label = 'timeout') {
@@ -50,6 +57,18 @@ export async function addFallbackImagery(Cesium, viewer, { online = true, timeou
   if (!online) return offline;
 
   try {
+    const provider = new Cesium.UrlTemplateImageryProvider({
+      url: ESRI_WORLD_IMAGERY_URL,
+      maximumLevel: 19,
+      credit: 'Imagery © Esri, Maxar, Earthstar Geographics',
+    });
+    const layer = viewer.imageryLayers.addImageryProvider(provider);
+    dropOnTileErrors(viewer, layer, provider, () => onChange(offline));
+    return 'esri';
+  } catch (error) {
+    console.warn('[Купол] ArcGIS World Imagery недоступен, пробую Cesium ion:', error);
+  }
+  try {
     const provider = await withTimeout(Cesium.IonImageryProvider.fromAssetId(ION_WORLD_IMAGERY_ASSET), timeoutMs, 'ion timeout');
     const layer = viewer.imageryLayers.addImageryProvider(provider);
     dropOnTileErrors(viewer, layer, provider, () => onChange(offline));
@@ -70,7 +89,8 @@ export async function addFallbackImagery(Cesium, viewer, { online = true, timeou
 
 /** Подсказка игроку: какая Земля сейчас на экране. */
 export const SOURCE_TOAST = {
-  ion: 'Без ключа Google: спутниковый глобус Cesium ion',
+  esri: 'Без ключа Google: спутник ArcGIS World Imagery (Maxar/Earthstar)',
+  ion: 'Без ключа Google: снимок Cesium ion (ArcGIS недоступен, разрешение ниже)',
   osm: 'Без ключа Google: карта OpenStreetMap поверх встроенного снимка',
   offline: 'Офлайн-глобус: встроенный снимок Natural Earth, ключи и интернет не нужны',
   none: 'Подложка глобуса не загрузилась: видны только игровые слои',

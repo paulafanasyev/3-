@@ -2,6 +2,8 @@ import * as Cesium from 'cesium';
 import populatedPlaces from '../data/populated_places.json';
 import sourceBombProfiles from '../data/source-bomb-profiles.json';
 import { NUCLEAR_AUDIO_SAMPLES, defaultNuclearSound } from './nuclearAudio.js';
+import { zonesForBomb } from './nuclearBlastModel.js';
+import { blastShapeAt } from './nuclearVolumetrics.js';
 
 const BOMBS = [
   { id: 'fat-man', name: 'Толстяк (Fat Man)', country: 'США', year: '1945', yieldKt: 21, kind: 'Плутониевая атомная бомба' },
@@ -113,6 +115,7 @@ export function createNuclearRange({ root, viewer, layers }) {
       <button type="button" data-close>Закрыть полигон</button>
     </div>
     <div class="k-nrange-muted">Разрушения — процедурная игровая визуализация поверх карты. Исходные Google 3D Tiles не изменяются; состояние основной партии и сервера не затрагивается.</div>
+    <div class="k-nrange-muted">Полёт над городом: W/S — вперёд-назад, A/D — вбок, Q/E — разворот, Z/X — вниз/вверх, Shift — ускорение. Мышью — обзор и зум, как в God's Eye View.</div>
   `;
   root.appendChild(panel);
 
@@ -136,16 +139,58 @@ export function createNuclearRange({ root, viewer, layers }) {
     bombInfo.textContent = `${bomb.country} · ${bomb.year} · ${formatYield(bomb.yieldKt)} · ${bomb.kind}`;
     soundSelect.value = defaultNuclearSound(bomb.id);
     profileSelect.value = PROFILE_FOR_BOMB[bomb.id] ?? 'rds37';
+    if (target) frameBlast(target.lon, target.lat);
   };
   bombSelect.addEventListener('change', updateBombInfo);
   updateBombInfo();
 
-  const flyToCity = (city) => {
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(city[2], city[1], 135000),
-      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-48), roll: 0 },
-      duration: 2.6,
-    });
+  // Кадр подбирается под реальный след выбранного заряда: с орбитальной высоты
+  // 15 кт и 50 Мт неразличимы, а задача полигона — разглядеть руины.
+  // Дистанция считается из вертикального FOV камеры: фиксированный множитель
+  // радиуса резал верх гриба на 16:9 (сфера выходила на 22° при половинном
+  // угле зрения 17.9°).
+  const fitRange = (radiusM) => {
+    const fovy = viewer.camera.frustum.fovy ?? Cesium.Math.toRadians(60);
+    return radiusM / Math.tan(fovy * 0.5 * 0.85);
+  };
+
+  const frameBlast = (lon, lat) => {
+    const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
+    const profile = sourceBombProfiles.bombs.find((item) => item.id === profileSelect.value) ?? null;
+    const R = zonesForBomb(profile, bomb.yieldKt).radiiM;
+    const radiusM = Math.max(R.light * 1.25, R.fireball * 1.6, 1500);
+    viewer.camera.flyToBoundingSphere(
+      new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(lon, lat, 0), radiusM),
+      {
+        duration: 2.6,
+        offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-56), fitRange(radiusM)),
+      },
+    );
+  };
+
+  const flyToCity = (city) => frameBlast(city[2], city[1]);
+
+  // Кадр самого облака: гриб в 3–50 раз больше зоны разрушений, и с высоты
+  // «разрушений» он уходит за верхний край экрана — ровно так и было в прогоне.
+  // Рамку берём по cloudTop/capRadius, как ставит камеру источник.
+  const frameCloud = (lon, lat) => {
+    const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
+    const profile = sourceBombProfiles.bombs.find((item) => item.id === profileSelect.value) ?? null;
+    const zones = zonesForBomb(profile, bomb.yieldKt);
+    const timing = blastShapeAt(profile, zones, bomb.yieldKt, 0).timing;
+    const { cloudTop, capRadius, tFull } = timing;
+    // Кадр берём по ЗРЕЛОМУ грибу: к tFull шляпа расходится до половины высоты
+    // подъёма, и по паспортному capRadius камера не успевает за шапкой — верх
+    // облака уезжал за край экрана ровно на тех кадрах, где гриб красивее всего.
+    const capR = Math.max(capRadius, blastShapeAt(profile, zones, bomb.yieldKt, tFull * 0.75).head.r);
+    // Сфера — вокруг реального гриба (высота cloudTop, шляпа capR), а не
+    // вокруг высоты облака: иначе кадр выходит в два раза дальше, чем нужно.
+    const radius = Math.max(Math.hypot(cloudTop * 0.55, capR * 1.5), 1500);
+    viewer.camera.flyToBoundingSphere(
+      new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(lon, lat, cloudTop * 0.45), radius),
+      { duration: 2.2, offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-11), fitRange(radius)) },
+    );
+    return radius;
   };
 
   const updateCityResults = () => {
@@ -229,8 +274,11 @@ export function createNuclearRange({ root, viewer, layers }) {
       return;
     }
     const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
+    // Кадр ставим ДО запуска: испытание стартует мгновенно, и камера, которая
+    // летит 2.4 s, иначе приезжает уже на остывший гриб.
+    const frameRadius = frameCloud(target.lon, target.lat);
     testButton.disabled = true;
-    status.textContent = `Запускаю ${bomb.name} над ${targetName}…`;
+    status.textContent = `Запускаю ${bomb.name} над ${targetName}, кадр с ${Math.round(frameRadius / 100) / 10} км…`;
     try {
       const result = await layers.playNuclearTest(target, bomb.yieldKt / 1000, {
         bombId: bomb.id,
@@ -240,7 +288,7 @@ export function createNuclearRange({ root, viewer, layers }) {
         damage: damageToggle.checked,
       });
       status.textContent = result?.ok
-        ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. ${formatDamage(result.damage)} Разрушено строений: ${result.damage.buildingCount}.` : '. Без разрушений.'}`
+        ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. ${formatDamage(result.damage)} Снесено застройки: ${Math.round(result.damage.levelledAreaKm2).toLocaleString('ru-RU')} км² (строений в сцене: ${result.damage.buildingCount}).` : '. Без разрушений.'}`
         : 'Не удалось запустить визуализацию.';
     } catch (error) {
       status.textContent = `Ошибка испытания: ${String(error?.message || error)}`;

@@ -3,12 +3,13 @@ import test from 'node:test';
 import { addFallbackImagery, dropOnTileErrors, TILE_ERROR_LIMIT, SOURCE_TOAST } from './imagery.js';
 
 function fakeEvent() { const fns = []; return { fns, addEventListener: (f) => { fns.push(f); return () => fns.splice(fns.indexOf(f), 1); }, fire: () => [...fns].forEach((f) => f()) }; }
-function fakeCesium({ natural = true, ion = 'ok', osm = true } = {}) {
+function fakeCesium({ natural = true, ion = 'ok', esri = true, osm = true } = {}) {
   const made = [];
   const C = {
     buildModuleUrl: (p) => `/cesium/${p}`,
     TileMapServiceImageryProvider: { fromUrl: async (url) => { if (!natural) throw new Error('404'); const p = { kind: 'natural', url, errorEvent: fakeEvent() }; made.push(p); return p; } },
     IonImageryProvider: { fromAssetId: (id) => (ion === 'ok' ? Promise.resolve({ kind: 'ion', id, errorEvent: fakeEvent() }) : ion === 'hang' ? new Promise(() => {}) : Promise.reject(new Error('401'))) },
+    UrlTemplateImageryProvider: function Esri(o) { if (!esri) throw new Error('esri'); this.kind = 'esri'; this.url = o.url; this.errorEvent = fakeEvent(); },
     OpenStreetMapImageryProvider: function OSM(o) { if (!osm) throw new Error('osm'); this.kind = 'osm'; this.url = o.url; this.errorEvent = fakeEvent(); },
     ImageryLayer: function Layer(p) { this.provider = p; },
   };
@@ -20,22 +21,35 @@ function fakeViewer() {
 }
 const kinds = (v) => v.layers.map((l) => l.provider.kind);
 
-test('без ключей: снизу встроенный Natural Earth, сверху спутник ion', async () => {
+test('без ключей: снизу встроенный Natural Earth, сверху реальный спутник ArcGIS', async () => {
   const { C } = fakeCesium(); const v = fakeViewer();
-  assert.equal(await addFallbackImagery(C, v), 'ion');
-  assert.deepEqual(kinds(v), ['natural', 'ion']);
+  assert.equal(await addFallbackImagery(C, v), 'esri');
+  assert.deepEqual(kinds(v), ['natural', 'esri']);
   assert.equal(v.layers[0].provider.url, '/cesium/Assets/Textures/NaturalEarthII');
+  assert.match(v.layers[1].provider.url, /World_Imagery/);
 });
 
-test('токен ion не работает (асинхронная ошибка) — переходим на OSM', async () => {
-  const { C } = fakeCesium({ ion: 'fail' }); const v = fakeViewer();
-  assert.equal(await addFallbackImagery(C, v), 'osm');
-  assert.deepEqual(kinds(v), ['natural', 'osm']);
+test('ArcGIS недоступен — тогда ионный снимок, несмотря на разрешение', async () => {
+  const { C } = fakeCesium({ esri: false }); const v = fakeViewer();
+  assert.equal(await addFallbackImagery(C, v), 'ion');
+  assert.deepEqual(kinds(v), ['natural', 'ion']);
 });
 
 test('ion завис без сети — не ждём вечно', async () => {
-  const { C } = fakeCesium({ ion: 'hang' }); const v = fakeViewer();
+  const { C } = fakeCesium({ ion: 'hang', esri: false }); const v = fakeViewer();
   assert.equal(await addFallbackImagery(C, v, { timeoutMs: 20 }), 'osm');
+});
+
+test('токен ion не работает — кладём фото-спутник ArcGIS без ключа', async () => {
+  const { C } = fakeCesium({ ion: 'fail' }); const v = fakeViewer();
+  assert.equal(await addFallbackImagery(C, v), 'esri');
+  assert.deepEqual(kinds(v), ['natural', 'esri']);
+});
+
+test('ни ArcGIS, ни ion — остаётся векторный OpenStreetMap', async () => {
+  const { C } = fakeCesium({ ion: 'fail', esri: false }); const v = fakeViewer();
+  assert.equal(await addFallbackImagery(C, v), 'osm');
+  assert.deepEqual(kinds(v), ['natural', 'osm']);
 });
 
 test('без интернета — только встроенный снимок', async () => {
@@ -45,14 +59,14 @@ test('без интернета — только встроенный снимо
 });
 
 test('верхний слой с ошибками тайлов снимается, Natural Earth остаётся', async () => {
-  const { C } = fakeCesium({ ion: 'fail' }); const v = fakeViewer();
+  const { C } = fakeCesium(); const v = fakeViewer();
   const changes = [];
   await addFallbackImagery(C, v, { onChange: (s) => changes.push(s) });
-  const osm = v.layers[1].provider;
-  for (let i = 0; i < TILE_ERROR_LIMIT + 3; i += 1) osm.errorEvent.fire();
+  const top = v.layers[1].provider;
+  for (let i = 0; i < TILE_ERROR_LIMIT + 3; i += 1) top.errorEvent.fire();
   assert.deepEqual(kinds(v), ['natural']);
   assert.deepEqual(changes, ['offline']);
-  assert.equal(osm.errorEvent.fns.length, 0, 'слушатель снят вместе со слоем');
+  assert.equal(top.errorEvent.fns.length, 0, 'слушатель снят вместе со слоем');
 });
 
 test('ion ответил после таймаута — брошенный провайдер освобождается', async () => {
@@ -66,9 +80,9 @@ test('ion ответил после таймаута — брошенный пр
 });
 
 test('даже без встроенного снимка глобус не падает', async () => {
-  const { C } = fakeCesium({ natural: false, ion: 'fail', osm: false }); const v = fakeViewer();
+  const { C } = fakeCesium({ natural: false, ion: 'fail', esri: false, osm: false }); const v = fakeViewer();
   assert.equal(await addFallbackImagery(C, v), 'none');
-  for (const s of ['ion', 'osm', 'offline', 'none']) assert.ok(SOURCE_TOAST[s]);
+  for (const s of ['ion', 'esri', 'osm', 'offline', 'none']) assert.ok(SOURCE_TOAST[s]);
 });
 
 test('dropOnTileErrors терпит единичные ошибки', () => {
