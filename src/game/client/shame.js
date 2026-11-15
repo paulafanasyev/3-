@@ -14,6 +14,7 @@ export const SHAME_EVENT = 'kupol:shame';
 let shamed = false;
 let overlay = null;
 let anthem = null;
+let muted = false;
 
 const CSS = `
   .k-shame{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:24px;
@@ -43,7 +44,10 @@ export const isShamed = () => shamed;
 function play() {
   anthem ??= new Audio(ANTHEM_SRC);
   anthem.volume = 0.9;
-  return anthem.play().then(() => true).catch(() => false);
+  // Намерение важнее флага paused: пока дорожка только начала грузиться,
+  // anthem.paused ещё true, и клик «выключить» по ошибке запускал гимн заново.
+  if (muted) return Promise.resolve(false);
+  return anthem.play().then(() => !muted).catch(() => false);
 }
 
 function build(target) {
@@ -70,8 +74,9 @@ function build(target) {
   layer.querySelector('[data-target]').textContent = target ? `${SHAME.targetLabel} ${target}` : SHAME.targetUnknown;
   const sound = layer.querySelector('[data-sound]');
   sound.addEventListener('click', () => {
-    if (anthem && !anthem.paused) {
-      anthem.pause();
+    muted = !muted;
+    if (muted) {
+      anthem?.pause();
       sound.textContent = SHAME.unmute;
       return;
     }
@@ -105,4 +110,5 @@ export function destroyShame() {
   overlay = null;
   if (anthem) { anthem.pause(); anthem = null; }
   shamed = false;
+  muted = false;
 }

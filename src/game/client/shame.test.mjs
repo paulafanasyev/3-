@@ -85,6 +85,14 @@ test('the ban lifts only on a page restart', () => {
   assert.match(SHAME.lock, /перезапуск/i);
 });
 
+test('the anthem toggle tracks intent, not the paused flag', () => {
+  // Клик по флагу paused во время загрузки давал «выключить гимн», который
+  // гимн включал: у ещё не стартонувшего Audio paused === true.
+  assert.match(shameSource, /muted = !muted/);
+  assert.match(shameSource, /if \(muted\) return Promise\.resolve\(false\)/);
+  assert.ok(!/if \(anthem && !anthem\.paused\)/.test(shameSource), 'переключатель снова читает paused');
+});
+
 test('the test range raises shame on every refusal and locks itself', () => {
   assert.match(rangeSource, /import \{ SHAME_EVENT, isShamed, triggerShame \} from '\.\/shame\.js'/);
   // Четыре независимых пути отказа (список городов, точка на глобусе, кнопка
