@@ -4,6 +4,8 @@ import sourceBombProfiles from '../data/source-bomb-profiles.json';
 import { NUCLEAR_AUDIO_SAMPLES, defaultNuclearSound } from './nuclearAudio.js';
 import { zonesForBomb } from './nuclearBlastModel.js';
 import { blastShapeAt } from './nuclearVolumetrics.js';
+import { nuclearBanFor, NUKE_BAN_ERROR } from '../nuclearBan.js';
+import { errorText } from '../i18n/ru.js';
 
 const BOMBS = [
   { id: 'fat-man', name: 'Толстяк (Fat Man)', country: 'США', year: '1945', yieldKt: 21, kind: 'Плутониевая атомная бомба' },
@@ -48,6 +50,7 @@ const CITY_ALIASES = Object.freeze({
   Paris: ['париж', 'paris'], Berlin: ['берлин', 'berlin'],
 });
 const CITIES = populatedPlaces.places;
+const BAN_NOTE = errorText(NUKE_BAN_ERROR);
 const SOURCE_PROFILES = sourceBombProfiles.bombs;
 const formatYield = (kt) => kt >= 1000 ? `${(kt / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} Мт` : `${kt.toLocaleString('ru-RU')} кт`;
 const formatDistance = (km) => km >= 1 ? `${km.toLocaleString('ru-RU', { maximumFractionDigits: km < 10 ? 1 : 0 })} км` : `${Math.round(km * 1000)} м`;
@@ -97,6 +100,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     <input id="k-nrange-city-query" type="search" placeholder="Например: Москва, Tokyo, Hanoi" autocomplete="off">
     <select id="k-nrange-city-results" size="5" aria-label="Результаты поиска города"></select>
     <div class="k-nrange-muted">В каталоге ${CITIES.length.toLocaleString('ru-RU')} городов и населённых пунктов. Поиск работает локально.</div>
+    <div class="k-nrange-muted">⛔ ${BAN_NOTE} Запрет держит маска территории, он же действует и в партии.</div>
     <label for="k-nrange-bomb">Модель испытания</label>
     <select id="k-nrange-bomb">${BOMBS.map((bomb) => `<option value="${bomb.id}">${bomb.name} · ${formatYield(bomb.yieldKt)} · ${bomb.year}</option>`).join('')}</select>
     <div class="k-nrange-status" data-bomb-info aria-live="polite"></div>
@@ -210,7 +214,11 @@ export function createNuclearRange({ root, viewer, layers }) {
     for (const [index, city] of matches.entries()) {
       const option = document.createElement('option');
       option.value = String(index);
-      option.textContent = `${city[0]} · ${city[1].toFixed(3)}, ${city[2].toFixed(3)}`;
+      // Правило видно уже в списке: строка запрещённого города не выбирается,
+      // а не отказывает постфактум.
+      const banned = Boolean(nuclearBanFor({ lon: city[2], lat: city[1] }, city));
+      option.disabled = banned;
+      option.textContent = `${banned ? '⛔ ' : ''}${city[0]} · ${city[1].toFixed(3)}, ${city[2].toFixed(3)}`;
       cityResults.appendChild(option);
     }
   };
@@ -218,6 +226,12 @@ export function createNuclearRange({ root, viewer, layers }) {
   cityResults.addEventListener('change', () => {
     const city = matches[Number(cityResults.value)];
     if (!city) return;
+    if (nuclearBanFor({ lon: city[2], lat: city[1] }, city)) {
+      target = null;
+      targetName = '';
+      status.textContent = `${errorText(NUKE_BAN_ERROR)} Цель ${city[0]} снята с наводки.`;
+      return;
+    }
     target = { lon: city[2], lat: city[1] };
     targetName = city[0];
     status.textContent = `Выбран город: ${city[0]} · ${city[1].toFixed(3)}°, ${city[2].toFixed(3)}°`;
@@ -255,6 +269,14 @@ export function createNuclearRange({ root, viewer, layers }) {
       status.textContent = 'Не удалось определить поверхность. Приблизьте глобус и выберите точку ещё раз.';
       return;
     }
+    if (nuclearBanFor(point)) {
+      // Точку не запоминаем и режим выбора оставляем включённым: отказ по
+      // маске территории — не повод терять весь кадр.
+      target = null;
+      targetName = '';
+      status.textContent = `${errorText(NUKE_BAN_ERROR)} Точка ${point.lat.toFixed(3)}°, ${point.lon.toFixed(3)}° — запрещённая территория.`;
+      return;
+    }
     target = point;
     targetName = 'Пользовательская точка';
     selecting = false;
@@ -274,6 +296,15 @@ export function createNuclearRange({ root, viewer, layers }) {
       return;
     }
     const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
+    // Проверяем до кадра: камера не должна успеть долететь до запрещённой цели.
+    // Маска накрывает и все города каталога РФ, поэтому здесь достаточно
+    // координаты, а не выбранной строки списка.
+    if (nuclearBanFor(target)) {
+      target = null;
+      targetName = '';
+      status.textContent = errorText(NUKE_BAN_ERROR);
+      return;
+    }
     // Кадр ставим ДО запуска: испытание стартует мгновенно, и камера, которая
     // летит 2.4 s, иначе приезжает уже на остывший гриб.
     const frameRadius = frameCloud(target.lon, target.lat);
@@ -289,7 +320,7 @@ export function createNuclearRange({ root, viewer, layers }) {
       });
       status.textContent = result?.ok
         ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. ${formatDamage(result.damage)} Снесено застройки: ${Math.round(result.damage.levelledAreaKm2).toLocaleString('ru-RU')} км² (строений в сцене: ${result.damage.buildingCount}).` : '. Без разрушений.'}`
-        : 'Не удалось запустить визуализацию.';
+        : (result?.error === NUKE_BAN_ERROR ? errorText(NUKE_BAN_ERROR) : 'Не удалось запустить визуализацию.');
     } catch (error) {
       status.textContent = `Ошибка испытания: ${String(error?.message || error)}`;
     } finally {

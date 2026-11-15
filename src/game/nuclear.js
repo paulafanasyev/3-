@@ -10,6 +10,7 @@ import { changeRelation, changeReputation } from './diplomacy.js';
 import { remember } from './leaders.js';
 import { removeUnit } from './state.js';
 import { addShield, pactMembers } from './finale.js';
+import { inRussia, NUKE_BAN_ERROR } from './nuclearBan.js';
 
 export const NUKE = Object.freeze({
   radius: 1,
@@ -68,6 +69,9 @@ export function nukeBlocker(state, map, nationId, unit, to) {
   const launchCity = Object.values(state.cities).find((city) => city.cell === unit.cell);
   if (!launchCity || launchCity.owner !== nationId || !launchCity.buildings.includes('silo')) return 'NEED_SILO';
   if (!validCell(map, to)) return 'NO_TARGET';
+  // Клетка отвечает своей координатой на Земле, так что запрет читается здесь,
+  // а не в интерфейсе: отказ настигает и команду игрока, и решение ИИ.
+  if (inRussia(map.cells[to])) return NUKE_BAN_ERROR;
   if (!state.explored[nationId][to]) return 'NOT_EXPLORED';
   const victim = state.owner[to];
   if (!victim || victim === nationId) return 'NO_TARGET';

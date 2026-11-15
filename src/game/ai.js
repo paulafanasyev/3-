@@ -22,6 +22,7 @@ import { techLearnable } from './events.js';
 import { evaluateDemand, demandBlocker } from './negotiation.js';
 import { OPS, opBlocker, opChances, hasCasusBelli } from './intrigue.js';
 import { warheads, interceptChance } from './nuclear.js';
+import { inRussia } from './nuclearBan.js';
 
 const FOCUS_TECHS = {
   defense: ['bronze', 'iron', 'steel', 'agriculture', 'massProduction'],
@@ -423,7 +424,7 @@ function considerNuke(state, map, id, other) {
   const firstStrike = desperate && aggr > 0.4 && interceptChance(state, other) < 0.3 && nextRandom(state) < 0.4 * aggr;
   if (!revenge && !firstStrike) return;
   const target = Object.values(state.cities)
-    .filter((c) => c.owner === other && state.explored[id][c.cell])
+    .filter((c) => c.owner === other && state.explored[id][c.cell] && !inRussia(map.cells[c.cell]))
     .sort((a, b) => b.pop - a.pop || a.id.localeCompare(b.id))[0];
   if (!target) return;
   applyCommand(state, id, { kind: 'nuke', unitId: mine[0].id, to: target.cell }, map);

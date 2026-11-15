@@ -10,6 +10,7 @@ import { createNuclearVolumetrics } from './nuclearVolumetrics.js';
 import { playNuclearAudio, stopNuclearAudio } from './nuclearAudio.js';
 import { createNuclearDamageLayer } from './nuclearDamage.js';
 import { zonesForBomb, nearestAirBurstProfile } from './nuclearBlastModel.js';
+import { nuclearBanFor, NUKE_BAN_ERROR } from '../nuclearBan.js';
 import sourceBombProfiles from '../data/source-bomb-profiles.json';
 
 /** Ниже этой высоты камеры заливка территорий гаснет, остаются границы: видно сами снимки. */
@@ -394,6 +395,10 @@ export function createWorldLayers(viewer, geometry) {
   /** Декоративный запуск с полигона: не вызывает игровые команды и не меняет состояние партии. */
   async function playNuclearTest(at, yieldMt, options = {}) {
     if (!at || !Number.isFinite(at.lon) || !Number.isFinite(at.lat)) return { ok: false };
+    // Отказ здесь, а не только в интерфейсе полигона: этот же вызов может
+    // прийти из партии, и ни один путь не должен дорастить гриб над Россией.
+    const ban = nuclearBanFor(at);
+    if (ban) return { ok: false, banned: ban, error: NUKE_BAN_ERROR };
     const sourceProfile = sourceBombProfiles.bombs.find((item) => item.id === options.profileId) ?? null;
     // Разрушения — ДО запуска: обход тысяч строений занимает поток на десятки
     // секунд, и запущенный раньше гриб успевал умереть внутри этого freeze,

@@ -18,6 +18,9 @@ export const ERRORS = Object.freeze({
   NEED_RESOURCE: 'Не хватает стратегического ресурса',
   NEED_SPACEPORT: 'Нужен космодром',
   NEED_SILO: 'Нужна ракетная шахта',
+  // Правило держится на маске территории (src/game/nuclearBan.js) и действует
+  // одинаково в партии и на испытательном полигоне.
+  NUKE_BANNED_RUSSIA: 'По России и её городам ядеркой не летают. Бомба вернулась в шахту, а ты — в баню.',
   NOT_ENOUGH_GOLD: 'Не хватает золота',
   NOT_ENOUGH_INFLUENCE: 'Не хватает влияния',
   NOT_ENOUGH_SCIENCE: 'Не хватает науки',
