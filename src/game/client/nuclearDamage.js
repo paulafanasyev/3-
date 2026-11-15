@@ -84,9 +84,9 @@ export function createNuclearDamageLayer(viewer) {
 
     // --- Scorch: concentric damage contours, darkest toward ground zero. ------
     const scorchRings = [
-      { radius: R.severe, css: '#151210', alpha: 0.68, duration: 22 },
-      { radius: R.heavy, css: '#241d17', alpha: 0.5, duration: 18 },
-      { radius: R.light, css: '#3f3325', alpha: 0.3, duration: 14 },
+      { radius: R.severe, css: '#241f1a', alpha: 0.55, duration: 22 },
+      { radius: R.heavy, css: '#33291f', alpha: 0.42, duration: 18 },
+      { radius: R.light, css: '#4a3d2c', alpha: 0.26, duration: 14 },
     ];
     for (const ring of scorchRings) {
       if (ring.radius < 20) continue;
@@ -191,7 +191,7 @@ export function createNuclearDamageLayer(viewer) {
             const p = collapse();
             const intact = Cesium.Color.fromCssColorString(PALETTE[colorIndex]);
             const charred = Cesium.Color.fromCssColorString(
-              tier === 'severe' ? '#1b1815' : tier === 'heavy' ? '#2a2521' : '#4a4038',
+              tier === 'severe' ? '#3c352e' : tier === 'heavy' ? '#585045' : '#6e6455',
             );
             return Cesium.Color.lerp(intact, charred, p, new Cesium.Color()).withAlpha(0.97);
           }, false)),
@@ -240,7 +240,7 @@ export function createNuclearDamageLayer(viewer) {
       const terrain = viewer.scene.globe?.getHeight(cartographic);
       const ground = Number.isFinite(terrain) ? terrain : baseHeight;
       const intact = Cesium.Color.fromCssColorString(PALETTE[Math.floor(random() * PALETTE.length)]);
-      const charred = Cesium.Color.fromCssColorString('#2b2620');
+      const charred = Cesium.Color.fromCssColorString('#544c41');
       add({
         position: Cesium.Cartesian3.fromDegrees(lon, lat, ground + h / 2),
         box: {

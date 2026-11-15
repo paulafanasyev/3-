@@ -310,7 +310,6 @@ export function createWorldLayers(viewer, geometry) {
       zones: zonesForBomb(profile, kt),
       yieldKt: kt,
       startedAt: start,
-      burstHeightM: Math.max(0, Number(profile.burst_height_m) || 0),
       onDone: () => nuclearVolumes.delete(volume),
     });
     nuclearVolumes.add(volume);

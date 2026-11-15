@@ -1484,12 +1484,18 @@ const rungForFullMs = (fullMs) => {
  */
 export function createNuclearVolumetrics({
   scene, at, profile = {}, zones = {}, yieldKt = 1000, startedAt = 0,
-  timeScale = null, lifeSeconds = null, burstHeightM = 0, onDone = () => {},
+  timeScale = null, lifeSeconds = null, onDone = () => {},
 } = {}) {
   if (!scene?.postProcessStages || typeof Cesium.PostProcessStage !== 'function') {
     return { destroy: () => {}, isDestroyed: () => true, state: () => null, shown: () => false };
   }
-  const origin = Cesium.Cartesian3.fromDegrees(at.lon, at.lat, burstHeightM);
+  // Начало координат — ЗЕМЛЯ под целью, а не точка взрыва. Форма уже считает
+  // высоту внутри себя: ключи облака идут от burstHeight (строка 169), а
+  // горизонтальный радиус фронта — из сечения сферы радиуса slant центром на
+  // высоте burstHeight (строка 242), то есть y=0 у неё пол. Поднимать ещё и
+  // начало координат — двойной счёт: на кадрах 15.11 гриб стоял на 1550 м
+  // выше выжженного города, и разрыв читался как «взрыв не над городом».
+  const origin = Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 0);
   const enu = Cesium.Transforms.eastNorthUpToFixedFrame(origin, Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
   const inv = Cesium.Matrix4.inverseTransformation(enu, new Cesium.Matrix4());
   // Столбцы матрицы ENU — это базис восток/север/верх в ECEF; через них
