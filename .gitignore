@@ -13,3 +13,5 @@ output/
 data/game/sources/
 public/game/leaders/
 public/game/units/forge/
+# userDataDir браузера: аккаунты, cookies, кэш и Autofill — в git не входит никогда.
+tmp/chrome-profile*/

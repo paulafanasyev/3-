@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Купол — лаборатория объёмного взрыва</title>
+    <style>
+      html, body, #app { margin: 0; height: 100%; background: #000; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import * as Cesium from 'cesium';
+      import { createNuclearVolumetrics } from '/src/game/client/nuclearVolumetrics.js';
+      import { addFallbackImagery } from '/src/game/client/imagery.js';
+      import { zonesForBomb } from '/src/game/client/nuclearBlastModel.js';
+      import profiles from '/src/game/data/source-bomb-profiles.json';
+      import places from '/src/game/data/populated_places.json';
+
+      const viewer = new Cesium.Viewer('app', {
+        baseLayer: false,
+        baseLayerPicker: false, geocoder: false, homeButton: false, sceneModePicker: false,
+        navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
+        infoBox: false, selectionIndicator: false, msaaSamples: 1, showError: false,
+      });
+      viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a1a24');
+      viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
+      viewer.scene.globe.maximumScreenSpaceError = 8;
+      viewer.scene.fog.enabled = false;
+      viewer.scene.sun.show = false;
+      viewer.scene.moon.show = false;
+      viewer.scene.skyAtmosphere.show = false;
+      viewer.scene.postProcessStages.bloom.enabled = false;
+      window.__renderErrors = [];
+      viewer.scene.renderError.addEventListener((scene, error) => {
+        window.__renderErrors.push(String(error?.stack || error));
+      });
+      const imagery = await addFallbackImagery(Cesium, viewer, { online: true, timeoutMs: 6000 });
+
+      const bombById = (id) => profiles.bombs.find((b) => b.id === id);
+      const findCity = (name) => {
+        const n = String(name).toLowerCase();
+        return places.places.find((p) => p[0].toLowerCase() === n)
+          || places.places.find((p) => p[0].toLowerCase().startsWith(n))
+          || places.places.find((p) => p[0].toLowerCase().includes(n));
+      };
+
+      let volume = null;
+      let frozen = false;
+      const realNow = performance.now.bind(performance);
+      let holdAt = 0;
+
+      // Камера: смотри на точку над землёй, стоя на заданном расстоянии.
+      function aim(target, southM, upM) {
+        viewer.camera.lookAt(target, new Cesium.Cartesian3(0, -southM, upM));
+      }
+
+      window.lab = async ({ bomb = 'castle_bravo', city = 'London', fraction = 0.6,
+        southM = 100000, camAltM = 12000, lookUpM = 9000, iso = null } = {}) => {
+        if (iso) {
+          viewer.clock.currentTime = Cesium.JulianDate.fromIso8601(iso);
+          viewer.clock.shouldAnimate = false;
+        }
+        const b = bombById(bomb);
+        const c = findCity(city);
+        if (!b || !c) return { error: `bomb=${!!b} city=${!!c}` };
+        const at = { lat: c[1], lon: c[2] };
+        const zones = zonesForBomb(b, b.yield_kt);
+        // тот же выбор визуального профиля, что в игре: ближайший по мощности
+        const dd = (p) => Math.abs(Math.log(p.yield_kt / b.yield_kt));
+        const profile = profiles.bombs.slice().sort((a, bb) => dd(a) - dd(bb))[0] ?? b;
+        if (volume) volume.destroy();
+        const startedAt = realNow();
+        volume = createNuclearVolumetrics({
+          scene: viewer.scene, at, profile, zones, yieldKt: b.yield_kt, startedAt,
+          burstHeightM: Math.max(0, Number(profile?.burst_height_m) || 0),
+          onDone: () => {},
+        });
+        const life = volume.durationSeconds;
+        // Держим модель на выбранной доле: время вперёд почти не идёт.
+        frozen = false;
+        holdAt = startedAt + life * fraction * 1000;
+        performance.now = () => holdAt + (realNow() - holdAt) / 5000;
+        frozen = true;
+        aim(Cesium.Cartesian3.fromDegrees(at.lon, at.lat, lookUpM), southM, camAltM - lookUpM);
+        await new Promise((r) => setTimeout(r, 1200));
+        const stage = viewer.scene.postProcessStages.length
+          ? viewer.scene.postProcessStages.get(0) : null;
+        window.__stage = stage;
+        const u = stage ? stage.uniforms : null;
+        let sunEl = null;
+        try {
+          const sunPos = Cesium.Sun.getPosition(viewer.clock.currentTime, Cesium.Ellipsoid.WGS84);
+          const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+            Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 0), Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
+          const upv = new Cesium.Cartesian4();
+          Cesium.Matrix4.getColumn(enu, 2, upv);
+          const dir = Cesium.Cartesian3.normalize(Cesium.Cartesian3.subtract(
+            sunPos, Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 0), new Cesium.Cartesian3()), new Cesium.Cartesian3());
+          sunEl = Math.round(Cesium.Math.toDegrees(Math.asin(
+            Cesium.Cartesian3.dot(dir, new Cesium.Cartesian3(upv.x, upv.y, upv.z)))));
+        } catch (e) { sunEl = String(e.message).slice(0, 40); }
+        return {
+          imagery, city: c[0], bomb: b.id, yieldKt: b.yield_kt, fraction, sunEl,
+          age: u ? +u.u_age.toFixed(1) : null,
+          boundR: u ? Math.round(u.u_boundR) : null,
+          head: u ? [Math.round(u.u_head.y), Math.round(u.u_head.w)] : null,
+          stem: u ? [Math.round(u.u_stem.x), Math.round(u.u_stem.y), Math.round(u.u_stem.z), +u.u_stem.w.toFixed(2)] : null,
+          cam: u ? [Math.round(u.u_cam.x), Math.round(u.u_cam.y), Math.round(u.u_cam.z)] : null,
+          rayTan: u ? [+u.u_rayTan.x.toFixed(3), +u.u_rayTan.y.toFixed(3)] : null,
+          errors: window.__renderErrors.slice(-3),
+        };
+      };
+
+      window.__viewer = viewer;
+      window.__Cesium = Cesium;
+      window.ready = true;
+    </script>
+  </body>
+</html>

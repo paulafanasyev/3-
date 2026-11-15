@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Купол — предпросмотр ядерных разрушений</title>
+    <style>
+      html, body, #app { margin: 0; height: 100%; background: #06131b; }
+      #hud {
+        position: fixed; left: 10px; top: 10px; z-index: 20; max-width: 90vw;
+        color: #eaf2fb; font: 12px/1.45 ui-monospace, "Cascadia Code", monospace;
+        background: rgba(8, 16, 24, .82); border: 1px solid #3a4a60; border-radius: 10px; padding: 10px 12px;
+      }
+      #hud b { color: #ffd58a; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud">загрузка…</div>
+    <script type="module">
+      import * as Cesium from 'cesium';
+      import { createNuclearDamageLayer } from '/src/game/client/nuclearDamage.js';
+      import { createNuclearVisuals } from '/src/game/client/nuclearEffects.js';
+      import { createNuclearVolumetrics } from '/src/game/client/nuclearVolumetrics.js';
+      import { addFallbackImagery } from '/src/game/client/imagery.js';
+      import { zonesForBomb } from '/src/game/client/nuclearBlastModel.js';
+      import profiles from '/src/game/data/source-bomb-profiles.json';
+      import places from '/src/game/data/populated_places.json';
+
+      const hud = document.getElementById('hud');
+      const viewer = new Cesium.Viewer('app', {
+        baseLayer: false,
+        baseLayerPicker: false, geocoder: false, homeButton: false, sceneModePicker: false,
+        navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
+        infoBox: false, selectionIndicator: false, msaaSamples: 1, showError: false,
+      });
+      // та же цепочка подложки, что в игре: ion → ArcGIS World Imagery → OSM
+      hud.dataset.imagery = await addFallbackImagery(Cesium, viewer, { online: true, timeoutMs: 6000 });
+      viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a1a24');
+      viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
+      // Software-rendered preview: keep the tile and post-process load down so
+      // the render loop never starves the automation protocol.
+      viewer.scene.globe.maximumScreenSpaceError = 8;
+      viewer.scene.globe.tileCacheSize = 600;
+      viewer.scene.fog.enabled = false;
+      viewer.scene.sun.show = false;
+      viewer.scene.moon.show = false;
+      viewer.scene.skyAtmosphere.show = false;
+      viewer.scene.postProcessStages.bloom.enabled = true;
+      window.__renderErrors = [];
+      viewer.scene.renderError.addEventListener((scene, error) => {
+        window.__renderErrors.push(String(error?.stack || error));
+      });
+      const damage = createNuclearDamageLayer(viewer);
+      const volumes = [];
+      window.resetVolumes = () => { for (const v of volumes) v.destroy(); volumes.length = 0; };
+
+      const bombById = (id) => profiles.bombs.find((b) => b.id === id);
+      const bombName = (bomb) => (bomb && (bomb.name?.ru ?? bomb.name)) || '—';
+      const findCity = (name) => {
+        const n = String(name).toLowerCase();
+        return places.places.find((p) => p[0].toLowerCase() === n)
+          || places.places.find((p) => p[0].toLowerCase().startsWith(n))
+          || places.places.find((p) => p[0].toLowerCase().includes(n));
+      };
+
+      // Frame the camera on the weapon's own footprint instead of a fixed orbit,
+      // so the shot always contains ground zero at a legible scale.
+      async function aim(at, model, view) {
+        const R = model.radiiM;
+        const wide = view === 'wide';
+        // Рамка обязана вмещать сам гриб, а не только зону разрушений: у
+        // мегатонн столб выше города в разы, и с близко посаженной камерой
+        // вместо гриба видно лишь пыльные шары над головой.
+        const cloudR = Math.max(0, Number(model.cloudTopKm) || 0) * 1000 * 0.85;
+        const radiusM = wide
+          ? Math.max(R.heavy * 1.35, R.fireball * 1.6, cloudR, 1200)
+          : Math.min(Math.max(R.fireball * 1.3, R.severe * 1.1, cloudR * 0.45, 1500), 9000);
+        const pitch = wide ? -64 : -28;
+        const sphere = new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 0), radiusM);
+        const flight = viewer.camera.flyToBoundingSphere(sphere, {
+          duration: 1.2,
+          offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(pitch), radiusM * 2.6),
+        });
+        await Promise.race([flight, new Promise((r) => setTimeout(r, 2500))]);
+        // Under software rendering the flight can still be in progress; snap it
+        // to the target so the first scenario is not photographed from orbit.
+        if (typeof viewer.camera.completeFlight === 'function') viewer.camera.completeFlight();
+        await new Promise((r) => setTimeout(r, 250));
+        // Tiles under the new view need a moment to arrive.
+        for (let i = 0; i < 6; i += 1) {
+          if (!viewer.scene.globe.tilesLoaded) await new Promise((r) => setTimeout(r, 300));
+          else break;
+        }
+        return radiusM;
+      }
+
+      window.runTest = async (bombId, cityName, view = 'wide') => {
+        const bomb = bombById(bombId);
+        const city = findCity(cityName);
+        if (!bomb || !city) return { error: `bomb=${!!bomb} city=${!!city}` };
+        const at = { lon: city[2], lat: city[1] };
+        damage.reset();
+        for (const v of volumes) v.destroy();
+        volumes.length = 0;
+        const model = zonesForBomb(bomb, bomb.yield_kt);
+        const frameRadiusM = await aim(at, model, view);
+        const startedAt = performance.now();
+        const scale = Math.max(0.55, Math.min(2.4, (bomb.yield_kt / 1000 / 1.6) ** 0.22));
+        try { createNuclearVisuals(viewer.entities, at, startedAt, false, scale, model); }
+        catch (e) { hud.dataset.visuals = String(e.message); }
+        // объёмный гриб: ближайший по мощности визуальный профиль источника
+        const d = (p) => Math.abs(Math.log(p.yield_kt / bomb.yield_kt));
+        const profile = profiles.bombs.slice().sort((a, b) => d(a) - d(b))[0] ?? null;
+        try {
+          volumes.push(createNuclearVolumetrics({
+            scene: viewer.scene, at, profile, zones: model,
+            yieldKt: bomb.yield_kt, startedAt,
+            burstHeightM: Math.max(0, Number(profile?.burst_height_m) || 0),
+          }));
+        } catch (e) { hud.dataset.volume = String(e.message); }
+        const res = await damage.apply(at, bomb.yield_kt / 1000, city[0], bomb);
+        window.__last = res;
+        hud.innerHTML = `<b>${bombName(bomb)}</b> · ${view === 'close' ? 'улица' : 'обзор'} · ${city[0]}<br>`
+          + `огненный шар ${res.fireballKm.toFixed(3)} км · полное ${res.severeKm.toFixed(2)} км · `
+          + `жильё ${res.heavyKm.toFixed(2)} км · стёкла ${res.lightKm.toFixed(2)} км<br>`
+          + `кратер ⌀${res.craterDiameterM} м · гриб ${res.cloudTopKm ?? '—'} км · строений ${res.buildingCount}`;
+        return { ...res, frameRadiusM };
+      };
+      window.resetTest = () => damage.reset();
+      window.__viewer = viewer;
+      window.__volumes = volumes;
+      window.__volState = () => [...volumes].map((v) => v.state?.() ?? null);
+      window.__Cesium = Cesium;
+      window.__camAlt = () => viewer.camera.positionCartographic.height;
+      window.ready = true;
+      hud.textContent = 'готов';
+    </script>
+</body>
+</html>
