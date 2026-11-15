@@ -44,11 +44,14 @@ jobs:
             echo
             echo "Exit code: $status"
             echo
-            echo "### Failing tests"
-            if grep '^not ok ' test-output.log; then :; else echo 'None'; fi
+            echo "### Сводка пакетов"
+            grep -E '^ℹ (tests|pass|fail|skipped) ' test-output.log || echo 'нет ни одной сводки — тесты не запустились'
             echo
-            echo "### Failure details"
-            awk '/^not ok / {show=1; n=0} show {print; n++} show && n>=30 {show=0}' test-output.log
+            echo "### Падающие тесты"
+            if grep -E '^✖ ' test-output.log | grep -v 'failing tests:' | awk '!seen[$0]++'; then :; elif grep '^not ok ' test-output.log; then :; else echo 'None'; fi
+            echo
+            echo "### Детали"
+            awk '/^✖ failing tests:|^not ok / {show=1} show {print; n++} n>=60 {show=0}' test-output.log
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
