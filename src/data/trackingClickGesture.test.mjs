@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import {
   bindTrackingClickGesture,
   isTrackingClickGesture,
@@ -8,6 +7,7 @@ import {
 } from './trackingClickGesture.js';
 import { TRACKED_MODEL_MAX_PX as CIVIL_TRACKED_MODEL_MAX_PX } from './flights.js';
 import { TRACKED_MODEL_MAX_PX as MILITARY_TRACKED_MODEL_MAX_PX } from './militaryFlights.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const TYPES = {
   LEFT_DOWN: 'left-down',
@@ -110,8 +110,8 @@ test('slow clean sprite clicks select, while long presses and orbit nudges canno
 
 test('civilian and military click handlers apply duration only at the deselect branch', () => {
   const sources = [
-    readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
-    readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
+    readSourceText(new URL('./flights.js', import.meta.url)),
+    readSourceText(new URL('./militaryFlights.js', import.meta.url)),
   ];
   for (const source of sources) {
     assert.match(source, /isTrackingSelectionGesture\(gesture\)[\s\S]+scene\.pick/);

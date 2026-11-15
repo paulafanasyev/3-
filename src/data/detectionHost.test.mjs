@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import {
   countFadingRenderEntries,
@@ -23,6 +22,7 @@ import {
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
 import { DETECTION_THEME_MAP } from '../overlays/worldOverlayTokens.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
   assert.equal(countFadingRenderEntries([
@@ -670,8 +670,8 @@ test('pathological detection paint holds alternate frames without freezing share
 });
 
 test('detection cannot resurrect a private canvas, listener, matrix, resize, clear, or UI inventory', () => {
-  const source = readFileSync(new URL('./detection.js', import.meta.url), 'utf8');
-  const uiSource = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
+  const source = readSourceText(new URL('./detection.js', import.meta.url));
+  const uiSource = readSourceText(new URL('../ui.js', import.meta.url));
   assert.doesNotMatch(source, /createElement\(\s*['"]canvas['"]\s*\)/);
   assert.doesNotMatch(source, /postRender\.addEventListener/);
   assert.doesNotMatch(source, /['"]detection-overlay['"]/);

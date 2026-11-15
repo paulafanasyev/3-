@@ -18,6 +18,7 @@ import {
 } from './layerState.js';
 import radioLayer from './radio.js';
 import { stampInitialShareGesture } from '../navigationPolicy.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 function deferred() {
   let resolve;
@@ -365,18 +366,18 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
   // first-run session actually boots from.
   const { readFile } = await import('node:fs/promises');
   for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
+    const source = await readSourceText(new URL(`./${name}`, import.meta.url));
     assert.match(source, /^let _models3dEnabled = true;$/m,
       `${name}: the fleet starts armed, matching the codec default`);
     assert.match(source, /^let _models3dMode = 'proximity';/m,
       `${name}: and starts in proximity, matching the codec default`);
   }
-  const ui = await readFile(new URL('../ui.js', import.meta.url), 'utf8');
+  const ui = await readSourceText(new URL('../ui.js', import.meta.url));
   assert.match(ui, /^\s*this\._models3dEnabled = true;$/m,
     'ui.js: the DISPLAY rail believes 3D is on before any layer-state sync arrives');
   assert.match(ui, /this\._models3dMode = 'proximity';/,
     'ui.js: and believes the mode is proximity');
-  const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+  const html = await readSourceText(new URL('../../index.html', import.meta.url));
   assert.match(html, /class="pp-toggle-btn active" id="models3d-toggle" aria-pressed="true"/,
     'index.html: the 3D button paints lit on first paint, before ui.js runs — and says so');
   assert.match(ui, /this\._models3dBtn\?\.setAttribute\('aria-pressed', String\(this\._models3dEnabled\)\)/,

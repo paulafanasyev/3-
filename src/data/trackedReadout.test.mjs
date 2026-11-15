@@ -12,6 +12,7 @@ import {
   refreshTrackedReadout,
   trackedLabelModelFromText,
 } from './trackedReadout.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 function makeCesiumEvent() {
   const listeners = new Set();
@@ -225,7 +226,7 @@ test('selection lifecycle ignores vessels, accepts installations, and clears wit
 });
 
 test('trackedReadout cannot resurrect a dedicated canvas or render listener', async () => {
-  const source = await readFile(new URL('./trackedReadout.js', import.meta.url), 'utf8');
+  const source = await readSourceText(new URL('./trackedReadout.js', import.meta.url));
   for (const forbidden of [
     'document.createElement',
     "createElement('canvas')",
@@ -244,7 +245,7 @@ test('tracking layers write gevLabelModel and expose only their cached display p
     'militaryFlights.js',
     'satellites.js',
     'militaryInstallations.js',
-  ].map(async (name) => [name, await readFile(new URL(`./${name}`, import.meta.url), 'utf8')]));
+  ].map(async (name) => [name, await readSourceText(new URL(`./${name}`, import.meta.url))]));
   const sources = Object.fromEntries(files);
   for (const [name, source] of files) {
     assert.ok(source.includes('.gevLabelModel ='), `${name} writes the explicit model directly`);
@@ -260,7 +261,7 @@ test('tracking layers write gevLabelModel and expose only their cached display p
 
 test('civilian and military trail heads use the lower-centre model anchor and weak-texture tint', async () => {
   const files = await Promise.all(['flights.js', 'militaryFlights.js'].map(async (name) => (
-    [name, await readFile(new URL(`./${name}`, import.meta.url), 'utf8')]
+    [name, await readSourceText(new URL(`./${name}`, import.meta.url))]
   )));
   for (const [name, source] of files) {
     assert.ok(

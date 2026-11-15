@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
+const css = readSourceText(path.join(ROOT, 'style.css'));
+const ui = readSourceText(path.join(ROOT, 'src', 'ui.js'));
 
 /*
  * Required-attribution keep-out pin.

@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
-const director = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
+const ui = readSourceText(path.join(ROOT, 'src', 'ui.js'));
+const director = readSourceText(path.join(ROOT, 'src', 'scenes', 'director.js'));
 
 /** Source of the free-text LOCATION search handler (Enter on #location-search). */
 function locationSearchHandler() {
@@ -99,7 +100,7 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
   );
 
   // …and the policy only reaches `release` after its authority checks pass.
-  const policy = fs.readFileSync(path.join(ROOT, 'src', 'navigationPolicy.js'), 'utf8');
+  const policy = readSourceText(path.join(ROOT, 'src', 'navigationPolicy.js'));
   const fn = policy.slice(policy.indexOf('export function reassertNavigationHandoff'));
   assert.match(fn, /if \(disposed \|\| generation !== currentGeneration\) return false;[\s\S]*?release\?\.\(\);/);
 });

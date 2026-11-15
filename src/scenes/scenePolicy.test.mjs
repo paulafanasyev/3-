@@ -13,6 +13,7 @@ import {
 } from './scenePolicy.js';
 import { SCENE_RECIPES } from './recipes.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 /**
  * Every key each layer publishes from getParams() — the exact surface
@@ -24,7 +25,7 @@ function sweepLayerParamKeys() {
   const dataDir = new URL('../data/', import.meta.url);
   for (const entry of fs.readdirSync(dataDir)) {
     if (!entry.endsWith('.js')) continue;
-    const source = fs.readFileSync(new URL(entry, dataDir), 'utf8');
+    const source = readSourceText(new URL(entry, dataDir));
     // Every getParams() in this codebase is a plain object return; take the
     // body up to its closing brace and read the keys it publishes.
     const body = source.match(/\n {2}getParams\(\)\s*\{[\s\S]*?\n {2}\},/);

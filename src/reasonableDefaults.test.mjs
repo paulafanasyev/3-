@@ -37,10 +37,11 @@ import {
   setScopeMaskFeather,
 } from './scopeMask.js';
 import { ShareLinkManager } from './sharelink.js';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-const indexHtml = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const shareSource = fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
+const uiSource = readSourceText(new URL('./ui.js', import.meta.url));
+const indexHtml = readSourceText(new URL('../index.html', import.meta.url));
+const shareSource = readSourceText(new URL('./sharelink.js', import.meta.url));
 
 /** Slice ui.js between two literal anchors, so a pin reads one method, not the file. */
 function uiBlock(start, end) {

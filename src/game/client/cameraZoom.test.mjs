@@ -2,10 +2,10 @@
 // интерфейс — по исходникам: без браузера видно только, что рычаг на месте.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { BUTTON_FACTOR, MAX_RANGE, MIN_RANGE, nextRange, wheelFactor } from './cameraZoom.js';
+import { readSourceText } from '../../../scripts/readSourceText.mjs';
 
-const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
+const read = (relative) => readSourceText(new URL(relative, import.meta.url));
 const zoomSource = read('./cameraZoom.js');
 const bootSource = read('./boot.js');
 const hudSource = read('./hud.js');

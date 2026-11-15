@@ -6,7 +6,6 @@
 // keyhole edge fade is covered by the celestialRing suite.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import {
   CCTV_CARD_FADE_END_M,
   CCTV_CARD_FADE_START_M,
@@ -30,6 +29,7 @@ import {
   isCctvCardAnchorSafe,
   planFrameCachePrune,
 } from './cctvCards.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 test('isCctvCardAnchorSafe protects the top HUD band for ambient cards', () => {
   assert.equal(isCctvCardAnchorSafe({ sy: 100, viewH: 1000 }), false);
@@ -117,7 +117,7 @@ test('active CCTV thumbnail is protected while ambient and pinned policies stay 
 });
 
 test('CCTV card module cannot resurrect a canvas, projection, listener, or private hit store', () => {
-  const source = readFileSync(new URL('./cctvCards.js', import.meta.url), 'utf8');
+  const source = readSourceText(new URL('./cctvCards.js', import.meta.url));
   const forbidden = [
     /createElement\(\s*['"]canvas['"]\s*\)/,
     /postRender\.addEventListener/,

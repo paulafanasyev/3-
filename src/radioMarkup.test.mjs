@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-const radio = readFileSync(new URL('./data/radio.js', import.meta.url), 'utf8');
-const rocketLaunches = readFileSync(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
-const realtime = readFileSync(new URL('./voice/gevRealtime.js', import.meta.url), 'utf8');
-const voice = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const html = readSourceText(new URL('../index.html', import.meta.url));
+const ui = readSourceText(new URL('./ui.js', import.meta.url));
+const radio = readSourceText(new URL('./data/radio.js', import.meta.url));
+const rocketLaunches = readSourceText(new URL('./data/rocketLaunches.js', import.meta.url));
+const realtime = readSourceText(new URL('./voice/gevRealtime.js', import.meta.url));
+const voice = readSourceText(new URL('../vite.config.js', import.meta.url));
+const css = readSourceText(new URL('../style.css', import.meta.url));
 
 /** Parse the Realtime tool array out of the Vite config as real data. */
 function realtimeTools() {

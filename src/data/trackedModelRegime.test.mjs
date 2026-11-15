@@ -44,6 +44,7 @@ import militaryFlightsLayer, {
 } from './militaryFlights.js';
 import { clearTr3bRegistry, setTr3b } from './tr3bRegistry.js';
 import { reportMeshFloorCell, _clearMeshFloorCellsForTest } from './groundFloor.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 // Sample altitudes are expressed RELATIVE to the band rather than as absolute
 // offsets. The thresholds have already been retuned once (1_000_000 → 150_000
@@ -929,9 +930,8 @@ for (const fixture of LAYERS) {
 }
 
 test('both layers gate the tracked-model load and record its failures', async () => {
-  const { readFile } = await import('node:fs/promises');
   for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
+    const source = readSourceText(new URL(`./${name}`, import.meta.url));
     assert.match(source, /!_trackedModel && !_trackedModelLoading && _trackedModelLoadAllowed\(\)/,
       `${name}: the driver asks permission before starting another tracked-model load`);
     assert.match(source, /_noteTrackedModelLoadFailure\(trackedSpec\.url, err\)/,
@@ -945,9 +945,8 @@ test('both layers gate the tracked-model load and record its failures', async ()
 });
 
 test('the tracked regime never consults the fleet models3d toggle', async () => {
-  const { readFile } = await import('node:fs/promises');
   for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
+    const source = readSourceText(new URL(`./${name}`, import.meta.url));
     const regime = /function _trackedModelRegimeActive\(\) \{[\s\S]*?\n\}/.exec(source)?.[0];
     assert.ok(regime, `${name}: _trackedModelRegimeActive is defined`);
     assert.doesNotMatch(regime, /_models3dEnabled|_modelRegimeActive\(\)/,

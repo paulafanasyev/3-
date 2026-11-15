@@ -31,6 +31,7 @@ import {
   trailHeadStart,
   modelAnchorWorld,
 } from './modelVisualAnchor.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -358,7 +359,7 @@ function nativeVisualCenter(file) {
 // --- per-layer constants, read from source (see header) --------------------
 
 function layerConstants(sourceFile) {
-  const src = fs.readFileSync(path.join(ROOT, sourceFile), 'utf8');
+  const src = readSourceText(path.join(ROOT, sourceFile));
   const scale = src.match(/\bconst MODEL_SCALE = ([\d.]+);/);
   assert.ok(scale, `${sourceFile}: MODEL_SCALE not found`);
   const belly = src.match(/\bconst MODEL_BELLY_OFFSET_NATIVE = ([\d.]+);/);
@@ -367,7 +368,7 @@ function layerConstants(sourceFile) {
 }
 
 function normalBillboardScaleByDistance(sourceFile) {
-  const src = fs.readFileSync(path.join(ROOT, sourceFile), 'utf8');
+  const src = readSourceText(path.join(ROOT, sourceFile));
   const fn = src.match(/function _normalBillboardScaleByDistance\(\) \{([\s\S]*?)\n\}/);
   assert.ok(fn, `${sourceFile}: _normalBillboardScaleByDistance not found`);
   const scalar = fn[1].match(/NearFarScalar\((\d+), ([\d.]+), (\d+), ([\d.]+)\)/);
@@ -391,7 +392,7 @@ const LAYERS = [
     name: 'military',
     source: 'src/data/militaryFlights.js',
     asset: (() => {
-      const src = fs.readFileSync(path.join(ROOT, 'src/data/militaryFlights.js'), 'utf8');
+      const src = readSourceText(path.join(ROOT, 'src/data/militaryFlights.js'));
       const m = src.match(/\bconst JET_MODEL_URL = '([^']+)';/);
       assert.ok(m, 'militaryFlights.js: JET_MODEL_URL not found');
       return m[1];
@@ -491,7 +492,7 @@ for (const [klass, spec] of Object.entries(CLASS_MODEL_REAL)) {
 // PLANE_* constants — pin them to the measured meter-scale GLB + flights'
 // calibration so the copies cannot drift.
 test('military layer airplane.glb constants match the measured GLB and flights calibration', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'src/data/militaryFlights.js'), 'utf8');
+  const src = readSourceText(path.join(ROOT, 'src/data/militaryFlights.js'));
   const grab = (name) => {
     const m = src.match(new RegExp(`\\bconst ${name} = ([\\d.]+);`));
     assert.ok(m, `militaryFlights.js: ${name} not found`);

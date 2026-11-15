@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   CLIMB_MS, DECIDE_MS, MAX_FRAME_MS, MIN_SAMPLES, RUNGS, TOP_RUNG, WINDOW,
   applyRung, attachPerfGovernor, decide, median,
 } from './perfGovernor.js';
+import { readSourceText } from '../../../scripts/readSourceText.mjs';
 
-const governorSource = readFileSync(fileURLToPath(new URL('./perfGovernor.js', import.meta.url)), 'utf8');
-const bootSource = readFileSync(fileURLToPath(new URL('./boot.js', import.meta.url)), 'utf8');
+const governorSource = readSourceText(fileURLToPath(new URL('./perfGovernor.js', import.meta.url)));
+const bootSource = readSourceText(fileURLToPath(new URL('./boot.js', import.meta.url)));
 
 // Подделка часов и requestAnimationFrame: движок проверяется без браузера, но
 // ровно тем же кодом, который работает в игре.

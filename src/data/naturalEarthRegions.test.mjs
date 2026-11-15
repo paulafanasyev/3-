@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { statSync, readFileSync } from 'node:fs';
 import { findNaturalRegion, listRegions, lookupNaturalRegionOutline, pointInRing } from './naturalEarthRegions.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const PACK_DIR = new URL('./local_data/natural_earth/', import.meta.url);
 
@@ -78,7 +79,7 @@ test('returned polygons have >=8 vertices with valid lon/lat', async () => {
 
 test('whole pack: every feature ring has >=8 vertices and valid coords', () => {
   for (const file of ['regions.json', 'marine.json']) {
-    const pack = JSON.parse(readFileSync(new URL(file, PACK_DIR), 'utf8'));
+    const pack = JSON.parse(readSourceText(new URL(file, PACK_DIR)));
     assert.ok(pack.meta?.license?.toLowerCase().includes('public domain'), `${file} meta declares PD license`);
     assert.ok(pack.meta?.fetched, `${file} meta records fetch time`);
     assert.ok(pack.features.length > 200, `${file} has hundreds of features (got ${pack.features.length})`);

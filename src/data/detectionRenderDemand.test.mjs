@@ -45,6 +45,7 @@ import {
   renderEntryIsAnimating,
   scanlineOffsetPx,
 } from './detectionRenderDemand.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 // ---------------------------------------------------------------------------
 // 1. Policy — outstanding work, and that all of it terminates
@@ -267,7 +268,7 @@ test('paint and demand share one timestamp, so the terminal frame is painted', a
 // ---------------------------------------------------------------------------
 
 test('detection holds nothing, and asks for its own frames instead', async () => {
-  const source = await readFile(new URL('./detection.js', import.meta.url), 'utf8');
+  const source = await readSourceText(new URL('./detection.js', import.meta.url));
 
   assert.doesNotMatch(source, /holdContinuousRender/,
     'detection must never take a continuous-render hold — that is the regression');
@@ -348,7 +349,7 @@ test('a layer whose detectable set changed dirties the solve', async () => {
   // throttle. A poll tick that replaces contact A with contact B requests one
   // frame; without this, that frame could be spent on a paint which declined to
   // re-solve — leaving A labelled, B unlabelled, and nothing left to ask again.
-  const detection = await readFile(new URL('./detection.js', import.meta.url), 'utf8');
+  const detection = await readSourceText(new URL('./detection.js', import.meta.url));
   assert.match(detection, /export function markDetectionSourcesChanged\(/,
     'detection exposes the source-change hook');
   const hook = /export function markDetectionSourcesChanged\([\s\S]*?\n\}/.exec(detection)[0];
@@ -358,7 +359,7 @@ test('a layer whose detectable set changed dirties the solve', async () => {
   assert.match(hook, /if \(_mode === MODE_OFF\) return;/,
     'and it stays inert while detection is off');
 
-  const manager = await readFile(new URL('./manager.js', import.meta.url), 'utf8');
+  const manager = await readSourceText(new URL('./manager.js', import.meta.url));
   assert.match(manager, /import \{ markDetectionSourcesChanged \} from '\.\/detection\.js';/);
   // Both discrete events that can change the detectable set, next to the render
   // request each already made.
@@ -373,7 +374,7 @@ test('the render-governor gate covers the parked case, with teeth on the painter
   // cannot see whether the painter still runs — a disabled painter would score a
   // perfect idle. If either half of the runtime gate is dropped, this fails and
   // says so rather than leaving the policy pinned but unobserved.
-  const gate = await readFile(new URL('../../scripts/qa-perf.mjs', import.meta.url), 'utf8');
+  const gate = await readSourceText(new URL('../../scripts/qa-perf.mjs', import.meta.url));
   assert.match(gate, /detection ON takes NO continuous-render hold/);
   assert.match(gate, /idle parked scene with detection ON \(≤4 fires \/ 5s\)/);
   assert.match(gate, /detection ON costs no more idle frames than detection OFF/);
@@ -427,7 +428,7 @@ test('the render-governor gate covers the parked case, with teeth on the painter
 // promptness goes with them, silently. This test is where that shows up.
 test('aircraft brackets stay prompt because the aircraft layers hold the render loop', async () => {
   for (const file of ['./flights.js', './militaryFlights.js']) {
-    const source = await readFile(new URL(file, import.meta.url), 'utf8');
+    const source = await readSourceText(new URL(file, import.meta.url));
     const enable = /\n  enable\([\s\S]*?\n  \},/.exec(source)?.[0];
     assert.ok(enable, `${file}: enable() is still identifiable`);
     assert.match(

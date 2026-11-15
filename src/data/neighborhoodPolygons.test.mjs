@@ -3,8 +3,8 @@
 // its resolution contract through the source-agnostic loader.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { lookupNeighborhoodRing } from './neighborhoodPolygons.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const FILE = new URL('./local_data/neighborhoods/san-francisco.json', import.meta.url);
 
@@ -17,7 +17,7 @@ function eachRing(geometry, fn) {
 }
 
 test('SF neighborhoods file parses with the expected DataSF shape', () => {
-  const fc = JSON.parse(readFileSync(FILE, 'utf8'));
+  const fc = JSON.parse(readSourceText(FILE));
   assert.equal(fc.type, 'FeatureCollection');
   assert.equal(fc.city, 'San Francisco');
   // DataSF Analysis Neighborhoods is exactly 41 areas (dataset j2bu-swwd).

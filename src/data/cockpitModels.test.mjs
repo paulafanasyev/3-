@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 /**
  * Cockpit 3D aircraft policy.
@@ -25,7 +25,7 @@ function numericConstant(source, name) {
 }
 
 for (const layer of LAYERS) {
-  const source = readFileSync(layer.path, 'utf8');
+  const source = readSourceText(layer.path);
 
   test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
     const calls = [...source.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];

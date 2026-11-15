@@ -7,9 +7,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { SHAME, errorText } from '../i18n/ru.js';
 import { ANTHEM_SRC, EMBLEM_SRC, SHAME_EVENT } from './shame.js';
+import { readSourceText } from '../../../scripts/readSourceText.mjs';
 import stateAssets from '../data/state-assets.json' with { type: 'json' };
 
-const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
+const read = (relative) => readSourceText(new URL(relative, import.meta.url));
 const shameSource = read('./shame.js');
 const rangeSource = read('./nuclear-range.js');
 const hudCss = read('./hud.css');
@@ -20,8 +21,8 @@ const byPath = new Map(stateAssets.assets.map((asset) => [asset.path, asset]));
 // на диске» расходился ровно на число строк герба (265254 против 263630). Мера
 // снимается с нормализованного содержимого — тех же байтов, что в git-блобе.
 const measuredContent = (relative, eol) => {
-  const raw = readFileSync(new URL(`../../../${relative}`, import.meta.url));
-  const content = eol === 'lf' ? Buffer.from(raw.toString('utf8').replace(/\r\n/g, '\n'), 'utf8') : raw;
+  const target = new URL(`../../../${relative}`, import.meta.url);
+  const content = eol === 'lf' ? Buffer.from(readSourceText(target), 'utf8') : readFileSync(target);
   // Хеш поверх размера: подмена картинки не должна проходить как «совпало только число байтов».
   return { bytes: content.length, sha256: createHash('sha256').update(content).digest('hex') };
 };
@@ -47,7 +48,7 @@ test('emblem and anthem are public domain and byte-for-byte what the provenance 
     );
     assert.equal(src, `/${relative.replace(/^public\//, '')}`, `${relative}: путь в shame.js не совпадает с провенансом`);
   }
-  const svg = readFileSync(new URL(`../../../public${EMBLEM_SRC}`, import.meta.url), 'utf8');
+  const svg = readSourceText(new URL(`../../../public${EMBLEM_SRC}`, import.meta.url));
   // Вектор, а не HTML-страница ошибки: герб обязан пережить офлайн-запуск.
   assert.match(svg, /<svg[\s>]/);
   assert.ok(!/<html/i.test(svg), 'emblem file is an HTML page, not a vector');

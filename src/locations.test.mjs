@@ -5,7 +5,6 @@
 // Run with: npm test   (node --test)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import * as Cesium from 'cesium';
 import {
   CANCELLED_SEARCH,
@@ -20,6 +19,7 @@ import {
   GLOBE_VIEW,
   searchAndFlyTo,
 } from './locations.js';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
 function stubViewer() {
   const flights = [];
@@ -520,7 +520,7 @@ test('a globe flight without callbacks still flies (both hooks are optional)', (
 });
 
 test('geocoded Location branches forward the resolved-navigation ownership hook', () => {
-  const source = fs.readFileSync(new URL('./locations.js', import.meta.url), 'utf8');
+  const source = readSourceText(new URL('./locations.js', import.meta.url));
   const searchStart = source.indexOf('export async function searchAndFlyTo');
   const searchEnd = source.indexOf('function placesViewportToBounds', searchStart);
   const search = source.slice(searchStart, searchEnd);

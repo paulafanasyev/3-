@@ -12,11 +12,10 @@ import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
-const LAYER_SOURCE = fs.readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
-  'utf8',
-);
+const LAYER_SOURCE = readSourceText(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'));
 
 function makeFire(overrides = {}) {
   return {

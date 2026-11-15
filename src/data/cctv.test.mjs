@@ -66,11 +66,10 @@ import {
   CCTV_FOCUS_REQUEST_EVENT,
   activateCctvCameraFromWorldClick,
 } from '../cctvFocusRequest.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
-const UI_SOURCE = fs.readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui.js'),
-  'utf8',
-);
+const UI_SOURCE = readSourceText(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ui.js'));
 
 const ASPECT = 16 / 9;
 const toRad = (deg) => (deg * Math.PI) / 180;

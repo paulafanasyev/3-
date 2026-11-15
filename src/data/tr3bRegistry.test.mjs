@@ -32,6 +32,7 @@ import militaryFlightsLayer, {
 import { findCompatibleHistoryIndex } from './militaryAwareness.js';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { ANALYST_LAYERS, createAnalystEngine } from './analystEngine.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 /** Strip block and line comments so source pins scan CODE, not prose. */
 function stripComments(source) {
@@ -227,7 +228,7 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
 
 test('both flight layers keep a converted contact 2D and visible (render invariants)', async () => {
   for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
+    const source = await readSourceText(new URL(`./${name}`, import.meta.url));
 
     // 1. The 3D model handoff is SUPPRESSED for a converted contact — there is
     //    no TR-3B GLB, so the triangle billboard stays the visual.
@@ -271,13 +272,13 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
   // should still show the triangle. Only a page reload resets it — so no
   // production code may clear the registry.
   for (const name of ['flights.js', 'militaryFlights.js', '../ui.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
+    const source = await readSourceText(new URL(`./${name}`, import.meta.url));
     assert.doesNotMatch(source, /clearTr3bRegistry/,
       `${name}: teardown must not clear session conversions`);
   }
   // And nothing persists it across reloads.
   const registry = stripComments(
-    await readFile(new URL('./tr3bRegistry.js', import.meta.url), 'utf8'),
+    await readSourceText(new URL('./tr3bRegistry.js', import.meta.url)),
   );
   assert.doesNotMatch(registry, /localStorage|sessionStorage/,
     'the Easter egg is session-only — never persisted');
@@ -406,7 +407,7 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
   // in the fleet tick (no seam to drive headlessly), so this asserts the guard's
   // POSITION rather than replaying the four-pass selection.
   for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
+    const source = await readSourceText(new URL(`./${name}`, import.meta.url));
     // Anchor on the MODEL-eligibility loop (keepDistSq), not the unrelated
     // ambient-enrichment candidate loop that also builds a `cand`.
     const loop = /const cand = \[\];\s*\n\s*for \(const \[icao, bb\] of _billboards\)[\s\S]*?cand\.push\(/.exec(source)?.[0];

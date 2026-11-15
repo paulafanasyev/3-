@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadMap, loadStopList, cellsWithin } from './map.js';
 import { haversineKm } from './geo.js';
 import { isWater } from './data/terrain.js';
 import { isNorthAmerica } from './data/regions.js';
 import { createRealNameGuard, normalizeName } from './names.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const map = loadMap();
 
@@ -66,7 +66,7 @@ test('ни одно название не совпадает с реальной
 });
 
 test('сборщик карты и генератор мира не читают реальные границы государств и списки городов', () => {
-  const source = ['../../scripts/build-game-map.mjs', './worldgen.js'].map((p) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8')).join('\n');
+  const source = ['../../scripts/build-game-map.mjs', './worldgen.js'].map((p) => readSourceText(fileURLToPath(new URL(p, import.meta.url)))).join('\n');
   for (const forbidden of ['admin_0', 'admin-0', 'populated_places', 'countries']) {
     assert.ok(!source.includes(forbidden), `в сборщике упоминается ${forbidden}`);
   }

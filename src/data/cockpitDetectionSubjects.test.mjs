@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import flightsLayer, {
   _setCockpitDetectionSubjectForTest as setFlightsCockpitSubject,
@@ -10,13 +9,14 @@ import militaryFlightsLayer, {
   _setCockpitDetectionSubjectForTest as setMilitaryCockpitSubject,
   _setTrackedMilitaryRefreshStateForTest,
 } from './militaryFlights.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const SUBJECT = 'abc123';
 const NEXT_SUBJECT = 'def456';
 
-const UI_SOURCE = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
-const FLIGHTS_SOURCE = readFileSync(new URL('./flights.js', import.meta.url), 'utf8');
-const MILITARY_SOURCE = readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8');
+const UI_SOURCE = readSourceText(new URL('../ui.js', import.meta.url));
+const FLIGHTS_SOURCE = readSourceText(new URL('./flights.js', import.meta.url));
+const MILITARY_SOURCE = readSourceText(new URL('./militaryFlights.js', import.meta.url));
 
 const LAYERS = [
   {

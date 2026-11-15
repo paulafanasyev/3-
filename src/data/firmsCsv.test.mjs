@@ -1,7 +1,6 @@
 // src/data/firmsCsv.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -10,11 +9,11 @@ import {
   isLikelyCsv,
   parseFirmsCsv,
 } from './firmsCsv.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE = fs.readFileSync(
+const FIXTURE = readSourceText(
   path.join(__dirname, 'fixtures', 'firms-viirs-noaa20-sample.csv'),
-  'utf8'
 );
 
 const HEADER = 'latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight';

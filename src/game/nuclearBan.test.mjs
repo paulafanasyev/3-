@@ -4,7 +4,6 @@
 // под запрет не попадать.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import territory from './data/russia-territory.json' with { type: 'json' };
 import russianCities from './data/russia-cities.json' with { type: 'json' };
@@ -15,6 +14,7 @@ import { createGame, addUnit, addCity } from './state.js';
 import { applyCommand } from './commands.js';
 import { isWater } from './data/terrain.js';
 import { errorText } from './i18n/ru.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const DEGREE_KM = 111.32;
 const kmBetween = (latA, lonA, latB, lonB) => Math.hypot(
@@ -136,6 +136,6 @@ test('отказ произносится вслух и остаётся пра�
   assert.match(text, /Росси/);
   assert.ok(text.length > 10 && text.length < 160, `подпись слишком длинная: ${text.length}`);
   for (const slur of ['хохл', 'ibaniy', 'пидор', 'жид']) assert.ok(!text.toLocaleLowerCase().includes(slur), 'в отказе нет оскорблений по национальности');
-  const source = readFileSync(fileURLToPath(new URL('./client/nuclear-range.js', import.meta.url)), 'utf8');
+  const source = readSourceText(fileURLToPath(new URL('./client/nuclear-range.js', import.meta.url)));
   for (const needle of ['nuclearBanFor', 'NUKE_BAN_ERROR']) assert.ok(source.includes(needle), `полигон не читает ${needle}`);
 });

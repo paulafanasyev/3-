@@ -38,11 +38,10 @@ import {
   getAwarenessNavigationTargets,
 } from './militaryAwarenessEngine.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
-const militaryAwarenessSource = fs.readFileSync(
-  new URL('./militaryAwareness.js', import.meta.url),
-  'utf8',
-);
+const militaryAwarenessSource = readSourceText(
+  new URL('./militaryAwareness.js', import.meta.url));
 
 const AWARENESS_DEPENDENCIES = [
   'flights',
@@ -1259,11 +1258,11 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
   // disable() hides the collection but keeps the records, so a map lookup
   // alone would report a preserved subject as FRESH from hidden stale data.
   for (const [name, source, guard] of [
-    ['flights', fs.readFileSync(new URL('./flights.js', import.meta.url), 'utf8'),
+    ['flights', readSourceText(new URL('./flights.js', import.meta.url)),
       /hasContact\(icao24\) \{\s*\n\s*if \(!_billboardCollection \|\| !_billboardCollection\.show \|\| _billboards\.size === 0\) return null;/],
-    ['militaryFlights', fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8'),
+    ['militaryFlights', readSourceText(new URL('./militaryFlights.js', import.meta.url)),
       /hasContact\(icao24\) \{\s*\n\s*if \(!_billboardCollection \|\| !_billboardCollection\.show \|\| _billboards\.size === 0\) return null;/],
-    ['aisLiveVessels', fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8'),
+    ['aisLiveVessels', readSourceText(new URL('./aisLiveVessels.js', import.meta.url)),
       /hasContact\(mmsi\) \{\s*\n\s*if \(!state\.enabled \|\| !state\.vesselMap \|\| state\.vesselMap\.size === 0\) return null;/],
   ]) {
     assert.match(source, guard, `${name}.hasContact must decline while the layer is disabled`);
@@ -1434,9 +1433,9 @@ test('a deliberate source clear still fully clears the subject', () => {
 test('production eviction sites actually tag their clears', () => {
   // The event contract above is worthless if the real cull paths never set the
   // origin, so pin the three production call sites.
-  const flightsSource = fs.readFileSync(new URL('./flights.js', import.meta.url), 'utf8');
-  const militarySource = fs.readFileSync(new URL('./militaryFlights.js', import.meta.url), 'utf8');
-  const vesselsSource = fs.readFileSync(new URL('./aisLiveVessels.js', import.meta.url), 'utf8');
+  const flightsSource = readSourceText(new URL('./flights.js', import.meta.url));
+  const militarySource = readSourceText(new URL('./militaryFlights.js', import.meta.url));
+  const vesselsSource = readSourceText(new URL('./aisLiveVessels.js', import.meta.url));
 
   for (const [name, source] of [['flights', flightsSource], ['militaryFlights', militarySource]]) {
     assert.match(
@@ -1460,7 +1459,7 @@ test('production eviction sites actually tag their clears', () => {
   // The tag alone is not enough — see the behavioral test in
   // firmsInteraction.test.mjs. The clear must also run BEFORE renderCurrentLod,
   // whose registration sweep deletes the record the clear needs to see.
-  const firmsSource = fs.readFileSync(new URL('./firmsHeatmap.js', import.meta.url), 'utf8');
+  const firmsSource = readSourceText(new URL('./firmsHeatmap.js', import.meta.url));
   const evictedClear = firmsSource.indexOf('clearSelectedEntityContextForLayer(id, { evicted: true });');
   const lodRebuild = firmsSource.indexOf('renderCurrentLod(true);\n      if (reselected) selectFire(reselected);');
   assert.ok(evictedClear > 0, 'FIRMS must mark a refresh-vanished selection as an eviction');

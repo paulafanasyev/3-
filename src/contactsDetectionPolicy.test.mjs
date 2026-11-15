@@ -9,7 +9,6 @@
 // assertions here and driven for real in scripts/qa-cockpit-utility.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {
   applyContactsDetection,
   contactsDetectionEnterPlan,
@@ -25,8 +24,9 @@ import {
   setMode as setDetectionModeByLabel,
 } from './data/detection.js';
 import { canonicalizeDensity } from './data/detectionPolicy.js';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
-const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+const uiSource = readSourceText(new URL('./ui.js', import.meta.url));
 
 /**
  * The tactical preset ui.js hands Contacts. Read out of the source so this test

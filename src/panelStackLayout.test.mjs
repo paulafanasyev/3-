@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   allocatePanelStackHeights,
@@ -7,6 +6,7 @@ import {
   resolveLeftStackBottomBoundary,
   resolvePanelStackCorridor,
 } from './panelStackLayout.js';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
 // Measured in Cockpit at 1512x790: CONTACT card at y541, HUD corner at y659,
 // Cesium credits at y758, viewport inset boundary at y758.4. Every surface is
@@ -132,8 +132,8 @@ test('minimum panel corridor expands upward without crossing the lower obstacle 
 });
 
 test('desktop panel lanes use per-panel allocations and presentation-only auto-collapse', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const ui = readSourceText(new URL('./ui.js', import.meta.url));
+  const css = readSourceText(new URL('../style.css', import.meta.url));
   assert.doesNotMatch(ui, /_enforce(?:Left|Right)PanelAccordion/);
   assert.match(ui, /classList\.add\('collapsed', 'layout-auto-collapsed'\)/);
   assert.match(ui, /classList\.remove\('collapsed', 'layout-auto-collapsed'\)/);
@@ -186,8 +186,8 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
 });
 
 test('share-panel state excludes responsive collapse and preserves recipient preferences', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const sharelink = readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8');
+  const ui = readSourceText(new URL('./ui.js', import.meta.url));
+  const sharelink = readSourceText(new URL('./sharelink.js', import.meta.url));
 
   assert.match(
     ui,
@@ -209,8 +209,8 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
 });
 
 test('parameterized Display presets keep one stable scroll owner', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const ui = readSourceText(new URL('./ui.js', import.meta.url));
+  const css = readSourceText(new URL('../style.css', import.meta.url));
 
   assert.match(css, /#pp-toggles:not\(\.collapsed\) > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
   assert.match(ui, /const displayScrollTop = this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?this\._ppToggles\?\.scrollTop \|\| 0/);
@@ -231,7 +231,7 @@ test('parameterized Display presets keep one stable scroll owner', () => {
 });
 
 test('expanded Display uses its container shell instead of a nested header card', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSourceText(new URL('../style.css', import.meta.url));
 
   assert.match(
     css,
@@ -245,7 +245,7 @@ test('expanded Display uses its container shell instead of a nested header card'
 });
 
 test('expanded left panels integrate their headers with the container shell', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = readSourceText(new URL('../style.css', import.meta.url));
 
   assert.match(
     css,
@@ -258,8 +258,8 @@ test('expanded left panels integrate their headers with the container shell', ()
 });
 
 test('Map Source uses four compact tiles in the bottom Visual Presets tray', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const html = readSourceText(new URL('../index.html', import.meta.url));
+  const css = readSourceText(new URL('../style.css', import.meta.url));
 
   assert.doesNotMatch(html, /id="stack-panel"/);
   assert.match(html, /id="control-panel"[\s\S]*?class="map-source-section"[\s\S]*?id="map-stack-chips"/);
@@ -271,8 +271,8 @@ test('Map Source uses four compact tiles in the bottom Visual Presets tray', () 
 });
 
 test('expanded right panels highlight the title divider without changing collapsed launchers', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const html = readSourceText(new URL('../index.html', import.meta.url));
+  const css = readSourceText(new URL('../style.css', import.meta.url));
 
   assert.match(
     html,

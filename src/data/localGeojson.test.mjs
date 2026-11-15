@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import {
   GROUND_SAMPLE_MAX_ARMED_RETRIES,
@@ -19,6 +18,7 @@ import {
   getRenderGovernorDiagnostics,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 class MockLayerEvent {
   constructor() {
@@ -446,7 +446,7 @@ test('a real enabled local layer has no native label graphics at runtime', async
 });
 
 test('local infrastructure creates no native labels or per-frame geometry callbacks', () => {
-  const source = readFileSync(new URL('./localGeojson.js', import.meta.url), 'utf8');
+  const source = readSourceText(new URL('./localGeojson.js', import.meta.url));
   assert.doesNotMatch(source, /new Cesium\.LabelGraphics/);
   assert.doesNotMatch(source, /new Cesium\.CallbackProperty/);
   assert.match(source, /feature\.position = tip/);

@@ -8,6 +8,7 @@ import {
   vesselOverlayCohortLimit,
   vesselTypeCss,
 } from './vesselLabels.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 test('normalizeVesselType maps numeric AIS codes to type families', () => {
   assert.equal(normalizeVesselType('30'), 'FISHING');
@@ -81,7 +82,7 @@ test('vessel host policy uses always-on shared fade and protected selected lane'
 });
 
 test('vesselLabels cannot resurrect a dedicated renderer', async () => {
-  const source = await readFile(new URL('./vesselLabels.js', import.meta.url), 'utf8');
+  const source = await readSourceText(new URL('./vesselLabels.js', import.meta.url));
   for (const forbidden of [
     'document.createElement',
     "createElement('canvas')",

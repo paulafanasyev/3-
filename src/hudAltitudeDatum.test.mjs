@@ -18,9 +18,9 @@
 // import → install DOM, in that order.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { ensureGeoidReady } from './data/geoid.js';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -42,7 +42,7 @@ registerHooks({
 
 const { IntelHUD } = await import('./hud.js');
 
-const source = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
+const source = readSourceText(new URL('./hud.js', import.meta.url));
 // Boolean probes, not assert.match on the whole file — a failure here should
 // name the missing wiring, not print all of hud.js.
 const has = (pattern) => pattern.test(source);

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   shouldExpandGlobalContextPanel,
   shouldHideCollapsedRightPanels,
 } from './rightRailPolicy.js';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
 test('Tactical HUD hides collapsed right-rail siblings while one panel is expanded', () => {
   assert.equal(shouldHideCollapsedRightPanels({
@@ -32,8 +32,8 @@ test('other HUD layouts keep collapsed right-rail launchers visible', () => {
 });
 
 test('desktop Display participates in Tactical exclusivity without changing mobile Display behavior', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const ui = readSourceText(new URL('./ui.js', import.meta.url));
+  const css = readSourceText(new URL('../style.css', import.meta.url));
   assert.match(ui, /const isMobile = window\.matchMedia\('\(max-width: 720px\)'\)\.matches/);
   assert.match(
     ui,

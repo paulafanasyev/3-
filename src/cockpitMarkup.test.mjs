@@ -3,16 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readSourceText } from '../scripts/readSourceText.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
-const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
-const sceneDirector = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
-const manager = fs.readFileSync(path.join(ROOT, 'src', 'data', 'manager.js'), 'utf8');
-const contextLayer = fs.readFileSync(path.join(ROOT, 'src', 'data', 'militaryAwareness.js'), 'utf8');
-const voiceActions = fs.readFileSync(path.join(ROOT, 'src', 'voice', 'gevActions.js'), 'utf8');
+const html = readSourceText(path.join(ROOT, 'index.html'));
+const ui = readSourceText(path.join(ROOT, 'src', 'ui.js'));
+const css = readSourceText(path.join(ROOT, 'style.css'));
+const sceneDirector = readSourceText(path.join(ROOT, 'src', 'scenes', 'director.js'));
+const manager = readSourceText(path.join(ROOT, 'src', 'data', 'manager.js'));
+const contextLayer = readSourceText(path.join(ROOT, 'src', 'data', 'militaryAwareness.js'));
+const voiceActions = readSourceText(path.join(ROOT, 'src', 'voice', 'gevActions.js'));
 
 test('Cockpit has one reset action beside its bottom exit path', () => {
   assert.doesNotMatch(html, /id="cockpit-quick-entry"/);

@@ -710,9 +710,10 @@ test('zoom-out aborts an active installation request and returns non-loading gui
 // tests use where a full boot is impractical.
 import { installationRetryDelayMs } from './militaryInstallations.js';
 import fs from 'node:fs';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
-const installationsSource = fs.readFileSync(
-  new URL('./militaryInstallations.js', import.meta.url), 'utf8');
+const installationsSource = readSourceText(
+  new URL('./militaryInstallations.js', import.meta.url));
 
 test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean', () => {
   assert.equal(installationRetryDelayMs(0), 30000, 'first failure retries in 30s');

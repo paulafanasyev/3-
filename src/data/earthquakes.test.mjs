@@ -3,7 +3,6 @@
 // Pure function — no viewer/DOM needed; imported directly.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import {
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
@@ -19,6 +18,7 @@ import {
   installRenderGovernor,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+import { readSourceText } from '../../scripts/readSourceText.mjs';
 
 const FULL_RAW = {
   id: 'us7000abcd',
@@ -294,7 +294,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
 });
 
 test('the earthquakes layer installs no per-frame callback and no continuous-render hold', () => {
-  const source = readFileSync(new URL('./earthquakes.js', import.meta.url), 'utf8');
+  const source = readSourceText(new URL('./earthquakes.js', import.meta.url));
   assert.doesNotMatch(
     source,
     /new Cesium\.CallbackProperty/,
