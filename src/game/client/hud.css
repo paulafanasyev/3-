@@ -1,11 +1,18 @@
 /* Интерфейс «Купола» поверх Cesium. Стеклянные панели, тёмная тема, шрифты из системы. */
 body.kupol { margin: 0; overflow: hidden; background: #000; }
-body.kupol > *:not(#kupol-globe):not(#kupol-root):not(.kb-root):not(.k-shame):not(#cesium-credits):not(script):not(style):not(link) { display: none !important; }
+/* Пищалка запрета — прямой ребёнок body (она обязана пережить z-index экрана
+   позора), поэтому она в белом списке, иначе это правило съело бы её целиком:
+   замер 15.11 дал getBoundingClientRect 0x0 при display:none. */
+body.kupol > *:not(#kupol-globe):not(#kupol-root):not(.kb-root):not(.k-shame):not(.k-nrange-toast):not(#cesium-credits):not(script):not(style):not(link) { display: none !important; }
 #kupol-globe { position: fixed; inset: 0; }
 #kupol-root { --glass: rgba(8, 14, 24, .66); --line: rgba(160, 200, 255, .16); --txt: #e8eef6; --dim: #93a4b8; --gold: #f0c46a;
   position: fixed; inset: 0; pointer-events: none; color: var(--txt); font-family: "Noto Sans", "Segoe UI", system-ui, sans-serif; font-size: 14px; z-index: 10; }
 #kupol-root * { box-sizing: border-box; }
 #kupol-root .glass { pointer-events: auto; background: var(--glass); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+/* Низкие ступени адаптива снимают размытие: композитный blur поверх каждого
+   кадра стоит дорого на слабой карте, а панель остаётся читаемой на своей
+   подложке. Класс ставит perfGovernor, специфичность выше базового правила. */
+#kupol-root.k-perf-flat .glass, #kupol-root.k-perf-flat .k-zoom button { backdrop-filter: none; }
 .k-top { position: absolute; left: 16px; right: 16px; top: 12px; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 16px; }
 .k-logo { font-weight: 700; letter-spacing: .42em; font-size: 20px; color: var(--gold); }
 .k-sep { width: 1px; height: 28px; background: var(--line); }

@@ -51,7 +51,6 @@ const CITY_ALIASES = Object.freeze({
   Paris: ['париж', 'paris'], Berlin: ['берлин', 'berlin'],
 });
 const CITIES = populatedPlaces.places;
-const BAN_NOTE = errorText(NUKE_BAN_ERROR);
 const SOURCE_PROFILES = sourceBombProfiles.bombs;
 const formatYield = (kt) => kt >= 1000 ? `${(kt / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} Мт` : `${kt.toLocaleString('ru-RU')} кт`;
 const formatDistance = (km) => km >= 1 ? `${km.toLocaleString('ru-RU', { maximumFractionDigits: km < 10 ? 1 : 0 })} км` : `${Math.round(km * 1000)} м`;
@@ -66,7 +65,7 @@ const formatDamage = (d) => {
   return `Разрушения по реальным зонам поражения: ${parts.join(', ')}.`;
 };
 
-export function createNuclearRange({ root, viewer, layers }) {
+export function createNuclearRange({ root, viewer, layers, onOpen = () => {} }) {
   const style = document.createElement('style');
   style.textContent = `
     .k-nrange-trigger{position:absolute;right:62px;top:80px;z-index:25;pointer-events:auto;padding:9px 13px;border:1px solid rgba(255,190,75,.5);border-radius:10px;background:rgba(22,19,16,.9);color:#ffd58a;font:700 12px "Noto Sans",sans-serif;cursor:pointer;box-shadow:0 5px 18px rgba(0,0,0,.28)}
@@ -79,6 +78,8 @@ export function createNuclearRange({ root, viewer, layers }) {
     .k-nrange-panel .k-nrange-close{position:absolute;right:10px;top:9px;padding:3px 8px;border:0;background:transparent;color:#b7c2d2;font-size:20px}
     .k-nrange-status{min-height:34px;margin-top:10px;padding:8px;border-radius:8px;background:rgba(255,255,255,.05);color:#bdc9da;font-size:11px}
     .k-nrange-muted{font-size:10px;color:#8998ad;margin-top:5px}
+    .k-nrange-toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:130;max-width:min(720px,calc(100vw - 48px));padding:15px 22px;border:1px solid rgba(255,96,84,.62);border-radius:14px;background:rgba(30,7,7,.96);color:#ffd8d2;font:700 17px/1.4 "Noto Sans",sans-serif;text-align:center;box-shadow:0 18px 54px rgba(0,0,0,.55);pointer-events:none}
+    .k-nrange-toast[hidden]{display:none}
     @media(max-width:900px){.k-nrange-trigger{right:60px;top:118px}.k-nrange-panel{top:158px}}
   `;
   root.appendChild(style);
@@ -101,7 +102,6 @@ export function createNuclearRange({ root, viewer, layers }) {
     <input id="k-nrange-city-query" type="search" placeholder="Например: Москва, Tokyo, Hanoi" autocomplete="off">
     <select id="k-nrange-city-results" size="5" aria-label="Результаты поиска города"></select>
     <div class="k-nrange-muted">В каталоге ${CITIES.length.toLocaleString('ru-RU')} городов и населённых пунктов. Поиск работает локально.</div>
-    <div class="k-nrange-muted">⛔ ${BAN_NOTE} Запрет держит маска территории, он же действует и в партии. Попытка обхода поднимает экран позора: герб, гимн и замок полигона до перезапуска страницы.</div>
     <label for="k-nrange-bomb">Модель испытания</label>
     <select id="k-nrange-bomb">${BOMBS.map((bomb) => `<option value="${bomb.id}">${bomb.name} · ${formatYield(bomb.yieldKt)} · ${bomb.year}</option>`).join('')}</select>
     <div class="k-nrange-status" data-bomb-info aria-live="polite"></div>
@@ -124,6 +124,20 @@ export function createNuclearRange({ root, viewer, layers }) {
   `;
   root.appendChild(panel);
 
+  // Пищалка правила. Вне панели она держится специально: панель скроллится и
+  // живёт справа, а запрет игрок должен увидеть по центру экрана ровно в тот
+  // момент, когда нажал курок над запрещённой территорией. В body, а не в
+  // #kupol-root: отказ поднимает экран позора (z-index 120), а весь HUD-слой
+  // стоит z-index 10 и красится под ним — в панели строка правила была бы
+  // закрыта гербом. Поэтому её класс добавлен и в белый список `body.kupol`
+  // в hud.css: без него прямой ребёнок body получает display:none, и замер
+  // 15.11 дал прямоугольник 0x0.
+  const toast = document.createElement('div');
+  toast.className = 'k-nrange-toast';
+  toast.setAttribute('role', 'alert');
+  toast.hidden = true;
+  document.body.appendChild(toast);
+
   const status = panel.querySelector('[data-status]');
   const bombInfo = panel.querySelector('[data-bomb-info]');
   const bombSelect = panel.querySelector('#k-nrange-bomb');
@@ -140,9 +154,16 @@ export function createNuclearRange({ root, viewer, layers }) {
   let matches = [];
 
   // Отказ полигона поднимает экран позора; бан держит именно он, поэтому здесь
-  // только формулировка строки состояния + вызов triggerShame. Порядок важен:
+  // только текст пищалки, строка состояния и вызов triggerShame. Порядок важен:
   // замок пишет свою строку, а текст отказа должен остаться вид поверх неё.
+  let toastTimer = 0;
   const refuse = (text, bannedTarget) => {
+    toast.textContent = text;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    // пищалка уходит сама: своё она сказала, а постоянная строка правила в
+    // панели больше не висит
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 9000);
     triggerShame({ target: bannedTarget });
     status.textContent = text;
   };
@@ -240,11 +261,9 @@ export function createNuclearRange({ root, viewer, layers }) {
     for (const [index, city] of matches.entries()) {
       const option = document.createElement('option');
       option.value = String(index);
-      // Правило видно уже в списке: строка запрещённого города не выбирается,
-      // а не отказывает постфактум.
-      const banned = Boolean(nuclearBanFor({ lon: city[2], lat: city[1] }, city));
-      option.disabled = banned;
-      option.textContent = `${banned ? '⛔ ' : ''}${city[0]} · ${city[1].toFixed(3)}, ${city[2].toFixed(3)}`;
+      // Правило в списке молчит: наводка свободна на любой город каталога, а
+      // встречает игрока запрет только на кнопке запуска испытания.
+      option.textContent = `${city[0]} · ${city[1].toFixed(3)}, ${city[2].toFixed(3)}`;
       cityResults.appendChild(option);
     }
   };
@@ -252,12 +271,6 @@ export function createNuclearRange({ root, viewer, layers }) {
   cityResults.addEventListener('change', () => {
     const city = matches[Number(cityResults.value)];
     if (!city) return;
-    if (nuclearBanFor({ lon: city[2], lat: city[1] }, city)) {
-      target = null;
-      targetName = '';
-      refuse(`${errorText(NUKE_BAN_ERROR)} Цель ${city[0]} снята с наводки.`, city[0]);
-      return;
-    }
     target = { lon: city[2], lat: city[1] };
     targetName = city[0];
     status.textContent = `Выбран город: ${city[0]} · ${city[1].toFixed(3)}°, ${city[2].toFixed(3)}°`;
@@ -272,7 +285,11 @@ export function createNuclearRange({ root, viewer, layers }) {
     panel.hidden = !open;
     root.classList.toggle('k-cinema', open);
     trigger.setAttribute('aria-expanded', String(open));
+    // Открытие витрины сообщается наверх: пока полигон виден, качество картинки
+    // не понижается (perfGovernor иначе занижает именно показ).
+    onOpen(open);
     if (open) return;
+    toast.hidden = true;
     selecting = false;
     pickButton.textContent = 'Указать точку на карте';
   };
@@ -298,13 +315,8 @@ export function createNuclearRange({ root, viewer, layers }) {
       status.textContent = 'Не удалось определить поверхность. Приблизьте глобус и выберите точку ещё раз.';
       return;
     }
-    if (nuclearBanFor(point)) {
-      // Точку не запоминаем: отказ по маске территории — не повод терять весь кадр.
-      target = null;
-      targetName = '';
-      refuse(`${errorText(NUKE_BAN_ERROR)} Точка ${point.lat.toFixed(3)}°, ${point.lon.toFixed(3)}° — запрещённая территория.`, `${point.lat.toFixed(3)}°, ${point.lon.toFixed(3)}°`);
-      return;
-    }
+    // Маска территории стреляет не здесь: точка берётся любая, иначе запрет
+    // выглядел бы как сломанная наводка, а не как отказ по кнопке запуска.
     target = point;
     targetName = 'Пользовательская точка';
     selecting = false;
@@ -335,7 +347,9 @@ export function createNuclearRange({ root, viewer, layers }) {
       const bannedName = targetName || `${target.lat.toFixed(3)}°, ${target.lon.toFixed(3)}°`;
       target = null;
       targetName = '';
-      refuse(errorText(NUKE_BAN_ERROR), bannedName);
+      // Единственное место, где правило показывает себя словами: до этого на
+      // экране нет ни строки о запрете, ни перечёркнутых городов.
+      refuse(`${errorText(NUKE_BAN_ERROR)} Полигон заперт до перезапуска страницы.`, bannedName);
       return;
     }
     // Кадр ставим ДО запуска: испытание стартует мгновенно, и камера, которая
@@ -353,8 +367,9 @@ export function createNuclearRange({ root, viewer, layers }) {
         damage: damageToggle.checked,
       });
       // Слои сами отказали по маске (например, цель успела смениться под курсором) —
-      // позор должен быть и здесь, иначе остались бы только слова без наказания.
-      if (!result?.ok && result?.error === NUKE_BAN_ERROR) triggerShame({ target: targetName || 'точка на карте' });
+      // пищалка и позор должны быть и здесь, иначе остались бы только слова без
+      // наказания.
+      if (!result?.ok && result?.error === NUKE_BAN_ERROR) refuse(errorText(NUKE_BAN_ERROR), targetName || 'точка на карте');
       status.textContent = result?.ok
         ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. ${formatDamage(result.damage)} Снесено застройки: ${Math.round(result.damage.levelledAreaKm2).toLocaleString('ru-RU')} км² (строений в сцене: ${result.damage.buildingCount}).` : '. Без разрушений.'}`
         : errorText(NUKE_BAN_ERROR);
@@ -375,9 +390,11 @@ export function createNuclearRange({ root, viewer, layers }) {
     destroy() {
       window.removeEventListener(SHAME_EVENT, onShame);
       handler.destroy();
+      clearTimeout(toastTimer);
       root.classList.remove('k-cinema');
       trigger.remove();
       panel.remove();
+      toast.remove();
       style.remove();
     },
   };

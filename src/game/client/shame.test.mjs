@@ -12,6 +12,7 @@ import stateAssets from '../data/state-assets.json' with { type: 'json' };
 const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 const shameSource = read('./shame.js');
 const rangeSource = read('./nuclear-range.js');
+const hudCss = read('./hud.css');
 const bootSource = read('./boot.js');
 const byPath = new Map(stateAssets.assets.map((asset) => [asset.path, asset]));
 
@@ -95,14 +96,40 @@ test('the anthem toggle tracks intent, not the paused flag', () => {
 
 test('the test range raises shame on every refusal and locks itself', () => {
   assert.match(rangeSource, /import \{ SHAME_EVENT, isShamed, triggerShame \} from '\.\/shame\.js'/);
-  // Четыре независимых пути отказа (список городов, точка на глобусе, кнопка
-  // пуска, слои) — каждый обязан дойти до позора, а не ограничиться строкой.
-  assert.equal([...rangeSource.matchAll(/refuse\(/g)].length, 3, 'every refusal site must raise shame');
-  assert.match(rangeSource, /triggerShame\(\{ target: targetName \|\| 'точка на карте' \}\)/, 'layers refusal must shame');
+  // Отказа теперь два пути: кнопка пуска и слои, отказавшие по маске. Наводка
+  // (список городов, точка на глобусе) правила не знает — она свободна.
+  assert.equal([...rangeSource.matchAll(/refuse\(/g)].length, 2, 'every refusal site must raise shame');
+  assert.match(rangeSource, /refuse\(errorText\(NUKE_BAN_ERROR\), targetName \|\| 'точка на карте'\)/, 'layers refusal must shame');
   assert.match(rangeSource, /window\.addEventListener\(SHAME_EVENT, onShame\)/);
   assert.match(rangeSource, /window\.removeEventListener\(SHAME_EVENT, onShame\)/);
   assert.match(rangeSource, /testButton\.disabled = isShamed\(\)/, 'a finished run must not re-arm the button');
   assert.match(rangeSource, /if \(isShamed\(\)\)/, 'the run button needs its own guard');
+});
+
+test('the ban is silent until the fire button, then speaks through the toast', () => {
+  // правило больше не висит в панели строкой и не перечёркивает города: до
+  // нажатия «Запустить испытание» игрок не видит ни слова о запрете
+  assert.ok(!rangeSource.includes('⛔'), 'no permanent ban mark in the panel');
+  assert.ok(!/option\.disabled\s*=\s*banned/.test(rangeSource), 'Russian cities must stay selectable');
+  assert.equal([...rangeSource.matchAll(/nuclearBanFor\(/g)].length, 1, 'only the fire button asks the mask');
+  assert.match(rangeSource, /if \(nuclearBanFor\(target\)\) \{[\s\S]{0,400}refuse\(/, 'the refusal lives in the test handler');
+  // сам баннер — пищалка поверх экрана: скрыта по умолчанию и показывается по отказу
+  assert.match(rangeSource, /className = 'k-nrange-toast'/);
+  assert.match(rangeSource, /toast\.setAttribute\('role', 'alert'\)/);
+  assert.match(rangeSource, /toast\.hidden = true;[\s\S]{0,60}document\.body\.appendChild\(toast\)/, 'hidden before the first refusal, and outside the HUD layer');
+  assert.match(rangeSource, /toast\.textContent = text;[\s\S]{0,20}toast\.hidden = false;/);
+  assert.match(rangeSource, /toastTimer = setTimeout\(\(\) => \{ toast\.hidden = true; \}, \d+\)/, 'the toast fades by itself');
+  // порядок слоёв: отказ поднимает экран позора, и пищалка обязана пережить
+  // его и по z-index, и по display — иначе игрок видит герб вместо строки
+  // правила (замер 15.11: внутри HUD-слоя она под позором, а прямым ребёнком
+  // body без белого списка получала display:none и прямоугольник 0x0)
+  const toastZ = Number(rangeSource.match(/\.k-nrange-toast\{[^}]*z-index:(\d+)/)[1]);
+  const shameZ = Number(shameSource.match(/\.k-shame\{[^}]*z-index:(\d+)/)[1]);
+  assert.ok(toastZ > shameZ, `пищалка (${toastZ}) обязана быть выше экрана позора (${shameZ})`);
+  // ...и пережить белый список body: правило «прячьте всё, кроме глобуса и HUD»
+  // съедает её display'ем, если класса там нет (замер 15.11: rect 0x0)
+  const whitelist = hudCss.match(/body\.kupol > \*[^{]*/)?.[0] ?? '';
+  assert.ok(whitelist.includes('.k-nrange-toast'), 'the toast must survive the body whitelist');
 });
 
 test('the party blocks nukes after shame and shames on the server refusal', () => {
