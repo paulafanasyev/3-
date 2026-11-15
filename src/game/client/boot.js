@@ -14,6 +14,9 @@ import { unitPortrait } from './icons.js';
 import { addFallbackImagery, SOURCE_TOAST } from './imagery.js';
 import { attachCameraFlight } from './cameraFlight.js';
 import { createNuclearRange } from './nuclear-range.js';
+import { isShamed, triggerShame } from './shame.js';
+import { NUKE_BAN_ERROR } from '../nuclearBan.js';
+import { errorText } from '../i18n/ru.js';
 
 const START_VIEW = { lon: -98, lat: 22, height: 7_500_000 };
 /** Кому сообщить, что верхний слой подложки отвалился уже после старта (ставит bootKupol). */
@@ -196,6 +199,12 @@ export async function bootKupol() {
   }
 
   async function send(command) {
+    // Позор снимается только перезагрузкой страницы, поэтому запрет держим и
+    // здесь: команда ядерного пуска не уходит на сервер уже заблокированной партии.
+    if (isShamed() && command.kind === 'nuke') {
+      hud.toast(errorText('NUKE_SHAMED'));
+      return { ok: false, error: 'NUKE_SHAMED' };
+    }
     const r = await net.command(command).catch(() => ({ ok: false, message: 'Нет связи с сервером' }));
     if (!r.ok) hud.toast(r.message ?? 'Нельзя');
     return r;
@@ -263,10 +272,16 @@ export async function bootKupol() {
     if (cell === undefined || cell === null) return;
     const unit = myUnit(selection.unitId);
     if (unit.type === 'icbm') {
+      if (isShamed()) { hud.toast(errorText('NUKE_SHAMED')); return; }
       const owner = state.owner[cell];
       const name = state.nations.find((n) => n.id === owner)?.name ?? state.neutrals.find((n) => n.id === owner)?.name ?? 'ничья земля';
       if (!confirm(`Ядерный удар по цели (${name})? Репутация рухнет, все нации получат повод к войне против вас.`)) return;
-      send({ kind: 'nuke', unitId: unit.id, to: cell }).then(() => { selection.unitId = null; redraw(); });
+      const city = state.cities.find((c) => c.cell === cell);
+      send({ kind: 'nuke', unitId: unit.id, to: cell }).then((r) => {
+        // Отказ сервера по маске территории = экран позора; он же и держит бан.
+        if (r.error === NUKE_BAN_ERROR) triggerShame({ target: city ? `${city.name} (${name})` : name });
+        selection.unitId = null; redraw();
+      });
       return;
     }
     if (unit.type === 'satellite') {

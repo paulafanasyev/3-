@@ -1,0 +1,27 @@
+{
+  "note": "Провенанс двух государственных ассетов экрана позора. Замеры (размер, длительность, кодек) сняты ffprobe по файлам в public/, а не переписаны из описания на Wiki.",
+  "assets": [
+    {
+      "id": "emblem-russia",
+      "path": "public/game/state/emblem-russia.svg",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Coat_of_Arms_of_the_Russian_Federation.svg",
+      "license": "Public domain",
+      "kind": "vector",
+      "bytes": 265254,
+      "viewBox": "0 0 12331.1 14589.7"
+    },
+    {
+      "id": "anthem-russia-instrumental",
+      "path": "public/audio/state/anthem-russia-instrumental.ogg",
+      "source_page": "https://commons.wikimedia.org/wiki/File:National_anthem_of_Russia,_performed_by_the_United_States_Navy_Band.wav",
+      "license": "Public domain",
+      "kind": "audio",
+      "performer": "United States Navy Band",
+      "composer": "Alexander Alexandrov",
+      "master": "WAV, PCM 44.1 kHz stereo, 67.50 с, 1411 кбит/с",
+      "encoded": "Opus в Ogg, 48 kHz stereo, 96 кбит/с (битрейт контейнера 115 кбит/с), frame 20 мс",
+      "bytes": 970341,
+      "duration_s": 67.507
+    }
+  ]
+}

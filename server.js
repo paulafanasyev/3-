@@ -129,19 +129,43 @@ function sendStatus(res, status, headers = {}) {
 }
 
 async function sendFile(req, res, filePath, stat, cacheControl) {
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-    'Content-Length': stat.size,
     'Last-Modified': stat.mtime.toUTCString(),
     'Cache-Control': cacheControl,
     'X-Content-Type-Options': 'nosniff',
-  });
+    'Accept-Ranges': 'bytes',
+  };
+  // Без Range браузер не может дочитать Ogg до последнего заголовка и берёт
+  // длительность наугад: гимн на экране позора показывал duration=NaN.
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
+  let from = 0;
+  let to = stat.size - 1;
+  if (range && (range[1] !== '' || range[2] !== '')) {
+    if (range[1] === '') from = Math.max(stat.size - Number(range[2]), 0);
+    else {
+      from = Number(range[1]);
+      if (range[2] !== '') to = Math.min(Number(range[2]), stat.size - 1);
+    }
+    if (from > to || from >= stat.size) {
+      res.writeHead(416, { ...headers, 'Content-Length': 0, 'Content-Range': `bytes */${stat.size}` });
+      res.end();
+      return;
+    }
+    res.writeHead(206, {
+      ...headers,
+      'Content-Length': to - from + 1,
+      'Content-Range': `bytes ${from}-${to}/${stat.size}`,
+    });
+  } else {
+    res.writeHead(200, { ...headers, 'Content-Length': stat.size });
+  }
   if (req.method === 'HEAD') {
     res.end();
     return;
   }
   await new Promise((resolve, reject) => {
-    const stream = fs.createReadStream(filePath);
+    const stream = fs.createReadStream(filePath, { start: from, end: to });
     stream.on('error', reject);
     res.on('close', resolve);
     stream.pipe(res);

@@ -6,6 +6,7 @@ import { zonesForBomb } from './nuclearBlastModel.js';
 import { blastShapeAt } from './nuclearVolumetrics.js';
 import { nuclearBanFor, NUKE_BAN_ERROR } from '../nuclearBan.js';
 import { errorText } from '../i18n/ru.js';
+import { SHAME_EVENT, isShamed, triggerShame } from './shame.js';
 
 const BOMBS = [
   { id: 'fat-man', name: 'Толстяк (Fat Man)', country: 'США', year: '1945', yieldKt: 21, kind: 'Плутониевая атомная бомба' },
@@ -100,7 +101,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     <input id="k-nrange-city-query" type="search" placeholder="Например: Москва, Tokyo, Hanoi" autocomplete="off">
     <select id="k-nrange-city-results" size="5" aria-label="Результаты поиска города"></select>
     <div class="k-nrange-muted">В каталоге ${CITIES.length.toLocaleString('ru-RU')} городов и населённых пунктов. Поиск работает локально.</div>
-    <div class="k-nrange-muted">⛔ ${BAN_NOTE} Запрет держит маска территории, он же действует и в партии.</div>
+    <div class="k-nrange-muted">⛔ ${BAN_NOTE} Запрет держит маска территории, он же действует и в партии. Попытка обхода поднимает экран позора: герб, гимн и замок полигона до перезапуска страницы.</div>
     <label for="k-nrange-bomb">Модель испытания</label>
     <select id="k-nrange-bomb">${BOMBS.map((bomb) => `<option value="${bomb.id}">${bomb.name} · ${formatYield(bomb.yieldKt)} · ${bomb.year}</option>`).join('')}</select>
     <div class="k-nrange-status" data-bomb-info aria-live="polite"></div>
@@ -137,6 +138,27 @@ export function createNuclearRange({ root, viewer, layers }) {
   let targetName = '';
   let selecting = false;
   let matches = [];
+
+  // Отказ полигона поднимает экран позора; бан держит именно он, поэтому здесь
+  // только формулировка строки состояния + вызов triggerShame. Порядок важен:
+  // замок пишет свою строку, а текст отказа должен остаться вид поверх неё.
+  const refuse = (text, bannedTarget) => {
+    triggerShame({ target: bannedTarget });
+    status.textContent = text;
+  };
+
+  const lockRange = () => {
+    if (!isShamed()) return;
+    selecting = false;
+    pickButton.textContent = 'Указать точку на карте';
+    for (const node of [testButton, pickButton, cityQuery, cityResults, bombSelect, profileSelect, soundSelect, damageToggle]) node.disabled = true;
+    status.textContent = `${errorText('NUKE_SHAMED')} Полигон заперт до перезапуска страницы.`;
+  };
+  const onShame = () => lockRange();
+  window.addEventListener(SHAME_EVENT, onShame);
+  // полигон живёт в том же окне, что и партия: если позор случился раньше
+  // монтирования панели, замок вешаем сразу
+  lockRange();
 
   const updateBombInfo = () => {
     const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
@@ -229,7 +251,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     if (nuclearBanFor({ lon: city[2], lat: city[1] }, city)) {
       target = null;
       targetName = '';
-      status.textContent = `${errorText(NUKE_BAN_ERROR)} Цель ${city[0]} снята с наводки.`;
+      refuse(`${errorText(NUKE_BAN_ERROR)} Цель ${city[0]} снята с наводки.`, city[0]);
       return;
     }
     target = { lon: city[2], lat: city[1] };
@@ -270,11 +292,10 @@ export function createNuclearRange({ root, viewer, layers }) {
       return;
     }
     if (nuclearBanFor(point)) {
-      // Точку не запоминаем и режим выбора оставляем включённым: отказ по
-      // маске территории — не повод терять весь кадр.
+      // Точку не запоминаем: отказ по маске территории — не повод терять весь кадр.
       target = null;
       targetName = '';
-      status.textContent = `${errorText(NUKE_BAN_ERROR)} Точка ${point.lat.toFixed(3)}°, ${point.lon.toFixed(3)}° — запрещённая территория.`;
+      refuse(`${errorText(NUKE_BAN_ERROR)} Точка ${point.lat.toFixed(3)}°, ${point.lon.toFixed(3)}° — запрещённая территория.`, `${point.lat.toFixed(3)}°, ${point.lon.toFixed(3)}°`);
       return;
     }
     target = point;
@@ -291,6 +312,10 @@ export function createNuclearRange({ root, viewer, layers }) {
   });
 
   testButton.addEventListener('click', async () => {
+    if (isShamed()) {
+      status.textContent = `${errorText('NUKE_SHAMED')} Полигон заперт до перезапуска страницы.`;
+      return;
+    }
     if (!target) {
       status.textContent = 'Сначала выберите город в списке или укажите точку на глобусе.';
       return;
@@ -300,9 +325,10 @@ export function createNuclearRange({ root, viewer, layers }) {
     // Маска накрывает и все города каталога РФ, поэтому здесь достаточно
     // координаты, а не выбранной строки списка.
     if (nuclearBanFor(target)) {
+      const bannedName = targetName || `${target.lat.toFixed(3)}°, ${target.lon.toFixed(3)}°`;
       target = null;
       targetName = '';
-      status.textContent = errorText(NUKE_BAN_ERROR);
+      refuse(errorText(NUKE_BAN_ERROR), bannedName);
       return;
     }
     // Кадр ставим ДО запуска: испытание стартует мгновенно, и камера, которая
@@ -318,13 +344,16 @@ export function createNuclearRange({ root, viewer, layers }) {
         cityName: targetName,
         damage: damageToggle.checked,
       });
+      // Слои сами отказали по маске (например, цель успела смениться под курсором) —
+      // позор должен быть и здесь, иначе остались бы только слова без наказания.
+      if (!result?.ok && result?.error === NUKE_BAN_ERROR) triggerShame({ target: targetName || 'точка на карте' });
       status.textContent = result?.ok
         ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. ${formatDamage(result.damage)} Снесено застройки: ${Math.round(result.damage.levelledAreaKm2).toLocaleString('ru-RU')} км² (строений в сцене: ${result.damage.buildingCount}).` : '. Без разрушений.'}`
-        : (result?.error === NUKE_BAN_ERROR ? errorText(NUKE_BAN_ERROR) : 'Не удалось запустить визуализацию.');
+        : errorText(NUKE_BAN_ERROR);
     } catch (error) {
       status.textContent = `Ошибка испытания: ${String(error?.message || error)}`;
     } finally {
-      testButton.disabled = false;
+      testButton.disabled = isShamed();
     }
   });
 
@@ -336,6 +365,7 @@ export function createNuclearRange({ root, viewer, layers }) {
   return {
     close,
     destroy() {
+      window.removeEventListener(SHAME_EVENT, onShame);
       handler.destroy();
       trigger.remove();
       panel.remove();
