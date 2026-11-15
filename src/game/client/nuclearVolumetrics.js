@@ -167,7 +167,18 @@ export function blastShapeAt(profile = {}, zones = {}, yieldKt = 1000, s = 0) {
 
   const topKeys = Array.isArray(art.top_keys) ? keysLen(art.top_keys)
     : [[0, burstHeight], [tHead1, burstHeight + cloudTop * 0.3], [tHead1 * 4, burstHeight + cloudTop * 0.72], [tFull, burstHeight + cloudTop]];
-  const capKeys = Array.isArray(art.cap_d_keys) ? keysLen(art.cap_d_keys)
+  // Ключи купола даны на паспортном горизонте испытания (у «Айви Кинг» — 600 с,
+  // у «Айви Майк» — 1800 с), а подъём облака кончается на tFull: 100 и 360 с.
+  // Без сжатия показ обрывается на «гвозде» — кадр 15.11 strike29 дал шляпу
+  // 3,3 км при вершине 16,2 км. Сжимаем ось времени купола так, чтобы
+  // документированный диаметр доставал до конца подъёма; там, где кривая и без
+  // того шире потолка, правит riseLimit, и сжатие ничего не меняет.
+  const capKeysRaw = Array.isArray(art.cap_d_keys) && art.cap_d_keys.length ? art.cap_d_keys : null;
+  const capSquash = capKeysRaw
+    ? Math.min(1, tFull / (capKeysRaw[capKeysRaw.length - 1][0] * k))
+    : 1;
+  const capKeys = capKeysRaw
+    ? capKeysRaw.map(([t, v]) => [t * k * capSquash, v * k])
     : [[tHead0, fireballMax * 1.6], [tHead1 * 2.4, capRadius * 1.5], [tFull, capRadius * 2.2]];
   const aspectKeys = Array.isArray(art.cap_aspect_keys) ? keysTime(art.cap_aspect_keys) : [[0, 0.78], [tFull, 0.42]];
 
@@ -1476,7 +1487,7 @@ export function createNuclearVolumetrics({
   timeScale = null, lifeSeconds = null, burstHeightM = 0, onDone = () => {},
 } = {}) {
   if (!scene?.postProcessStages || typeof Cesium.PostProcessStage !== 'function') {
-    return { destroy: () => {}, isDestroyed: () => true, state: () => null };
+    return { destroy: () => {}, isDestroyed: () => true, state: () => null, shown: () => false };
   }
   const origin = Cesium.Cartesian3.fromDegrees(at.lon, at.lat, burstHeightM);
   const enu = Cesium.Transforms.eastNorthUpToFixedFrame(origin, Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
@@ -1494,9 +1505,13 @@ export function createNuclearVolumetrics({
   // Свет гриба — «съёмочный» солнце-прожектор, а не астрономический: сцена
   // игры рисуется при выключенном освещении глобуса, то есть земля всегда
   // дневная, а настоящее солнце в 02:00 UTC над Лондоном стоит под горизонтом.
-  // (восток, вверх, север), возвышение 45°, азимут 40° от севера — тот же
-  // трёхчетвертной рисунок, что на дневных плёнках испытаний.
-  const STUDY_SUN = [0.455, 0.707, 0.542];
+  // (восток, вверх, север), возвышение 28°, азимут 130° от севера.
+  // 45°/40° давали шапку-молочко: съёмочный глаз стоит северо-восточнее цели и
+  // смотрит на юго-запад, то есть свет пришёл почти из-за камеры, и купол
+  // засвечивался ровно. Замер 15.11 (sun1, 40 с, один кадр на четыре ракурса):
+  // низкое солнце сбоку поднимает фактуру купола 0.0816 → 0.0862 и оставляет
+  // правый борт в тени — шар перестаёт быть блином.
+  const STUDY_SUN = [0.676, 0.470, -0.568];
   // Степень сжатия времени подбираем по окну формирования шляпы: за полчаса
   // реальных секунд зритель обязан успеть увидеть и шар, и вставший гриб.
   const timing = blastShapeAt(profile, zones, yieldKt, 0).timing;
@@ -1598,7 +1613,7 @@ export function createNuclearVolumetrics({
   } catch (error) {
     console.warn('[Купол] объёмный взрыв недоступен:', error);
     stage = null;
-    return { destroy: () => {}, isDestroyed: () => true, state: () => null };
+    return { destroy: () => {}, isDestroyed: () => true, state: () => null, shown: () => false };
   }
 
   const destroy = () => {
@@ -1856,6 +1871,12 @@ export function createNuclearVolumetrics({
       destroy();
     },
     isDestroyed: () => removed,
+    // Жив ли объёмный проход. Знакам карты (nuclearEffects.js) довольно и этого:
+    // они уступают маршу в тот же миг, как он создан. По stage.enabled судить
+    // нельзя — update() вызывается сразу при создании и на первом проходе
+    // оставляет enabled=false (кадр без марша нужен адаптации), то есть в момент
+    // решения знаков марш всегда выглядел бы «не рисующим».
+    shown: () => !removed && !!stage,
     state: () => lastState,
     durationSeconds: life,
     timeScale: rate,

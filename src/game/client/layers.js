@@ -5,7 +5,7 @@ import * as Cesium from 'cesium';
 import { borderEdges, chainSegments, unwrapRing } from './geometry.js';
 import { cityIcon, unitIcon } from './icons.js';
 import { UNITS } from '../data/units.js';
-import { createNuclearVisuals } from './nuclearEffects.js';
+import { createNuclearVisuals, hideMapSigns } from './nuclearEffects.js';
 import { createNuclearVolumetrics } from './nuclearVolumetrics.js';
 import { playNuclearAudio, stopNuclearAudio } from './nuclearAudio.js';
 import { createNuclearDamageLayer } from './nuclearDamage.js';
@@ -349,7 +349,8 @@ export function createWorldLayers(viewer, geometry) {
       ellipse: { semiMajorAxis: radius, semiMinorAxis: radius, material: new Cesium.ColorMaterialProperty(alpha), classificationType: Cesium.ClassificationType.BOTH },
       point: st.intercepted ? undefined : { pixelSize: 26, color: Cesium.Color.WHITE.withAlpha(0.9), disableDepthTestDistance: Number.POSITIVE_INFINITY },
     }));
-    added.push(...createNuclearVisuals(entities.entities, to, start, Boolean(st.intercepted)));
+    const signs = createNuclearVisuals(entities.entities, to, start, Boolean(st.intercepted), 1, null, scene);
+    added.push(...signs);
     setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 12000);
     if (st.intercepted) return;
     // Запись того же заряда, чьим замером считается гриб: без soundId лестница
@@ -368,7 +369,9 @@ export function createWorldLayers(viewer, geometry) {
       await nuclearDamage.apply(to, kt / 1000, st.city, profile);
       await settleFrames(scene, 3, 120000);
     }
-    blastVolume(to, performance.now(), profile, sized ? kt : null);
+    // Марш запускается последним (снос и осадка кадров идут перед ним), поэтому
+    // знаки карты гасим уже по факту его появления.
+    if (blastVolume(to, performance.now(), profile, sized ? kt : null)) hideMapSigns(signs);
   }
 
   /** Ждём N отрисованных кадров: геометрия после массового сноса строится внутри рендера. */
@@ -406,8 +409,11 @@ export function createWorldLayers(viewer, geometry) {
     const start = performance.now();
     const added = [];
     const scale = Math.max(0.55, Math.min(2.4, (yieldMt / 1.6) ** 0.22));
-    added.push(...createNuclearVisuals(entities.entities, at, start, false, scale, zonesForBomb(sourceProfile, Math.max(0, yieldMt) * 1000)));
+    // Марш запускаем ПЕРВЫМ: знаки карты обязаны уступить ему с первого кадра,
+    // а не наполовину показать оба слоя — предикат читает уже существующий проход.
     const volume = blastVolume(at, start, sourceProfile, Math.max(0, yieldMt) * 1000);
+    added.push(...createNuclearVisuals(entities.entities, at, start, false, scale,
+      zonesForBomb(sourceProfile, Math.max(0, yieldMt) * 1000), scene, () => Boolean(volume?.shown?.())));
     for (const entity of added) nuclearTestEffects.add(entity);
     playNuclearAudio({ intercepted: false, yieldMt, soundId: options.soundId });
     // Гриб живёт минутами, сущности на земле — секундами: таймер держим по

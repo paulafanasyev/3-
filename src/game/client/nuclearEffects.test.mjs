@@ -56,3 +56,25 @@ test('an intercepted warhead keeps a single short-lived ring and no cloud', () =
   assert.ok(added[0].ellipse);
   assert.equal(added[0].ellipsoid, undefined);
 });
+
+// Пока объёмный проход рисует пыль и фронт сами, знаки карты обязаны молчать:
+// два слоя одного предмета в кадре дают серый блин с пунктиром интерфейса.
+// Без марша (Stage unsupported, камера слишком далеко) знак — единственная
+// картинка, и он обязан остаться.
+test('map signs step aside while the volumetric pass is drawing', () => {
+  const time = Cesium.JulianDate.now();
+  const signsOf = (volumeShown) => {
+    const added = collect([performance.now() - 1000, false, 1, null, null, volumeShown]);
+    // Гашение — это подмена show новым объектом: CallbackProperty Cesium для
+    // этой графики перечитывает, но геометрию от него не пересобирает.
+    return added.filter((item) => item.ellipse)
+      .map((item) => (item.ellipse.show ? sample(item.ellipse.show, time) : 'нет'));
+  };
+  const live = signsOf(() => true);
+  const silent = signsOf(() => false);
+  const unknown = signsOf(null);
+  assert.equal(live.length, 3, `знаков должно быть три, получено ${live.length}`);
+  assert.ok(live.every((show) => show === false), `живой марш не погасил знаки: ${live}`);
+  assert.ok(silent.every((show) => show === 'нет'), `мёртвый марш погасил знаки: ${silent}`);
+  assert.ok(unknown.every((show) => show === 'нет'), `без предиката знаки погашены: ${unknown}`);
+});

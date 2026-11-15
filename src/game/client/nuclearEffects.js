@@ -29,9 +29,36 @@ function axisPair(compute, flatten = 1) {
   };
 }
 
-export function createNuclearVisuals(entities, at, startedAt, intercepted = false, scale = 1, zones = null) {
+// У point sizeInMeters в этом Cesium не работает: пробой point-probe.mjs меряли
+// 60, 150 и 300 «метров» с 1,5 и 8,3 км — каждый раз рисовалось ровно столько
+// же ПИКСЕЛЕЙ, то есть размер от дистанции не зависел вообще. Поэтому метры
+// считаем сами: проецируем точку и точку в 100 метрах выше по up камеры. Та же
+// проба подтвердила пересчёт — 300 м с 8,3 км дали запрошенные 30,1 px и
+// нарисованные 30×30, а 30 м с 8,3 км погасли сами, не дотянув до пикселя.
+function metersToPixels(meters, position, scene) {
+  if (!scene) return 0;
+  const a = Cesium.SceneTransforms.worldToWindowCoordinates(scene, position);
+  if (!a) return 0;
+  const up = Cesium.Cartesian3.multiplyByScalar(scene.camera.upWC, 100, new Cesium.Cartesian3());
+  const b = Cesium.SceneTransforms.worldToWindowCoordinates(
+    scene,
+    Cesium.Cartesian3.add(position, up, new Cesium.Cartesian3()),
+  );
+  if (!b) return 0;
+  return meters * Math.hypot(b.x - a.x, b.y - a.y) / 100;
+}
+
+export function createNuclearVisuals(entities, at, startedAt, intercepted = false, scale = 1, zones = null, scene = null, volumeShown = null) {
   const added = [];
   const elapsed = () => Math.max(0, (performance.now() - startedAt) / 1000);
+  // Знаки карты уступают объёмному проходу: два слоя одного предмета в кадре
+  // складываются в серый блин с пунктиром интерфейса.
+  // Знаки карты уступают объёмному проходу: два слоя одного предмета в кадре
+  // складываются в серый блин с пунктиром интерфейса. Гасим их заменой свойства
+  // новым объектом (hideMapSigns): перечитывание CallbackProperty — show, цвет,
+  // радиус — геометрию не трогает, и замер 15.11 оставил в кадре диск при
+  // show=false, нулевой альфе и радиусе в один метр.
+  const volumeLive = typeof volumeShown === 'function' ? volumeShown() : false;
   const tint = intercepted ? color('#6bd8ff') : color('#ffb33d');
   // Без расчётных зон остаётся условный масштаб ~1 Мт: удары боёвки не выбирают
   // модель заряда, и им хватает одного кольца осколков.
@@ -69,6 +96,10 @@ export function createNuclearVisuals(entities, at, startedAt, intercepted = fals
 
   // 1. Пылевой лист: диск до самого фронта, прозрачность — по давлению за
   // фронтом (тот же закон, что у DustLayer в источнике).
+  //
+  // Лист и нитка фронта — условные знаки стратегической карты. Пока объёмный
+  // проход жив, они только портят кадр: полигон с камеры выглядит серым блином
+  // с пунктиром интерфейса поверх настоящего гриба.
   const { major: dustMajor, minor: dustMinor } = axisPair(frontR, 0.995);
   added.push(entities.add({
     position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat, 40),
@@ -134,21 +165,22 @@ export function createNuclearVisuals(entities, at, startedAt, intercepted = fals
     const progress = () => clamp01((elapsed() - delay) / duration);
     const lon = at.lon + Math.cos(angle) * reach / (111320 * Math.max(0.15, Math.cos(at.lat * Math.PI / 180)));
     const lat = at.lat + Math.sin(angle) * reach / 111320;
+    // Камень из воронки — единицы метров, не пузыри в 60 px: с 8 км он не
+    // разрешается ничем, а крупным станет, когда к нему подлетят.
+    const fragmentM = 3 + (i % 4) * 3;
+    let pos = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
     added.push(entities.add({
       position: new Cesium.CallbackProperty(() => {
         const p = easeOut(progress());
-        return Cesium.Cartesian3.fromDegrees(
+        pos = Cesium.Cartesian3.fromDegrees(
           at.lon + (lon - at.lon) * p,
           at.lat + (lat - at.lat) * p,
           Math.max(0, peak * Math.sin(Math.PI * progress())),
         );
+        return pos;
       }, false),
       point: {
-        // Метры, не пиксели: осколок в 30 м с 30 км — доли пикселя, и он обязан
-        // исчезать, а не висеть жёлтыми пузырями над городом. Крупным он станет,
-        // когда к нему подлетят.
-        pixelSize: 18 + (i % 4) * 14,
-        sizeInMeters: true,
+        pixelSize: new Cesium.CallbackProperty(() => metersToPixels(fragmentM, pos, scene), false),
         color: new Cesium.CallbackProperty(() => color(
           progress() < 0.35 ? '#ffcf82' : '#c2551d', 0.75 * (1 - progress())), false),
         outlineWidth: 0,
@@ -157,5 +189,19 @@ export function createNuclearVisuals(entities, at, startedAt, intercepted = fals
     }));
   }
 
+  if (volumeLive) hideMapSigns(added);
+
   return added;
+}
+
+/**
+ * Гасит картографические знаки удара. Работает только замена свойства новым
+ * объектом: Cesium перестраивает геометрию эллипса по событию changed, а
+ * CallbackProperty он перечитывает, но геометрию от него не пересобирает —
+ * на кадре остаётся диск, запечённый до марша (замер 15.11).
+ */
+export function hideMapSigns(items) {
+  for (const item of items) {
+    if (item?.ellipse) item.ellipse.show = new Cesium.ConstantProperty(false);
+  }
 }

@@ -249,3 +249,21 @@ test('condensation rings, ice lenses and the soil dome copy the source keys', ()
   assert.ok(d30.dome[2] > 0.4 && d30.dome[2] <= 1, `трещины @3: ${d30.dome[2]}`);
   assert.equal(d40.dome[1], 0, 'купол не схлопнулся после прорыва газа');
 });
+
+test('купол успевает распластаться к концу подъёма облака', () => {
+  // Паспортная кривая диаметра купола живёт на горизонте испытания (600-1800 с),
+  // показ — на горизонте подъёма (tFull). Если ось не сжимать, зритель видит
+  // «гвоздь»: кадр 15.11 strike29, шляпа 3,3 км при вершине 16,2 км.
+  for (const bomb of profiles.bombs) {
+    const keys = Array.isArray(bomb.profile?.cap_d_keys) ? bomb.profile.cap_d_keys : null;
+    if (!keys) continue;
+    const zones = zonesForBomb(bomb, bomb.yield_kt);
+    const tFull = probe(bomb, 0).timing.tFull;
+    const st = probe(bomb, tFull);
+    const ratio = (2 * st.head.r) / (2 * st.bound.y);
+    const squash = Math.min(1, tFull / (keys[keys.length - 1][0] * yieldScale(bomb, bomb.yield_kt)));
+    const floor = squash < 0.5 ? 0.45 : 0.30;
+    assert.ok(ratio >= floor && ratio <= 0.75,
+      `${bomb.id} @${tFull.toFixed(0)} с: купол/вершина ${ratio.toFixed(2)} вне ${floor}..0.75`);
+  }
+});
