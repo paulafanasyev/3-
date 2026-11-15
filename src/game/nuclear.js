@@ -13,6 +13,10 @@ import { addShield, pactMembers } from './finale.js';
 
 export const NUKE = Object.freeze({
   radius: 1,
+  // Мощность боевого блока ИЦБМ в партии. Это игровой параметр, а не данные
+  // реального заряда: он нужен клиенту, чтобы гриб и кольца разрушения
+  // считались той же моделью, что и на полигоне, а не фиксированным 1,6 Мт.
+  yieldKt: 150,
   popFactor: 0.35,
   buildingsLost: 2,
   falloutTurns: 20,
@@ -82,7 +86,7 @@ export function launchNuke(state, map, nationId, unit, to) {
   const chance = interceptChance(state, victim);
   const intercepted = chance > 0 && nextRandom(state) < chance;
   const target = Object.values(state.cities).find((c) => c.cell === to) ?? null;
-  const strike = { turn: state.turn, from: nationId, to: victim, fromCell: from, cell: to, intercepted, city: target?.name ?? null };
+  const strike = { turn: state.turn, from: nationId, to: victim, fromCell: from, cell: to, intercepted, city: target?.name ?? null, yieldKt: NUKE.yieldKt };
   log.strikes.push(strike);
   if (log.strikes.length > 60) log.strikes.shift();
   // Координаты получают только атакующий, жертва и те, кто сейчас видит хотя бы одну из клеток.
@@ -191,7 +195,10 @@ export function nuclearView(state, nationId) {
     fallout: Object.entries(state.fallout ?? {}).filter(([c, until]) => until > state.turn && (explored[c] || state.owner[c] === nationId)).map(([c, until]) => [Number(c), until]).sort((a, b) => a[0] - b[0]),
     recon: reconZones(state, nationId).map(({ cell, until }) => ({ cell, until })),
     // точку взрыва знают свидетели и все, у кого есть «Ядерное деление» (сейсмический мониторинг)
-    strikes: (state.nuclear?.strikes ?? []).slice(-12).map((s) => ({ turn: s.turn, from: s.from, to: s.to, cell: explored[s.cell] || seismic || s.from === nationId || s.to === nationId ? s.cell : null, fromCell: explored[s.fromCell] || s.from === nationId ? s.fromCell : null, intercepted: s.intercepted })),
+    // city и yieldKt не секрет: имя города уже уходит в публичное событие
+    // nuclearStrike, а мощность у всех ИЦБМ одна — без неё клиент считает гриб
+    // по профилю по умолчанию, а не по тому, что прилетело.
+    strikes: (state.nuclear?.strikes ?? []).slice(-12).map((s) => ({ turn: s.turn, from: s.from, to: s.to, city: s.city ?? null, yieldKt: s.yieldKt ?? null, cell: explored[s.cell] || seismic || s.from === nationId || s.to === nationId ? s.cell : null, fromCell: explored[s.fromCell] || s.from === nationId ? s.fromCell : null, intercepted: s.intercepted })),
     nuclearPowers: Object.keys(state.nations).filter((id) => state.nations[id].techs.includes('fission') && (state.nations[id].met?.includes(nationId) || id === nationId)).sort(),
   };
 }

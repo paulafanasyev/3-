@@ -324,6 +324,9 @@ export async function bootKupol() {
   window.__kupol = {
     viewer, get state() { return state; },
     flight,
+    // update(state) нужен дымовой проверке: без ручки на слои снимок партии
+    // нечем протолкнуть в syncStrikes, а остальной путь клиента тот же.
+    layers,
     endTurn,
     tactical: (unitId, cell) => { const u = myUnit(unitId); return u ? runTactical(u, cell) : Promise.resolve(null); },
     battleSpeed: (speed) => net.battleSpeed(speed),

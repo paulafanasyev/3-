@@ -9,7 +9,7 @@ import { createNuclearVisuals } from './nuclearEffects.js';
 import { createNuclearVolumetrics } from './nuclearVolumetrics.js';
 import { playNuclearAudio, stopNuclearAudio } from './nuclearAudio.js';
 import { createNuclearDamageLayer } from './nuclearDamage.js';
-import { zonesForBomb } from './nuclearBlastModel.js';
+import { zonesForBomb, nearestAirBurstProfile } from './nuclearBlastModel.js';
 import sourceBombProfiles from '../data/source-bomb-profiles.json';
 
 /** Ниже этой высоты камеры заливка территорий гаснет, остаются границы: видно сами снимки. */
@@ -19,6 +19,14 @@ const MODEL_VISIBLE_KM = 450;
 // ИЦБМ в партии не имеет своей модели взрыва: визуал берётся у ближайшего
 // по мощности замеренного заряда (1,6 Мт), а не из условного шара-заглушки.
 const DEFAULT_STRIKE_PROFILE_ID = 'rds37';
+
+/**
+ * Заряд партии берёт себе замер по мощности — ближайший по логарифму среди
+ * воздушных и высотных профилей. Прежний код всегда брал rds37, то есть
+ * 1,6 Мт независимо от того, что прилетело.
+ */
+const profileForYield = (kt) => nearestAirBurstProfile(sourceBombProfiles.bombs, kt)
+  ?? sourceBombProfiles.bombs.find((b) => b.id === DEFAULT_STRIKE_PROFILE_ID) ?? null;
 
 const ringDegrees = (ring) => unwrapRing(ring.points).flatMap((p) => [p.lon, p.lat]);
 const hashOf = (text) => { let h = 2166136261; for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619); return h >>> 0; };
@@ -309,9 +317,19 @@ export function createWorldLayers(viewer, geometry) {
     return volume;
   }
 
-  function animateStrike(st) {
+  /**
+   * Новый пуск: дуга от шахты к цели и вспышка с расходящейся волной, затем
+   * реальные разрушения и объёмный гриб той мощности, которая прилетела.
+   */
+  async function animateStrike(st) {
     const to = center(st.cell);
     const start = performance.now();
+    // Старые записи партий поля не имеют: тогда считаем мощность неизвестной и
+    // остаёмся на прежнем профиле по умолчанию, а не выдумываем число.
+    const kt = Number(st.yieldKt);
+    const sized = Number.isFinite(kt) && kt > 0;
+    const profile = sized ? profileForYield(kt) : null;
+    const severeM = profile ? zonesForBomb(profile, kt).radiiM.severe : 260_000;
     const color = st.intercepted ? Cesium.Color.fromCssColorString('#5ad1ff') : Cesium.Color.fromCssColorString('#ffd23a');
     const added = [];
     if (st.fromCell !== null && st.fromCell !== undefined) {
@@ -324,7 +342,7 @@ export function createWorldLayers(viewer, geometry) {
       }
       added.push(entities.entities.add({ polyline: { positions: pts, width: 3, material: new Cesium.PolylineGlowMaterialProperty({ glowPower: 0.3, color }) } }));
     }
-    const radius = new Cesium.CallbackProperty(() => 30_000 + Math.min(1, (performance.now() - start) / 2500) * (st.intercepted ? 60_000 : 260_000), false);
+    const radius = new Cesium.CallbackProperty(() => 30_000 + Math.min(1, (performance.now() - start) / 2500) * (st.intercepted ? 60_000 : severeM), false);
     const alpha = new Cesium.CallbackProperty(() => color.withAlpha(Math.max(0, 0.75 - (performance.now() - start) / 8000)), false);
     added.push(entities.entities.add({
       position: Cesium.Cartesian3.fromDegrees(to.lon, to.lat),
@@ -332,9 +350,19 @@ export function createWorldLayers(viewer, geometry) {
       point: st.intercepted ? undefined : { pixelSize: 26, color: Cesium.Color.WHITE.withAlpha(0.9), disableDepthTestDistance: Number.POSITIVE_INFINITY },
     }));
     added.push(...createNuclearVisuals(entities.entities, to, start, Boolean(st.intercepted)));
-    if (!st.intercepted) playNuclearAudio(st);
-    if (!st.intercepted) blastVolume(to, start, null, null);
     setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 12000);
+    if (st.intercepted) return;
+    playNuclearAudio({ ...st, yieldMt: kt / 1000 });
+    // Снос считается ДО гриба ровно по той же причине, что и на полигоне:
+    // обход тысяч строений занимает поток на десятки секунд, и запущенный
+    // раньше гриб успевал умереть внутри этого freeze, не отрисовав ни одного
+    // кадра. По полю без города удар не сносим: apply селяет застройку от
+    // имени города, и на пустой клетке он бы выдумал город, которого нет.
+    if (sized && st.city) {
+      await nuclearDamage.apply(to, kt / 1000, st.city, profile);
+      await settleFrames(scene, 3, 120000);
+    }
+    blastVolume(to, performance.now(), profile, sized ? kt : null);
   }
 
   /** Ждём N отрисованных кадров: геометрия после массового сноса строится внутри рендера. */

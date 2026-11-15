@@ -133,6 +133,26 @@ export function zonesForBomb(bomb, yieldKt) {
   });
 }
 
+/**
+ * Замер, ближайший по мощности к `yieldKt`, среди воздушных и высотных
+ * ядерных профилей. Подземный и подводный дают другую ножку и другую шляпу,
+ * а ИЦБМ рвёт в воздухе, поэтому брать их по логарифму нельзя.
+ */
+export function nearestAirBurstProfile(bombs, yieldKt) {
+  const kt = num(yieldKt);
+  if (!(kt > 0) || !Array.isArray(bombs)) return null;
+  let best = null;
+  let bestGap = Infinity;
+  for (const b of bombs) {
+    if (!/^NUCLEAR_(AIR|LOW_AIR|HIGH_AIR)$/.test(String(b?.burst_type ?? ''))) continue;
+    const own = num(b.yield_kt);
+    if (!(own > 0)) continue;
+    const gap = Math.abs(Math.log(own / kt));
+    if (gap < bestGap) { bestGap = gap; best = b; }
+  }
+  return best;
+}
+
 // ------------------------------------------------------------------ кинематика фронта
 // Время прихода ударной волны по стандартной кривой DNA: t₁(r) для 1 kt,
 // масштабированное на W^⅓. та же кривая, что в исходном проекте

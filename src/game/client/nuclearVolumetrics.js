@@ -12,10 +12,6 @@
 import * as Cesium from 'cesium';
 import { overpressurePsi, positivePhaseSeconds, radiusForPressurePsi, shockArrivalSeconds, shockRadiusM } from './nuclearBlastModel.js';
 
-// Замеренная цена кадра сцены (мс), переживает один проход: следующий взрыв
-// выбирает размер текстуры по ней. 0 = ещё не измерено.
-let lastFrameMs = 0;
-
 // Оптическая толщина сжатого слоя перед фронтом: 0.15·c₀·t⁺ (fx_layers.gd::ShockLayer).
 const COMPRESSED_LAYER = 0.15 * 343.0;
 // Сдвиг фона ударным фронтом никогда не растягивается дальше нескольких
@@ -1437,6 +1433,36 @@ void main() {
 }
 `;
 
+// Лестница: (потолок полной цены прохода в мс, размер растера, множитель
+// шага). Полная цена — цена при растере 1.0 и шаге 1.0; стоимость
+// масштабируется как px² (пикселей) и 1/stepScale (числа итераций), поэтому
+// нормировка именно такая. Пороги — бюджет на сам марш, а не на кадр: сцена
+// без объёма имеет свою цену, и наказывать объём за глобус незачем. Замер
+// этой машины (960×540, без GPU): полный проход стоит 31,5 и 49,5 с на кадр,
+// растер 0,3 при шаге 2,5 — 3,6-5,3 с; на видеокарте те же проходы укладываются
+// в миллисекунды и лестница остаётся на верхней ступени.
+const RUNGS = [
+  [400, 0.3, 2.5],
+  [150, 0.4, 2.2],
+  [60, 0.55, 1.8],
+  [20, 0.75, 1.4],
+  [8, 1, 1],
+];
+// Оценка ПОЛНОЙ цены прохода, накопленная между взрывами. Нужна потому, что
+// растер можно выбрать только при создании прохода: запись stage._textureScale
+// позже цену кадра не меняет (замер 15.11: tex=1, выставленный адаптацией,
+// дал кадр 7,8 с, а tex=1, заданный при создании, — 31,5 и 49,5 с).
+let fullMsPrior = 0;
+// Ступень по накопленной цене: берём самую качественную, чей прогноз влезает в
+// её же бюджет. Приор неизвестен (первый взрыв сессии) — средняя ступень.
+const rungForFullMs = (fullMs) => {
+  if (!(fullMs > 0)) return 1;
+  for (let r = RUNGS.length - 1; r >= 0; r -= 1) {
+    if (fullMs * RUNGS[r][1] * RUNGS[r][1] / RUNGS[r][2] <= RUNGS[r][0]) return r;
+  }
+  return 0;
+};
+
 /**
  * Ставит объёмный взрыв в сцену и ведёт его по часам.
  * @returns {{destroy: () => void, isDestroyed: () => boolean, state: () => object}}
@@ -1551,18 +1577,19 @@ export function createNuclearVolumetrics({
   let removed = false;
   let lastState = null;
 
-  // Цена прохода = пиксели × шаги. textureScale у Cesium readonly после
-  // создания, поэтому размер выбираем один раз — по ЗАМЕРЕННОМУ времени кадра
-  // сцены, а не по названию видеокарты: на GPU остаётся полная детализация, на
-  // программном растеризаторе облако рисуется в меньшую текстуру и растягивается
-  // билинейно, что для мягкой среды почти бесплатно по качеству.
-  const texScale = lastFrameMs > 900 ? 0.5 : lastFrameMs > 180 ? 0.75 : 1;
+  // Растер выбирается один раз — здесь, по накопленной цене прохода. Шаг
+  // (u_stepScale) остаётся живым рычагом на весь показ, растер после создания
+  // поменять нельзя: запись stage._textureScale цену кадра не меняет (замер
+  // 15.11), а пересоздавать проход посреди показа незачем — цена кадра внутри
+  // одного взрыва от растера уже не зависит.
+  const startRung = rungForFullMs(fullMsPrior);
+  const rasterPx = RUNGS[startRung][1];
   try {
     stage = scene.postProcessStages.add(new Cesium.PostProcessStage({
       name: `kupol-blast-${Math.floor(uniforms.u_seed * 1000)}`,
       fragmentShader: FS,
       uniforms,
-      textureScale: texScale,
+      textureScale: rasterPx,
     }));
   } catch (error) {
     console.warn('[Купол] объёмный взрыв недоступен:', error);
@@ -1582,7 +1609,6 @@ export function createNuclearVolumetrics({
   // preRender поднимается как (scene, time): брать первый аргумент за время —
   // значит передать Scene в sunFactor и получить NaN в u_sunI и всей экспозиции.
   let prevFrameMs = 0;
-  let frameMs = 0;
   // Цена прохода = пиксели растера² × число шагов. Мерим её ОТДЕЛЬНО от
   // рельефа: интервал кадров, где проход исполнялся, минус интервал кадров,
   // где его не было. По-старому «адаптация» смотрела на полный кадр и
@@ -1591,32 +1617,15 @@ export function createNuclearVolumetrics({
   let idleMs = 0;
   let blastMs = 0;
   let blastSamples = 0;
-  let pxScale = texScale;
-  let stepScale = 1;
+  let stepScale = RUNGS[startRung][2];
+  uniforms.u_stepScale = stepScale;
   let adaptFrames = 99;
   let lastAdaptAt = 0;
-  // Лестница: (потолок полной цены прохода в мс, размер растера, множитель
-  // шага). Полная цена — цена при растере 1.0 и шаге 1.0; стоимость
-  // масштабируется как pxScale² (пикселей) и 1/stepScale (числа итераций),
-  // поэтому нормировка именно такая. Пороги — бюджет на сам марш, а не на
-  // кадр: сцена без объёма имеет свою цену, и наказывать объём за глобус
-  // незачем. Замер этой машины (960×540, без GPU): марш при полном качестве
-  // стоит 25-28 с на ближнем кадре и 10 с на дальнем; на видеокарте те же
-  // проходы укладываются в миллисекунды и лестница остаётся на верхней ступени.
-  const RUNGS = [
-    [400, 0.3, 2.5],
-    [150, 0.4, 2.2],
-    [60, 0.55, 1.8],
-    [20, 0.75, 1.4],
-    [8, 1, 1],
-  ];
   // Ступень выбирается с гистерезисом: вниз (ухудшать) — как только полная
   // цена перескочила потолок ступени, вверх (улучшать) — только когда она
   // упала ниже половины этого потолка. Без зазора лестница ходила бы туда-
   // сюда на шуме замеров, а прыжок шага виден как дыхание облака.
-  // Начинаем с верхней ступени: стартовый raster уже выбран по цене прошлого
-  // взрыва (texScale), и понижать качество до первого замера незачем.
-  let rung = RUNGS.length - 1;
+  let rung = startRung;
   const adaptQuality = (uniforms, nowMs) => {
     if (blastSamples < 2 || idleMs <= 0) return;
     adaptFrames += 1;
@@ -1628,16 +1637,15 @@ export function createNuclearVolumetrics({
     lastAdaptAt = nowMs;
     const costMs = blastMs - idleMs;
     if (costMs <= 0) return;
-    const fullMs = costMs * stepScale / Math.max(1e-6, pxScale * pxScale);
+    // Нормировка по ФАКТИЧЕСКОМУ растрёу этого прохода: растер за время показа
+    // не двигается, поэтому ступень здесь меняет только шаг, а растер
+    // перевыберется на следующем взрыве — по этому же полному ценнику.
+    const fullMs = costMs * stepScale / Math.max(1e-6, rasterPx * rasterPx);
+    fullMsPrior = fullMsPrior > 0 ? fullMsPrior * 0.6 + fullMs * 0.4 : fullMs;
     while (rung > 0 && fullMs > RUNGS[rung][0]) rung -= 1;
     while (rung < RUNGS.length - 1 && fullMs < RUNGS[rung + 1][0] * 0.4) rung += 1;
-    if (Math.abs(RUNGS[rung][1] - pxScale) > 0.01 || Math.abs(RUNGS[rung][2] - stepScale) > 0.01) {
-      pxScale = RUNGS[rung][1];
+    if (Math.abs(RUNGS[rung][2] - stepScale) > 0.01) {
       stepScale = RUNGS[rung][2];
-      // textureScale в Cesium только для чтения, но PostProcessStageTextureCache
-      // читает stage._textureScale каждый кадр и сам пересобирает framebuffer
-      // при изменении — поэтому пишем поле, а не пересоздаём проход.
-      stage._textureScale = pxScale;
       uniforms.u_stepScale = stepScale;
     }
   };
@@ -1656,6 +1664,9 @@ export function createNuclearVolumetrics({
     const uniforms = stage.uniforms;
     // Системные часы не зависят от управляемого в тестах игрового таймера.
     const nowMs = Date.now();
+    // Первый вызов — синхронный, из createNuclearVolumetrics, ещё до какого
+    // либо кадра: prevFrameMs нулевой именно на нём.
+    const beforeFirstFrame = prevFrameMs === 0;
     // stage.enabled на входе — то, с чем проход реально отрисовался в ПРОШЛОМ
     // кадре: ниже update() переставляет его заново.
     const wasShown = stage.enabled;
@@ -1663,8 +1674,6 @@ export function createNuclearVolumetrics({
       // Потолок 180 с: на программном растере честный марш даёт и 80-секундные
       // кадры, а срез на 60 с занижал бы цену ровно там, где она важнее всего.
       const dtMs = clamp(nowMs - prevFrameMs, 0, 180000);
-      frameMs = frameMs ? frameMs * 0.7 + dtMs * 0.3 : dtMs;
-      lastFrameMs = frameMs;
       if (wasShown) {
         blastMs = blastMs ? blastMs * 0.75 + dtMs * 0.25 : dtMs;
         blastSamples += 1;
@@ -1826,7 +1835,12 @@ export function createNuclearVolumetrics({
     // одиночной стадии нет вообще. До this марш выполнялся каждый кадр
     // взрыва, даже когда гриб был за спиной камеры, — «выключение» лишь
     // казалось выключением.
-    stage.enabled = onScreen || uniforms.u_flash > 0.002;
+    // Первый кадр показа марш не исполняется: только так получается честный
+    // интервал «кадр без объёма», из которого родится idleMs. Без него
+    // адаптация не запускалась ни разу, пока гриб в кадре (замер 15.11:
+    // 57-61 с на кадр, показ в 150 с = два кадра, гриба на снимках нет).
+    // Потеря одного кадра почти ничего: вспышка на ageReal = 0 равна нулю.
+    stage.enabled = beforeFirstFrame ? false : (onScreen || uniforms.u_flash > 0.002);
   };
 
   const removeListener = scene.preRender.addEventListener(update);

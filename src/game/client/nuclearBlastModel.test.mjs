@@ -5,6 +5,7 @@ import {
   computeBlastZones,
   damageTierAt,
   zonesForBomb,
+  nearestAirBurstProfile,
   burstCoupling,
   overpressurePsi,
   positivePhaseSeconds,
@@ -148,4 +149,21 @@ test('the pressure radius inverts the near-field law and applies the surface fac
   assert.ok(Math.abs(radiusForPressurePsi(8000, 3) / radiusForPressurePsi(1000, 3) - 2) < 1e-9);
   // Давление убывает с дальностью монотонно, без ступенек на узлах таблицы.
   assert.ok(radiusForPressurePsi(500, 4) < radiusForPressurePsi(500, 3));
+});
+
+test('ближайший воздушный замер подбирается по логарифму мощности', () => {
+  const bombs = profiles.bombs;
+  const pick = (kt) => nearestAirBurstProfile(bombs, kt);
+  // 150 кт ИЦБМ: ближайший воздушный замер — 500 кт, а не 1,6 Мт прежнего
+  // профиля по умолчанию и не 104 кт подземного «Седана».
+  assert.equal(pick(150).id, 'ivy_king');
+  assert.equal(pick(15).id, 'grable');
+  assert.equal(pick(50000).id, 'tsar');
+  // Подземные, водные и башенные профили в выборку не попадают никогда:
+  // у них другая ножка и другая шляпа, а ИЦБМ рвёт в воздухе.
+  for (const kt of [0.3, 20, 104, 1000, 15000]) {
+    assert.match(pick(kt).burst_type, /^NUCLEAR_(AIR|LOW_AIR|HIGH_AIR)$/, `${kt} кт дал ${pick(kt).id}`);
+  }
+  assert.equal(nearestAirBurstProfile(bombs, 0), null);
+  assert.equal(nearestAirBurstProfile([], 150), null);
 });

@@ -62,6 +62,10 @@ test('ядерный удар: город теряет население и п�
   const snap = snapshot(s, 'auris', { map });
   assert.ok(snap.nuclear.fallout.some(([c]) => c === b.cell));
   assert.equal(snap.nuclear.strikes.at(-1).cell, b.cell);
+  // Клиент считает гриб и снос по мощности из снимка: без этих полей удар
+  // выглядел бы как 1,6 Мт профиля по умолчанию, а не как то, что прилетело.
+  assert.equal(snap.nuclear.strikes.at(-1).yieldKt, NUKE.yieldKt);
+  assert.equal(snap.nuclear.strikes.at(-1).city, 'Мишень');
   // осадки рассеиваются
   for (let i = 0; i < NUKE.falloutTurns + 1; i += 1) endTurn(s, map);
   assert.equal(Object.keys(s.fallout).filter((c) => Number(c) === b.cell).length, 0);
