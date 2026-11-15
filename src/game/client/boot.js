@@ -14,6 +14,7 @@ import { unitPortrait } from './icons.js';
 import { addFallbackImagery, SOURCE_TOAST } from './imagery.js';
 import { attachCameraFlight } from './cameraFlight.js';
 import { attachCameraZoom } from './cameraZoom.js';
+import { attachPerfGovernor } from './perfGovernor.js';
 import { createNuclearRange } from './nuclear-range.js';
 import { isShamed, triggerShame } from './shame.js';
 import { NUKE_BAN_ERROR } from '../nuclearBan.js';
@@ -144,7 +145,22 @@ export async function bootKupol() {
   });
   // Полигон монтируется после createHud: тот перезаписывает innerHTML root и
   // стёр бы кнопку полигона.
-  createNuclearRange({ root, viewer, layers });
+  // Качество картинки считает сам игрок: на чужой машине FPS не измерить (см.
+  // шапку perfGovernor.js), поэтому часы берём отсюда, а не из замерщика.
+  let rangeOpen = false;
+  const perf = attachPerfGovernor({ viewer, scene: viewer.scene, root }, {
+    isBusy: () => rangeOpen || layers.nuclearLive(),
+    onNotice: (text) => hud.toast(text),
+  });
+  createNuclearRange({
+    root, viewer, layers,
+    onOpen: (open) => {
+      rangeOpen = open;
+      // Витрина всегда в полном качестве: иначе адаптив занижал бы ровно тот
+      // кадр, который игрок разглядывает, и красота мерилась бы замерщиком.
+      if (open) perf.toFull();
+    },
+  });
   // настоящие слои GEV (самолёты, спутники, землетрясения, запуски) поверх партии
   const liveLayers = createLiveLayers(viewer, (st) => hud.live(st));
   const net = connectGame({
@@ -344,6 +360,7 @@ export async function bootKupol() {
     viewer, get state() { return state; },
     flight,
     zoom,
+    perf,
     // update(state) нужен дымовой проверке: без ручки на слои снимок партии
     // нечем протолкнуть в syncStrikes, а остальной путь клиента тот же.
     layers,

@@ -524,6 +524,9 @@ export function createWorldLayers(viewer, geometry) {
     },
     playCombat,
     playNuclearTest,
+    // Жив ли объёмный гриб прямо сейчас: по этому признаку адаптив качества не
+    // имеет права трогать ступень во время показа.
+    nuclearLive: () => nuclearVolumes.size > 0,
     resetNuclearDamage() {
       clearNuclearTestEffects();
       stopNuclearAudio();
