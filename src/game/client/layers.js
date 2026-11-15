@@ -352,7 +352,13 @@ export function createWorldLayers(viewer, geometry) {
     added.push(...createNuclearVisuals(entities.entities, to, start, Boolean(st.intercepted)));
     setTimeout(() => { for (const e of added) entities.entities.remove(e); }, 12000);
     if (st.intercepted) return;
-    playNuclearAudio({ ...st, yieldMt: kt / 1000 });
+    // Запись того же заряда, чьим замером считается гриб: без soundId лестница
+    // мощности дала бы на 150 кт рекорд 1,6 Мт, как до внедрения физики.
+    playNuclearAudio({
+      ...st,
+      yieldMt: kt / 1000,
+      soundId: profile ? String(profile.id).replace(/_/g, '-') : st.soundId,
+    });
     // Снос считается ДО гриба ровно по той же причине, что и на полигоне:
     // обход тысяч строений занимает поток на десятки секунд, и запущенный
     // раньше гриб успевал умереть внутри этого freeze, не отрисовав ни одного

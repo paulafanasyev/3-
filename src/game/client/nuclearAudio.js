@@ -39,11 +39,18 @@ const DEFAULT_SOUND = Object.freeze({
 export const NUCLEAR_AUDIO_SAMPLES = SAMPLES;
 export const defaultNuclearSound = (bombId) => DEFAULT_SOUND[bombId] ?? 'rds37';
 
+// Путь без soundId выбирается по мощности, но файлы берёт те же, что и список
+// образцов: прежние «16-rds37-front.ogg» — имена исходного датасета, а не
+// собранного бандла, поэтому удар партии обращался к несуществующим файлам
+// (curl: 404 на front и tail) и молчал.
 const GAME_PROFILES = [
-  { maxMt: 5, front: '/audio/nuclear/16-rds37-front.ogg', tail: '/audio/nuclear/16-rds37-tail.ogg' },
-  { maxMt: 20, front: '/audio/nuclear/18-castle-bravo-front.ogg', tail: '/audio/nuclear/18-castle-bravo-tail.ogg' },
-  { maxMt: Infinity, front: '/audio/nuclear/20-tsar-front.ogg', tail: '/audio/nuclear/20-tsar-tail.ogg' },
-];
+  { maxMt: 5, id: 'rds37' },
+  { maxMt: 20, id: 'castle-bravo' },
+  { maxMt: Infinity, id: 'tsar' },
+].map(({ maxMt, id }) => {
+  const sample = SAMPLES.find((item) => item.id === id);
+  return { maxMt, front: sample.front, tail: sample.tail };
+});
 
 let activeFront = null;
 let activeTail = null;
@@ -66,17 +73,27 @@ export function stopNuclearAudio() {
   activeTail = null;
 }
 
+/**
+ * Образец для удара: явный soundId правит, иначе мощность. Возвращает только
+ * те пути, что есть в собранном бандле — выбор по мощности когда-то указывал
+ * на имена исходного датасета и молчал (curl: 404 на front и tail).
+ */
+export function nuclearSoundForStrike(strike = {}) {
+  const selected = SAMPLES.find((sample) => sample.id === strike.soundId);
+  if (selected) return selected;
+  const yieldMt = Number(strike.yieldMt);
+  return yieldMt > 0
+    ? GAME_PROFILES.find((item) => yieldMt <= item.maxMt) ?? GAME_PROFILES.at(-1)
+    : GAME_PROFILES[0];
+}
+
 export function playNuclearAudio(strike = {}) {
   if (typeof Audio === 'undefined' || strike.intercepted) return false;
   if (activeFront) { activeFront.pause(); activeFront.currentTime = 0; }
   if (activeTail) { activeTail.pause(); activeTail.currentTime = 0; }
   if (tailTimer !== null) clearTimeout(tailTimer);
 
-  const selected = SAMPLES.find((sample) => sample.id === strike.soundId);
-  const yieldMt = Number(strike.yieldMt);
-  const profile = selected ?? (Number.isFinite(yieldMt) && yieldMt > 0
-    ? GAME_PROFILES.find((item) => yieldMt <= item.maxMt) ?? GAME_PROFILES.at(-1)
-    : GAME_PROFILES[0]);
+  const profile = nuclearSoundForStrike(strike);
 
   activeFront = new Audio(profile.front);
   activeFront.preload = 'auto';
