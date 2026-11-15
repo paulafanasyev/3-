@@ -172,11 +172,15 @@ export function blastShapeAt(profile = {}, zones = {}, yieldKt = 1000, s = 0) {
   const aspectKeys = Array.isArray(art.cap_aspect_keys) ? keysTime(art.cap_aspect_keys) : [[0, 0.78], [tFull, 0.42]];
 
   const topY = Math.max(burstHeight, keyAt(topKeys, s, cloudTop));
-  // Зрелая шляпа обязана расходиться вширь: у реальных ядерных грибов диаметр
-  // шапки — 0.55-0.65 высоты подъёма, а не «облачко на палке». Без этого пола
-  // «Малыш» давал колонну 1.5 км под шапкой 3 км при вершине 9 км.
-  const spread = topY * 0.6 * clamp01(s / Math.max(1, tFull * 0.35));
-  const capD = Math.max(fireballMax * 0.8, keyAt(capKeys, s, capRadius * 2), spread);
+  // Диаметр шляпы ограничен долей высоты облака: у реальных ядерных грибов он
+  // 0,5-0,65 подъёма. Без потолка документированный купол РДС-37 (28 км)
+  // надевался уже на трети подъёма: шляпа 22 км в поперечнике при вершине 14 км
+  // ложилась на землю мячом и прятала ножку целиком (кадр 15.11 rds37_s209).
+  // Потолок считаем от cloudTop, а не от текущей вершины: высота подъёма в
+  // начальный момент содержит отметку подрыва — число самолёта, не функцию
+  // мощности, — и масштабирование заряду по W^⅓ ломалось бы на этом остатке.
+  const riseLimit = cloudTop * (0.50 + 0.15 * smoothstep(tFull * 0.5, tFull * 1.6, s));
+  const capD = Math.min(riseLimit, Math.max(fireballMax * 0.8, keyAt(capKeys, s, capRadius * 2)));
   const capR = capD * 0.5 * (1 + num(art.overshoot, 0.1) * Math.exp(-Math.max(0, s - tHead1) / (tHead1 * 2)));
   const halfH = Math.max(capR * 0.12, capR * keyAt(aspectKeys, s, 0.55));
   const headY = Math.max(burstHeight + halfH, topY - halfH);
