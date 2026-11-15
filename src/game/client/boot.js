@@ -13,6 +13,7 @@ import { openBattle } from './battle/hud.js';
 import { unitPortrait } from './icons.js';
 import { addFallbackImagery, SOURCE_TOAST } from './imagery.js';
 import { attachCameraFlight } from './cameraFlight.js';
+import { attachCameraZoom } from './cameraZoom.js';
 import { createNuclearRange } from './nuclear-range.js';
 import { isShamed, triggerShame } from './shame.js';
 import { NUKE_BAN_ERROR } from '../nuclearBan.js';
@@ -96,6 +97,7 @@ export async function bootKupol() {
   const { viewer, source } = await createViewer(globe);
   viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(START_VIEW.lon, START_VIEW.lat, START_VIEW.height) });
   const flight = attachCameraFlight(viewer);
+  const zoom = attachCameraZoom(viewer);
   const layers = createWorldLayers(viewer, geometry);
 
   let state = null;
@@ -122,6 +124,8 @@ export async function bootKupol() {
     spy: (d) => send({ kind: 'spy', op: d.op, target: d.target, ...(d.third ? { third: d.third } : {}) }),
     buy: (d) => send({ kind: 'buy', cityId: d.city }),
     fly: (d) => flyToCell(viewer, geometry, Number(d.cell), 9_000),
+    zoomIn: () => zoom.zoomIn(),
+    zoomOut: () => zoom.zoomOut(),
     selectUnit: (d) => { selection.unitId = d.unit; redraw(); },
     found: (d) => send({ kind: 'found', unitId: d.unit }),
     fortify: (d) => send({ kind: 'fortify', unitId: d.unit }),
@@ -339,6 +343,7 @@ export async function bootKupol() {
   window.__kupol = {
     viewer, get state() { return state; },
     flight,
+    zoom,
     // update(state) нужен дымовой проверке: без ручки на слои снимок партии
     // нечем протолкнуть в syncStrikes, а остальной путь клиента тот же.
     layers,

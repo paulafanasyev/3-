@@ -125,3 +125,14 @@ body.kupol > *:not(#kupol-globe):not(#kupol-root):not(.kb-root):not(.k-shame):no
 #kupol-root .k-new-game { justify-content: center; text-align: center; background: linear-gradient(180deg, #f2c76d, #c8902f); color: #1b1306; font-weight: 700; }
 #kupol-root .k-reconnect { position: absolute; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(5, 9, 16, .72); color: var(--txt); font-size: 16px; text-align: center; pointer-events: auto; }
 #kupol-root .k-reconnect button { padding: 9px 15px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.08); color: var(--txt); font: inherit; cursor: pointer; }
+/* масштаб карты: тот же шаг, что у колеса, только с кнопки */
+.k-zoom { position: absolute; left: 336px; top: 50%; transform: translateY(-50%); z-index: 22; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
+.k-zoom button { width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); backdrop-filter: blur(14px) saturate(1.2); color: var(--gold); font: 700 21px/1 "Noto Sans", sans-serif; cursor: pointer; box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+.k-zoom button:hover { border-color: rgba(240, 196, 106, .6); background: rgba(240, 196, 106, .16); }
+@media (max-width: 760px) { .k-zoom { left: 16px; top: auto; bottom: 196px; transform: none; } }
+/* испытательный полигон: интерфейс партии уходит, остаются только сам полигон,
+   масштаб и подсказки о связи — смотреть гриб нужно на пустом экране */
+#kupol-root.k-cinema .k-top, #kupol-root.k-cinema .k-left, #kupol-root.k-cinema .k-right,
+#kupol-root.k-cinema .k-chron, #kupol-root.k-cinema .k-live, #kupol-root.k-cinema .k-hint,
+#kupol-root.k-cinema .k-end, #kupol-root.k-cinema .k-help, #kupol-root.k-cinema .k-offer,
+#kupol-root.k-cinema .k-combat { visibility: hidden; }

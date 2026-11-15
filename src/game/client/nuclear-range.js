@@ -120,7 +120,7 @@ export function createNuclearRange({ root, viewer, layers }) {
       <button type="button" data-close>Закрыть полигон</button>
     </div>
     <div class="k-nrange-muted">Разрушения — процедурная игровая визуализация поверх карты. Исходные Google 3D Tiles не изменяются; состояние основной партии и сервера не затрагивается.</div>
-    <div class="k-nrange-muted">Полёт над городом: W/S — вперёд-назад, A/D — вбок, Q/E — разворот, Z/X — вниз/вверх, Shift — ускорение. Мышью — обзор и зум, как в God's Eye View.</div>
+    <div class="k-nrange-muted">Полёт над городом: W/S — вперёд-назад, A/D — вбок, Q/E — разворот, Z/X — вниз/вверх, Shift — ускорение. Колесо мыши — зум от 1 м до всего диска Земли, тот же шаг у кнопок «+» и «−» на карте. Пока полигон открыт, интерфейс партии скрыт, а любое движение камеры или колеса перебивает авто-наводку кадра.</div>
   `;
   root.appendChild(panel);
 
@@ -159,6 +159,10 @@ export function createNuclearRange({ root, viewer, layers }) {
   // полигон живёт в том же окне, что и партия: если позор случился раньше
   // монтирования панели, замок вешаем сразу
   lockRange();
+
+  // Пока фокус в поле панели, клавиатура принадлежит форме, и W/S долетают до
+  // камеры как ввод в текст. Выбор завершён — отдаём клавиши полёту.
+  const releaseKeys = () => document.activeElement?.blur?.();
 
   const updateBombInfo = () => {
     const bomb = BOMBS.find((item) => item.id === bombSelect.value) ?? BOMBS[0];
@@ -258,19 +262,22 @@ export function createNuclearRange({ root, viewer, layers }) {
     targetName = city[0];
     status.textContent = `Выбран город: ${city[0]} · ${city[1].toFixed(3)}°, ${city[2].toFixed(3)}°`;
     flyToCity(city);
+    releaseKeys();
   });
   cityResults.addEventListener('dblclick', () => cityResults.dispatchEvent(new Event('change')));
 
-  const close = () => {
-    panel.hidden = true;
-    trigger.setAttribute('aria-expanded', 'false');
+  // Полигон — это кинотеатр: интерфейс партии уходит, чтобы гриб смотрелся на
+  // пустом экране, и возвращается ровно в момент закрытия панели.
+  const setOpen = (open) => {
+    panel.hidden = !open;
+    root.classList.toggle('k-cinema', open);
+    trigger.setAttribute('aria-expanded', String(open));
+    if (open) return;
     selecting = false;
     pickButton.textContent = 'Указать точку на карте';
   };
-  trigger.addEventListener('click', () => {
-    panel.hidden = !panel.hidden;
-    trigger.setAttribute('aria-expanded', String(!panel.hidden));
-  });
+  const close = () => setOpen(false);
+  trigger.addEventListener('click', () => setOpen(panel.hidden));
   panel.querySelector('.k-nrange-close').addEventListener('click', close);
   panel.querySelector('[data-close]').addEventListener('click', close);
 
@@ -333,6 +340,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     }
     // Кадр ставим ДО запуска: испытание стартует мгновенно, и камера, которая
     // летит 2.4 s, иначе приезжает уже на остывший гриб.
+    releaseKeys();
     const frameRadius = frameCloud(target.lon, target.lat);
     testButton.disabled = true;
     status.textContent = `Запускаю ${bomb.name} над ${targetName}, кадр с ${Math.round(frameRadius / 100) / 10} км…`;
@@ -367,6 +375,7 @@ export function createNuclearRange({ root, viewer, layers }) {
     destroy() {
       window.removeEventListener(SHAME_EVENT, onShame);
       handler.destroy();
+      root.classList.remove('k-cinema');
       trigger.remove();
       panel.remove();
       style.remove();
