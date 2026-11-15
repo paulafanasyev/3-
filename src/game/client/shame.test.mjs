@@ -3,8 +3,8 @@
 // честность текстов и что замок висит именно на перезагрузке, а не на кнопке.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
 import { SHAME, errorText } from '../i18n/ru.js';
 import { ANTHEM_SRC, EMBLEM_SRC, SHAME_EVENT } from './shame.js';
 import stateAssets from '../data/state-assets.json' with { type: 'json' };
@@ -16,7 +16,17 @@ const hudCss = read('./hud.css');
 const bootSource = read('./boot.js');
 const byPath = new Map(stateAssets.assets.map((asset) => [asset.path, asset]));
 
-test('emblem and anthem are public domain and byte-for-byte what the provenance file measured', async () => {
+// Windows с core.autocrlf=true кладёт в рабочее дерево CRLF, Linux CI — LF: «размер
+// на диске» расходился ровно на число строк герба (265254 против 263630). Мера
+// снимается с нормализованного содержимого — тех же байтов, что в git-блобе.
+const measuredContent = (relative, eol) => {
+  const raw = readFileSync(new URL(`../../../${relative}`, import.meta.url));
+  const content = eol === 'lf' ? Buffer.from(raw.toString('utf8').replace(/\r\n/g, '\n'), 'utf8') : raw;
+  // Хеш поверх размера: подмена картинки не должна проходить как «совпало только число байтов».
+  return { bytes: content.length, sha256: createHash('sha256').update(content).digest('hex') };
+};
+
+test('emblem and anthem are public domain and byte-for-byte what the provenance file measured', () => {
   for (const [src, relative] of [
     [EMBLEM_SRC, 'public/game/state/emblem-russia.svg'],
     [ANTHEM_SRC, 'public/audio/state/anthem-russia-instrumental.ogg'],
@@ -24,8 +34,17 @@ test('emblem and anthem are public domain and byte-for-byte what the provenance 
     const asset = byPath.get(relative);
     assert.ok(asset, `${relative} отсутствует в src/game/data/state-assets.json`);
     assert.equal(asset.license, 'Public domain', `${relative}: лицензия не общественная`);
-    const file = await stat(new URL(`../../../${relative}`, import.meta.url));
-    assert.equal(file.size, asset.bytes, `${relative}: размер на диске разошёлся с провенансом (${file.size} ≠ ${asset.bytes})`);
+    const measured = measuredContent(relative, asset.eol);
+    assert.equal(
+      measured.bytes,
+      asset.bytes,
+      `${relative}: размер разошёлся с провенансом (${measured.bytes} ≠ ${asset.bytes})`
+    );
+    assert.equal(
+      measured.sha256,
+      asset.sha256,
+      `${relative}: содержимое разошлось с провенансом (${measured.sha256.slice(0, 12)}… ≠ ${asset.sha256.slice(0, 12)}…)`
+    );
     assert.equal(src, `/${relative.replace(/^public\//, '')}`, `${relative}: путь в shame.js не совпадает с провенансом`);
   }
   const svg = readFileSync(new URL(`../../../public${EMBLEM_SRC}`, import.meta.url), 'utf8');
