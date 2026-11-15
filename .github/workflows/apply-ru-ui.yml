@@ -35,6 +35,12 @@ jobs:
       - name: Rebuild translation catalog
         run: node build-translation-catalog.mjs
 
+      # The word map above translates words, and UPPER_SNAKE identifiers contain
+      # words: without this step the bot re-commits names like ROCKET_МИССИЯ_...,
+      # which breaks every importer (measured on main 16.11, commit dc8309f).
+      - name: Repair Latin identifiers damaged by the word map
+        run: node scripts/repair-i18n-identifiers.mjs
+
       - name: Commit applied translations
         shell: bash
         run: |

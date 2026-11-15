@@ -15,20 +15,20 @@ import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor
 const WINDOW_DAYS = 30;
 const API_URL = '/api/launches';
 
-export const ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID = 'rocket-missions';
-export const ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID = 'rocket-mission-selected';
-export const ROCKET_МИССИЯ_AMBIENT_OVERLAY_COHORT_LIMIT = 48;
-export const ROCKET_МИССИЯ_AMBIENT_OVERLAY_COLLISION_CAPACITY = 24;
-export const ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+export const ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID = 'rocket-missions';
+export const ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID = 'rocket-mission-selected';
+export const ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT = 48;
+export const ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY = 24;
+export const ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   cohortLimit: 12,
   collisionCapacity: 0,
   moving: true,
   solveIntervalMs: 0,
 });
 
-const ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_OPTIONS = Object.freeze({
-  cohortLimit: ROCKET_МИССИЯ_AMBIENT_OVERLAY_COHORT_LIMIT,
-  collisionCapacity: ROCKET_МИССИЯ_AMBIENT_OVERLAY_COLLISION_CAPACITY,
+const ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+  cohortLimit: ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
+  collisionCapacity: ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
   moving: false,
 });
 const DEFAULT_OVERLAY_HOST = Object.freeze({
@@ -95,18 +95,18 @@ const _missionOrbitPrimitives = new Map();
 const REPLAY_ASCENT_FALLBACK_SEC = 12;
 const REPLAY_ASCENT_MIN_SEC = 8;
 const REPLAY_ASCENT_MAX_SEC = 36;
-const REPLAY_ОРБИТА_DURATION_SEC = 28;
+const REPLAY_ORBIT_DURATION_SEC = 28;
 const REPLAY_COUNTDOWN_DURATION_SEC = 10;
 const REPLAY_TILE_SETTLE_DELAY_SEC = 5;
 const REPLAY_INITIAL_RANGE_M = 3500;
 const REPLAY_LOCAL_MAX_RANGE_M = 900000;
 const REPLAY_CONTEXT_MAX_RANGE_M = 2400000;
 const REPLAY_CONTEXT_ALTITUDE_END_M = 420000;
-const REPLAY_ОРБИТА_GLOBE_RANGE_M = 18000000;
-const REPLAY_ОРБИТА_PULLBACK_FRACTION = 0.2;
+const REPLAY_ORBIT_GLOBE_RANGE_M = 18000000;
+const REPLAY_ORBIT_PULLBACK_FRACTION = 0.2;
 const REPLAY_ASCENT_CAMERA_OFFSET_RAD = Cesium.Math.toRadians(30);
-const REPLAY_ОРБИТА_CAMERA_OFFSET_RAD = Cesium.Math.toRadians(45);
-const REPLAY_ОРБИТА_FRAME_CENTER_BLEND = 0.45;
+const REPLAY_ORBIT_CAMERA_OFFSET_RAD = Cesium.Math.toRadians(45);
+const REPLAY_ORBIT_FRAME_CENTER_BLEND = 0.45;
 const REPLAY_SPEED_MIN = 0.25;
 const REPLAY_SPEED_MAX = 4;
 const REPLAY_SPEED_STEP = 0.25;
@@ -120,10 +120,10 @@ const _declutterOccluder = new Cesium.EllipsoidalOccluder(
 const _missionRingDate = new Date(0);
 const EARTH_ROTATION_RAD_PER_SEC = Cesium.Math.TWO_PI / 86164.0905;
 const PROJECTED_ASCENT_ROTATION_SEC = 600;
-const СТУПЕНЬ_REENTRY_ALTITUDE_M = 100000;
-const МИССИЯ_CLOSE_VIEW_RANGE_M = 180000;
-const МИССИЯ_GLOBE_VIEW_RANGE_M = 5000000;
-const МИССИЯ_ФОКУС_RANGE_M = 12000;
+const STAGE_REENTRY_ALTITUDE_M = 100000;
+const MISSION_CLOSE_VIEW_RANGE_M = 180000;
+const MISSION_GLOBE_VIEW_RANGE_M = 5000000;
+const MISSION_FOCUS_RANGE_M = 12000;
 const SATELLITE_STANDALONE_DEFAULTS = {
   catalog: 'core',
   showPoints: true,
@@ -232,13 +232,13 @@ export function releaseAircraftTracking(dataManager) {
   }
   return released;
 }
-const МИССИЯ_ОРБИТА_PATTERN_GROUPS = 4;
-const МИССИЯ_ОРБИТА_DASHES_PER_GROUP = 100;
+const MISSION_ORBIT_PATTERN_GROUPS = 4;
+const MISSION_ORBIT_DASHES_PER_GROUP = 100;
 export const LAUNCH_PAD_ZONE_RADIUS_M = 500;
 const LAUNCH_PAD_ZONE_MAX_CAMERA_HEIGHT_M = 120000;
 const LAUNCH_PAD_ZONE_MAX_CAMERA_DISTANCE_M = 180000;
 
-const TRAJECTORY_СТУПЕНЬ_COLORS = [
+const TRAJECTORY_STAGE_COLORS = [
   '#ff9f43', '#ff66c4', '#a78bfa', '#7bed9f', '#ffd166', '#60a5fa',
 ];
 
@@ -256,8 +256,8 @@ function ensureMissionOrbitPatternRegistered() {
       type: 'GevMissionOrbitTactical',
       uniforms: {
         color: Cesium.Color.CYAN,
-        groupCount: МИССИЯ_ОРБИТА_PATTERN_GROUPS,
-        dashCount: МИССИЯ_ОРБИТА_DASHES_PER_GROUP,
+        groupCount: MISSION_ORBIT_PATTERN_GROUPS,
+        dashCount: MISSION_ORBIT_DASHES_PER_GROUP,
       },
       source: `
         czm_material czm_getMaterial(czm_materialInput materialInput) {
@@ -290,8 +290,8 @@ function createMissionOrbitPatternMaterial(color) {
   ensureMissionOrbitPatternRegistered();
   return Cesium.Material.fromType('GevMissionOrbitTactical', {
     color,
-    groupCount: МИССИЯ_ОРБИТА_PATTERN_GROUPS,
-    dashCount: МИССИЯ_ОРБИТА_DASHES_PER_GROUP,
+    groupCount: MISSION_ORBIT_PATTERN_GROUPS,
+    dashCount: MISSION_ORBIT_DASHES_PER_GROUP,
   });
 }
 
@@ -370,8 +370,8 @@ MissionOrbitPatternMaterialProperty.prototype.getType = function getType() {
 MissionOrbitPatternMaterialProperty.prototype.getValue = function getValue(time, result) {
   if (!Cesium.defined(result)) result = {};
   result.color = this._color;
-  result.groupCount = МИССИЯ_ОРБИТА_PATTERN_GROUPS;
-  result.dashCount = МИССИЯ_ОРБИТА_DASHES_PER_GROUP;
+  result.groupCount = MISSION_ORBIT_PATTERN_GROUPS;
+  result.dashCount = MISSION_ORBIT_DASHES_PER_GROUP;
   return result;
 };
 
@@ -590,10 +590,10 @@ export function createRocketMissionElementOverlayEntry({
 /** Keep the newest ambient mission markers with stable identity tie-breaking. */
 export function selectRocketMissionMarkerOverlayCohort(
   entries,
-  limit = ROCKET_МИССИЯ_AMBIENT_OVERLAY_COHORT_LIMIT,
+  limit = ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
 ) {
   const cap = Math.max(0, Math.min(
-    ROCKET_МИССИЯ_AMBIENT_OVERLAY_COHORT_LIMIT,
+    ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
     Math.floor(Number(limit) || 0),
   ));
   if (!Array.isArray(entries) || cap === 0) return [];
@@ -781,8 +781,8 @@ export function missionRosterEntries(launches) {
 export function missionHoverPreviewRange(cameraHeight) {
   const height = Number(cameraHeight);
   return Math.max(
-    МИССИЯ_CLOSE_VIEW_RANGE_M,
-    Number.isFinite(height) ? height : МИССИЯ_GLOBE_VIEW_RANGE_M,
+    MISSION_CLOSE_VIEW_RANGE_M,
+    Number.isFinite(height) ? height : MISSION_GLOBE_VIEW_RANGE_M,
   );
 }
 
@@ -1006,10 +1006,10 @@ function entityLaunchId(entity) {
 
 function clearMissionOverlaySources() {
   _selectedMissionOverlayTimeText = null;
-  _missionOverlayHost.clearSource(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID);
-  _missionOverlayHost.setVisible(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID, false);
-  _missionOverlayHost.clearSource(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID);
-  _missionOverlayHost.setVisible(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID, false);
+  _missionOverlayHost.clearSource(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID);
+  _missionOverlayHost.setVisible(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false);
+  _missionOverlayHost.clearSource(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID);
+  _missionOverlayHost.setVisible(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false);
 }
 
 function syncMissionOverlayEntries() {
@@ -1021,8 +1021,8 @@ function syncMissionOverlayEntries() {
     ? _missionOverlayRecords.get(_selectedLaunchId)
     : null;
   if (selectedRecord) {
-    _missionOverlayHost.clearSource(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID);
-    _missionOverlayHost.setVisible(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID, false);
+    _missionOverlayHost.clearSource(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID);
+    _missionOverlayHost.setVisible(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false);
     const entries = selectedRecord.elementEntryFactories.map((createEntry) => createEntry());
     if (_replayCameraLaunchId !== selectedRecord.launch.id) {
       entries.unshift(createRocketMissionMarkerOverlayEntry(
@@ -1032,19 +1032,19 @@ function syncMissionOverlayEntries() {
       ));
     }
     _missionOverlayHost.setEntries(
-      ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID,
+      ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
       entries,
-      ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_OPTIONS,
+      ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_OPTIONS,
     );
-    _missionOverlayHost.setVisible(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID, true);
+    _missionOverlayHost.setVisible(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, true);
     _selectedMissionOverlayTimeText = selectedRecord.liveEventTime
       ? formatMissionEventTime(selectedRecord.liveEventTime())
       : null;
     return;
   }
 
-  _missionOverlayHost.clearSource(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID);
-  _missionOverlayHost.setVisible(ROCKET_МИССИЯ_SELECTED_OVERLAY_SOURCE_ID, false);
+  _missionOverlayHost.clearSource(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID);
+  _missionOverlayHost.setVisible(ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID, false);
   _selectedMissionOverlayTimeText = null;
   const entries = selectRocketMissionMarkerOverlayCohort(
     Array.from(_missionOverlayRecords.values(), (record) => {
@@ -1060,11 +1060,11 @@ function syncMissionOverlayEntries() {
     }),
   );
   _missionOverlayHost.setEntries(
-    ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID,
+    ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
     entries,
-    ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_OPTIONS,
+    ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_OPTIONS,
   );
-  _missionOverlayHost.setVisible(ROCKET_МИССИЯ_AMBIENT_OVERLAY_SOURCE_ID, true);
+  _missionOverlayHost.setVisible(ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, true);
 }
 
 function refreshSelectedMissionOverlayText() {
@@ -1534,7 +1534,7 @@ export function replayChaseCameraHeading(pathHeading, orbitBlend = 0) {
   return Cesium.Math.zeroToTwoPi(
     pathHeading + Cesium.Math.lerp(
       REPLAY_ASCENT_CAMERA_OFFSET_RAD,
-      REPLAY_ОРБИТА_CAMERA_OFFSET_RAD,
+      REPLAY_ORBIT_CAMERA_OFFSET_RAD,
       blend,
     ),
   );
@@ -1569,8 +1569,8 @@ export function smoothReplayCameraHeading(
 export function missionZoomPitch(rangeM) {
   const range = Math.max(0, Number(rangeM) || 0);
   const blend = Cesium.Math.clamp(
-    (Math.log(Math.max(range, МИССИЯ_CLOSE_VIEW_RANGE_M)) - Math.log(МИССИЯ_CLOSE_VIEW_RANGE_M))
-      / (Math.log(МИССИЯ_GLOBE_VIEW_RANGE_M) - Math.log(МИССИЯ_CLOSE_VIEW_RANGE_M)),
+    (Math.log(Math.max(range, MISSION_CLOSE_VIEW_RANGE_M)) - Math.log(MISSION_CLOSE_VIEW_RANGE_M))
+      / (Math.log(MISSION_GLOBE_VIEW_RANGE_M) - Math.log(MISSION_CLOSE_VIEW_RANGE_M)),
     0,
     1,
   );
@@ -1600,7 +1600,7 @@ export function replayCameraView(state, altitudeM) {
   const contextBlend = rawContextBlend * rawContextBlend * (3 - 2 * rawContextBlend);
   const contextRange = Cesium.Math.clamp(
     180000 + altitude * 3.8,
-    МИССИЯ_CLOSE_VIEW_RANGE_M,
+    MISSION_CLOSE_VIEW_RANGE_M,
     REPLAY_CONTEXT_MAX_RANGE_M,
   );
   const ascentRange = Cesium.Math.lerp(localRange, contextRange, contextBlend);
@@ -1613,13 +1613,13 @@ export function replayCameraView(state, altitudeM) {
     return { range: ascentRange, pitch: ascentPitch };
   }
   const rawBlend = Cesium.Math.clamp(
-    (Number(state?.phaseProgress) || 0) / REPLAY_ОРБИТА_PULLBACK_FRACTION,
+    (Number(state?.phaseProgress) || 0) / REPLAY_ORBIT_PULLBACK_FRACTION,
     0,
     1,
   );
   const blend = rawBlend * rawBlend * (3 - 2 * rawBlend);
   return {
-    range: Cesium.Math.lerp(ascentRange, REPLAY_ОРБИТА_GLOBE_RANGE_M, blend),
+    range: Cesium.Math.lerp(ascentRange, REPLAY_ORBIT_GLOBE_RANGE_M, blend),
     // Keep an oblique tactical view of the complete orbit rather than ending
     // in a nadir view. This also prevents the camera from appearing to
     // return toward the launch site after insertion.
@@ -1664,7 +1664,7 @@ export function replayOrbitCameraTarget(vehicleAnchor, frameCenter, orbitBlend =
   if (!vehicleAnchor) return vehicleAnchor;
   if (!frameCenter) return Cesium.Cartesian3.clone(vehicleAnchor);
   const blend = Cesium.Math.clamp(Number(orbitBlend) || 0, 0, 1)
-    * REPLAY_ОРБИТА_FRAME_CENTER_BLEND;
+    * REPLAY_ORBIT_FRAME_CENTER_BLEND;
   return Cesium.Cartesian3.lerp(
     vehicleAnchor,
     frameCenter,
@@ -1807,7 +1807,7 @@ function startMissionZoomAnchor(launch, initialRange) {
   if (!_viewer || !launch || _replayCameraLaunchId) return;
   stopMissionZoomAnchor();
   const target = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
-  const range = Math.max(2000, Number(initialRange) || МИССИЯ_GLOBE_VIEW_RANGE_M);
+  const range = Math.max(2000, Number(initialRange) || MISSION_GLOBE_VIEW_RANGE_M);
   _missionZoomAnchorId = launch.id;
   _viewer.camera.lookAt(
     target,
@@ -1990,7 +1990,7 @@ function startMissionReplay(launchId) {
     );
     const orbitBlend = !state.ascending
       ? Cesium.Math.clamp(
-        (Number(state.phaseProgress) || 0) / REPLAY_ОРБИТА_PULLBACK_FRACTION,
+        (Number(state.phaseProgress) || 0) / REPLAY_ORBIT_PULLBACK_FRACTION,
         0,
         1,
       )
@@ -2068,7 +2068,7 @@ function startMissionReplay(launchId) {
       }
     }
     if (state.elapsedSinceStart >= ascentDurationSec
-      + REPLAY_ОРБИТА_DURATION_SEC) {
+      + REPLAY_ORBIT_DURATION_SEC) {
       stopMissionReplay();
     }
   });
@@ -2225,8 +2225,8 @@ function atmosphericReentryIndex(path) {
     if (
       Number.isFinite(previousHeight)
       && Number.isFinite(height)
-      && previousHeight > СТУПЕНЬ_REENTRY_ALTITUDE_M
-      && height <= СТУПЕНЬ_REENTRY_ALTITUDE_M
+      && previousHeight > STAGE_REENTRY_ALTITUDE_M
+      && height <= STAGE_REENTRY_ALTITUDE_M
     ) {
       return index;
     }
@@ -2477,13 +2477,13 @@ function focusLaunchSite(launch) {
       offset: new Cesium.HeadingPitchRange(
         0,
         Cesium.Math.toRadians(-42),
-        МИССИЯ_ФОКУС_RANGE_M,
+        MISSION_FOCUS_RANGE_M,
       ),
       duration: 1.4,
       easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
       complete: () => {
         if (_selectedLaunchId === launch.id) {
-          startMissionZoomAnchor(launch, МИССИЯ_ФОКУС_RANGE_M);
+          startMissionZoomAnchor(launch, MISSION_FOCUS_RANGE_M);
         }
       },
     },
@@ -2903,7 +2903,7 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
         polyline: {
           positions: surfaceSafePath(segment.positions),
           width: 2,
-          material: Cesium.Color.fromCssColorString(TRAJECTORY_СТУПЕНЬ_COLORS[index % TRAJECTORY_СТУПЕНЬ_COLORS.length]).withAlpha(0.8),
+          material: Cesium.Color.fromCssColorString(TRAJECTORY_STAGE_COLORS[index % TRAJECTORY_STAGE_COLORS.length]).withAlpha(0.8),
           clampToGround: false,
           arcType: Cesium.ArcType.NONE,
         },
@@ -2963,7 +2963,7 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
       launch,
       _animationStarts.get(launch.id) || Date.now(),
       ascentDurationSec,
-      REPLAY_ОРБИТА_DURATION_SEC,
+      REPLAY_ORBIT_DURATION_SEC,
       orbitPeriodSec,
       _replaySpeed,
       replayClockNow(launch.id),
@@ -2991,7 +2991,7 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
       const reentryIndex = atmosphericReentryIndex(path);
       const reentryPath = path.slice(reentryIndex);
       const color = Cesium.Color.fromCssColorString(
-        TRAJECTORY_СТУПЕНЬ_COLORS[(stageIndex + 1) % TRAJECTORY_СТУПЕНЬ_COLORS.length],
+        TRAJECTORY_STAGE_COLORS[(stageIndex + 1) % TRAJECTORY_STAGE_COLORS.length],
       );
       _dataSource.entities.add({
         id: `rocket-reentry-recovery:${launch.id}:${stageIndex}`,
@@ -3008,7 +3008,7 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
         properties: {
           launchId: launch.id,
           stageId: stage.id,
-          phase: 'СТУПЕНЬ_REENTRY_RECOVERY',
+          phase: 'STAGE_REENTRY_RECOVERY',
           accuracy: stage.endpoint.accuracy,
           source: launch.source,
         },
@@ -3030,7 +3030,7 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
             launchId: launch.id,
             stageId: stage.id,
             phase: 'ATMOSPHERIC_REENTRY',
-            altitudeM: СТУПЕНЬ_REENTRY_ALTITUDE_M,
+            altitudeM: STAGE_REENTRY_ALTITUDE_M,
             source: 'Estimated 100 km atmospheric interface',
           },
         });
@@ -3131,7 +3131,7 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
       properties: {
         launchId: launch.id,
         noradId: satelliteTrack?.noradId || '',
-        phase: satelliteTrack ? 'CURRENT_SATELLITE_POSITION' : 'ESTIMATED_ОРБИТА_POSITION',
+        phase: satelliteTrack ? 'CURRENT_SATELLITE_POSITION' : 'ESTIMATED_ORBIT_POSITION',
         source: satelliteTrack ? 'Satellites layer' : 'Approximate mission orbit',
       },
     });
@@ -3205,7 +3205,7 @@ function addLaunchEntity(launch, activeTleText = _activeTleText) {
     _dataSource.entities.add({
       id: `rocket-vehicle:${launch.id}`,
       position: replayPosition,
-      properties: { launchId: launch.id, noradId: satelliteTrack?.noradId || '', phase: 'ASCENT_THEN_ОРБИТА', source: satelliteTrack ? 'Satellite trajectory animation' : 'Approximate trajectory animation' },
+      properties: { launchId: launch.id, noradId: satelliteTrack?.noradId || '', phase: 'ASCENT_THEN_ORBIT', source: satelliteTrack ? 'Satellite trajectory animation' : 'Approximate trajectory animation' },
     });
     _dataSource.entities.add({
       id: `rocket-transfer:${launch.id}`,
