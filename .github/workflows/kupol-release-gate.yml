@@ -1,0 +1,74 @@
+name: Kupol release gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kupol-release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-production-and-browser:
+    name: Linux production build and browser QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Validate Russian identifiers
+        run: node scripts/repair-i18n-identifiers.mjs --check
+      - name: Run complete unit suite
+        run: npm test
+      - name: Build production bundle
+        run: npm run build
+      - name: Smoke-test production HTTP and WebSocket server
+        run: npm run smoke
+      - name: Build QA-instrumented bundle
+        run: npm run build
+        env:
+          VITE_KUPOL_QA: "1"
+      - name: Verify nuclear range, camera aim, damage, audio and responsive layout
+        run: node scripts/nuclear-range-browser-smoke.mjs
+      - name: Restore a non-instrumented production build
+        run: npm run build
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kupol-browser-qa
+          path: artifacts/nuclear-range-smoke.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-production:
+    name: Windows build and cross-platform tests
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Run complete unit suite
+        run: npm test
+      - name: Build production bundle on Windows
+        run: npm run build
