@@ -117,5 +117,8 @@ test('battle clock is stopped while detached and resumes on rebind', () => {
   assert.ok(interval, 'battle interval restarted after resume');
   interval(); interval();
   assert.ok(state.battle.tick > before, 'battle advances after resume');
+  const deliveredFrames = secondWs.sent.filter((message) => message.type === 'game:battle');
+  assert.ok(deliveredFrames.length > 0, 'battle frames are delivered to the resumed transport');
+  assert.ok(deliveredFrames.at(-1).battle.tick > before, 'the delivered battle frame contains the advanced authoritative tick');
   second.close();
 });
