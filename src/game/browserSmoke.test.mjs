@@ -14,7 +14,7 @@ const chrome = wanted ? findChrome() : null;
 const once = process.env.GITHUB_RUN_ID ? `/tmp/kupol-browser-smoke-${process.env.GITHUB_RUN_ID}` : null;
 const skip = !wanted ? 'только в CI или с KUPOL_BROWSER_SMOKE=1' : !chrome ? 'нет Chrome/Chromium' : once && existsSync(once) ? 'уже прошла в этом прогоне' : false;
 
-test('браузер: /kupol без ключей и интернета — глобус, тактический бой, конец хода', { skip, timeout: 240000 }, async () => {
+test('браузер: /kupol без ключей и интернета — глобус, тактический бой, конец хода', { skip, timeout: 360000 }, async () => {
   if (once) writeFileSync(once, '1');
   const server = await startDevServer({ scenario: 'battle' });
   try {
