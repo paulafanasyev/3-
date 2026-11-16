@@ -286,7 +286,7 @@ server.on('upgrade', (req, socket, head) => {
   // also bounds active in-memory game sessions; detached sessions are separately
   // capped by createSessionRegistry(max=200) and expire after their resume TTL.
   if (wss.clients.size >= MAX_WS_CLIENTS) {
-    socket.write('HTTP/1.1 503 Service Unavailable\\r\\nRetry-After: 15\\r\\nConnection: close\\r\\nContent-Length: 0\\r\\n\\r\\n');
+    socket.write('HTTP/1.1 503 Service Unavailable\r\\nRetry-After: 15\r\\nConnection: close\r\\nContent-Length: 0\r\\n\r\\n');
     socket.destroy();
     return;
   }
