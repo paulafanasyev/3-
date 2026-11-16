@@ -173,7 +173,8 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-status]')?.textContent.includes('Выбран город: Hanoi'));
   await page.waitForFunction(() => {
     const probe = window.__KUPOL_QA__?.snapshot();
-    return probe?.target?.name === 'Hanoi' && probe?.camera?.aimDot > 0.97;
+    return probe?.target?.name === 'Hanoi' && probe?.camera?.aimDot > 0.97
+      && probe?.camera?.height > 0 && probe.camera.height < 1_000_000;
   }, { timeout: 20000 });
   const cameraProbe = await page.evaluate(() => window.__KUPOL_QA__.snapshot());
   assert(cameraProbe.camera.aimDot > 0.97, `Cesium camera actually aims at Hanoi (dot=${cameraProbe.camera.aimDot.toFixed(4)})`);
