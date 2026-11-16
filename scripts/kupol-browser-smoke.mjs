@@ -71,14 +71,14 @@ async function cdp(port) {
     pending.clear();
   };
   const send = (method, params = {}) => new Promise((resolve, reject) => {
-    id += 1;
+    const commandId = ++id;
     const timer = setTimeout(() => {
-      pending.delete(id);
+      pending.delete(commandId);
       reject(new Error(`CDP command timed out after 15s: ${method}`));
     }, 15000);
-    pending.set(id, { resolve, reject, timer, method });
-    try { ws.send(JSON.stringify({ id, method, params })); }
-    catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
+    pending.set(commandId, { resolve, reject, timer, method });
+    try { ws.send(JSON.stringify({ id: commandId, method, params })); }
+    catch (error) { clearTimeout(timer); pending.delete(commandId); reject(error); }
   });
   return { send, on: (h) => handlers.push(h), close: () => ws.close() };
 }
