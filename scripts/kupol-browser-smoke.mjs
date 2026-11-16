@@ -55,9 +55,31 @@ async function cdp(port) {
   let id = 0; const pending = new Map(); const handlers = [];
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
-    if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } else handlers.forEach((h) => h(m));
+    if (m.id && pending.has(m.id)) {
+      const item = pending.get(m.id);
+      clearTimeout(item.timer);
+      pending.delete(m.id);
+      if (m.error) item.reject(new Error(`CDP ${item.method}: ${m.error.message || JSON.stringify(m.error)}`));
+      else item.resolve(m);
+    } else handlers.forEach((h) => h(m));
   };
-  const send = (method, params = {}) => new Promise((res) => { id += 1; pending.set(id, res); ws.send(JSON.stringify({ id, method, params })); });
+  ws.onclose = () => {
+    for (const item of pending.values()) {
+      clearTimeout(item.timer);
+      item.reject(new Error(`CDP connection closed while waiting for ${item.method}`));
+    }
+    pending.clear();
+  };
+  const send = (method, params = {}) => new Promise((resolve, reject) => {
+    id += 1;
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`CDP command timed out after 15s: ${method}`));
+    }, 15000);
+    pending.set(id, { resolve, reject, timer, method });
+    try { ws.send(JSON.stringify({ id, method, params })); }
+    catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
+  });
   return { send, on: (h) => handlers.push(h), close: () => ws.close() };
 }
 
