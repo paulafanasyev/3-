@@ -143,3 +143,128 @@ body.kupol > *:not(#kupol-globe):not(#kupol-root):not(.kb-root):not(.k-shame):no
 #kupol-root.k-cinema .k-chron, #kupol-root.k-cinema .k-live, #kupol-root.k-cinema .k-hint,
 #kupol-root.k-cinema .k-end, #kupol-root.k-cinema .k-help, #kupol-root.k-cinema .k-offer,
 #kupol-root.k-cinema .k-combat { visibility: hidden; }
+
+/* Респонсивная компоновка: не даём фиксированным панелям выходить за экран.
+   На телефонах боковые панели становятся узкими прокручиваемыми колонками,
+   а старт, бой и нижние элементы получают отдельные размеры. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .k-left { left: 10px; width: min(270px, 27vw); max-height: calc(100dvh - 260px); }
+  .k-right { right: 10px; width: min(290px, 29vw); max-height: calc(100dvh - 330px); }
+  .k-chron { left: 10px; width: min(46vw, 520px); }
+  .k-end { right: 10px; padding: 13px 20px; }
+  .k-start { padding: 16px; overflow: auto; }
+  .k-start .glass { width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+  #kupol-root .k-combat { width: min(540px, calc(100vw - 300px)); }
+}
+
+@media (max-width: 760px) {
+  #kupol-root { font-size: 12px; }
+  .k-top {
+    left: 8px; right: 8px; top: 8px; height: auto; min-height: 48px;
+    padding: 6px 9px; gap: 7px; flex-wrap: wrap; align-items: center;
+  }
+  .k-logo { font-size: 14px; letter-spacing: .22em; }
+  .k-sep { height: 20px; }
+  .k-turn { font-size: 10px; }
+  .k-turn b { font-size: 13px; }
+  .k-chips {
+    flex: 1 1 100%; min-width: 0; margin-left: 0; gap: 5px;
+    overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px;
+  }
+  .k-chip { flex: 0 0 auto; gap: 5px; padding: 5px 7px; font-size: 10px; }
+  .k-chip i { font-size: 9px; }
+  .k-status { display: none; }
+
+  .k-left {
+    left: 8px; top: 102px; width: min(44vw, 220px);
+    max-height: calc(100dvh - 290px); gap: 6px;
+  }
+  .k-right {
+    right: 8px; top: 102px; width: min(44vw, 220px);
+    max-height: calc(100dvh - 290px); gap: 6px;
+  }
+  .k-card { padding: 8px; }
+  .k-head { gap: 7px; }
+  .k-por { width: 42px; height: 48px; border-radius: 7px; font-size: 15px; }
+  .k-nm { font-size: 13px; }
+  .k-ld { font-size: 10px; }
+  .k-h4 { font-size: 9px; }
+  .k-btn { padding: 6px 7px; gap: 4px; font-size: 10px; }
+  .k-lc { gap: 6px; padding: 7px; }
+  .k-line { font-size: 10px; }
+  .k-acts { gap: 3px; }
+  .k-acts button { font-size: 10px; padding: 4px 5px; }
+  .k-list { max-height: 180px; }
+
+  .k-chron {
+    left: 8px; right: 8px; bottom: 8px; width: auto;
+    max-height: 17dvh; padding: 7px 9px; font-size: 10px; line-height: 1.35;
+  }
+  .k-end {
+    right: 8px; bottom: calc(12px + 17dvh); padding: 9px 12px;
+    border-radius: 10px; font-size: 12px;
+  }
+  .k-end small { font-size: 9px; }
+  .k-fin {
+    left: 8px; right: 8px; bottom: calc(12px + 17dvh); transform: none;
+    width: auto; padding: 8px 10px; font-size: 11px;
+  }
+  .k-live { right: 8px; bottom: calc(68px + 17dvh); width: min(42vw, 190px); padding: 7px 8px; }
+  .k-toast { top: 96px; width: calc(100vw - 24px); text-align: center; }
+  .k-offer { left: 8px; right: 8px; top: 96px; transform: none; width: auto; }
+  .k-hint { display: none; }
+  .k-zoom { left: 8px; bottom: calc(18px + 17dvh); gap: 4px; }
+  .k-zoom button { width: 36px; height: 36px; border-radius: 9px; }
+
+  .k-start { padding: 12px; overflow: auto; align-items: flex-start; }
+  .k-start .glass {
+    width: 100%; max-height: calc(100dvh - 24px); overflow: auto;
+    padding: 16px; border-radius: 12px;
+  }
+  .k-start h1 { font-size: 20px; letter-spacing: .18em; }
+  .k-start p { font-size: 12px; margin-bottom: 12px; }
+  .k-nations { grid-template-columns: 1fr; gap: 7px; }
+  .k-nations button { padding: 9px; gap: 8px; }
+  .k-difficulty { font-size: 11px; }
+
+  #kupol-root .k-combat {
+    left: 8px; right: 8px; bottom: calc(12px + 17dvh); transform: none;
+    width: auto; max-height: 45dvh; overflow: auto; padding: 10px;
+  }
+  #kupol-root .k-cb-row { grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr); gap: 5px; }
+  #kupol-root .k-cb-side img { width: 52px; height: 52px; }
+  #kupol-root .k-cb-str { font-size: 18px; }
+  #kupol-root .k-cb-mods { font-size: 9px; }
+  #kupol-root .k-cb-mid { padding-top: 12px; }
+  #kupol-root .k-cb-odds { font-size: 27px; }
+  #kupol-root .k-cb-title { font-size: 10px; margin-bottom: 7px; }
+
+  .k-help { top: 72px; right: 8px; width: 30px; height: 30px; }
+  .k-help-box { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); padding: 18px 14px; }
+  #kupol-root .k-gameover-card { padding: 18px; }
+  #kupol-root .k-gameover-card h1 { font-size: 22px; }
+  #kupol-root .k-gameover-stats { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 390px) {
+  .k-logo { font-size: 12px; letter-spacing: .16em; }
+  .k-turn { font-size: 9px; }
+  .k-chip { font-size: 9px; padding: 4px 6px; }
+  .k-left, .k-right { width: calc(50vw - 12px); }
+  .k-card { padding: 6px; }
+  .k-btn { font-size: 9px; padding: 5px; }
+  .k-chron { max-height: 15dvh; }
+  .k-end, .k-fin, #kupol-root .k-combat { bottom: calc(10px + 15dvh); }
+  .k-zoom { bottom: calc(16px + 15dvh); }
+}
+
+@media (max-height: 520px) and (max-width: 900px) {
+  .k-top { min-height: 38px; }
+  .k-chips { display: none; }
+  .k-left, .k-right { top: 58px; max-height: calc(100dvh - 142px); }
+  .k-chron { display: none; }
+  .k-end, .k-fin { bottom: 8px; }
+  .k-zoom { bottom: 8px; }
+  #kupol-root .k-combat { bottom: 8px; max-height: 48dvh; }
+}
+
