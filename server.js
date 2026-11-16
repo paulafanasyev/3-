@@ -21,7 +21,7 @@ const dist = path.join(__dirname, 'dist');
 const indexHtml = path.join(dist, 'index.html');
 
 const WS_PATH = '/ws';
-const WS_MAX_PAYLOAD = 16 * 1024;
+const WS_MAX_PAYLOAD = 64 * 1024;
 const configuredMaxWsClients = Number(process.env.GEV_MAX_WS_CLIENTS || 128);
 const MAX_WS_CLIENTS = Number.isInteger(configuredMaxWsClients)
   && configuredMaxWsClients > 0
