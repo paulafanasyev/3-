@@ -68,13 +68,24 @@ async function cdp(port) {
 export async function smokeKupol({ url, chrome = findChrome(), offline = true, timeoutMs = 45000, shot = null, game = false } = {}) {
   if (!chrome) throw new Error('не найден Chrome/Chromium (можно указать CHROME_PATH)');
   const port = 9300 + Math.floor(Math.random() * 600);
-  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--no-sandbox', '--no-first-run', '--use-angle=swiftshader',
+  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--remote-allow-origins=*', '--no-sandbox',
+    '--disable-dev-shm-usage', '--disable-gpu', '--no-first-run', '--no-zygote', '--use-angle=swiftshader',
     '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1280,720', `--user-data-dir=/tmp/kupol-smoke-chrome-${port}`];
   if (offline) args.push('--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>;localhost;127.0.0.1');
-  const proc = spawn(chrome, args, { stdio: 'ignore' });
+  let chromeLog = '';
+  const proc = spawn(chrome, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  proc.stdout.on('data', (d) => { chromeLog += d.toString(); });
+  proc.stderr.on('data', (d) => { chromeLog += d.toString(); });
   const report = { offline, url, ws: [], exceptions: [], consoleErrors: [], natural: { ok: 0, fail: 0 }, toasts: [], canvas: false, bootError: null, waitedMs: 0 };
+  proc.on('error', (error) => { chromeLog += `\\nspawn error: ${error.stack || error}`; });
   try {
-    const s = await cdp(port);
+    let s;
+    try {
+      s = await cdp(port);
+    } catch (error) {
+      await sleep(250);
+      throw new Error(`${error.message}; chrome exit=${proc.exitCode ?? 'running'}; stderr/stdout:\\n${chromeLog.slice(-5000)}`);
+    }
     s.on((m) => {
       if (m.method === 'Runtime.exceptionThrown') report.exceptions.push(String(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 500));
       if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') report.consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 500));
