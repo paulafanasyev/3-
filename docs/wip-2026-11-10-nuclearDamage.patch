@@ -1,0 +1,447 @@
+diff --git a/src/game/client/layers.js b/src/game/client/layers.js
+index 7b2f4df..df956bb 100644
+--- a/src/game/client/layers.js
++++ b/src/game/client/layers.js
+@@ -323,7 +323,7 @@ export function createWorldLayers(viewer, geometry) {
+     nuclearTestTimers.add(timer);
+     const damage = options.damage === false
+       ? null
+-      : await nuclearDamage.apply(at, yieldMt, options.cityName || 'Выбранный город');
++      : await nuclearDamage.apply(at, yieldMt, options.cityName || 'Выбранный город', sourceProfile);
+     return { ok: true, damage };
+   }
+ 
+diff --git a/src/game/client/nuclear-range.js b/src/game/client/nuclear-range.js
+index 27f039d..cd34464 100644
+--- a/src/game/client/nuclear-range.js
++++ b/src/game/client/nuclear-range.js
+@@ -38,14 +38,27 @@ const CITY_ALIASES = Object.freeze({
+   Moscow: ['москва'], 'Saint Petersburg': ['санкт-петербург', 'петербург'], Hanoi: ['ханой'],
+   'Ho Chi Minh City': ['хошимин', 'сайгон'], 'Da Nang': ['дананг'], Bangkok: ['бангкок'],
+   Beijing: ['пекин'], Shanghai: ['шанхай'], Tokyo: ['токио'], Seoul: ['сеул'],
+-  'New York': ['нью-йорк'], 'Los Angeles': ['лос-анджелес'], London: ['лондон'], Paris: ['париж'],
+-  Berlin: ['берлин'], Rome: ['рим'], Kyiv: ['киев', 'київ'], Minsk: ['минск'],
++  'Los Angeles': ['лос-анджелес'], Rome: ['рим'], Kyiv: ['киев', 'київ'], Minsk: ['минск'],
+   Tashkent: ['ташкент'], Almaty: ['алматы'], Astana: ['астана'], Dubai: ['дубай'],
+   Cairo: ['каир'], Istanbul: ['стамбул'], Delhi: ['дели'], Mumbai: ['мумбаи'],
++  'Washington,  D.C.': ['вашингтон', 'washington', 'washington d.c.', 'washington dc'],
++  'New York': ['нью-йорк', 'new york', 'nyc'], London: ['лондон', 'london'],
++  Paris: ['париж', 'paris'], Berlin: ['берлин', 'berlin'],
+ });
+ const CITIES = populatedPlaces.places;
+ const SOURCE_PROFILES = sourceBombProfiles.bombs;
+ const formatYield = (kt) => kt >= 1000 ? `${(kt / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} Мт` : `${kt.toLocaleString('ru-RU')} кт`;
++const formatDistance = (km) => km >= 1 ? `${km.toLocaleString('ru-RU', { maximumFractionDigits: km < 10 ? 1 : 0 })} км` : `${Math.round(km * 1000)} м`;
++const formatDamage = (d) => {
++  const parts = [];
++  if (d.craterDiameterM > 0) parts.push(`воронка ⌀${Math.round(d.craterDiameterM)} м`);
++  parts.push(`огненный шар ${formatDistance(d.fireballKm)}`);
++  parts.push(`полное разрушение ${formatDistance(d.severeKm)}`);
++  parts.push(`разрушение жилых районов ${formatDistance(d.heavyKm)}`);
++  parts.push(`выбитые окна ${formatDistance(d.lightKm)}`);
++  if (Number.isFinite(d.cloudTopKm)) parts.push(`гриб на ${Math.round(d.cloudTopKm)} км`);
++  return `Разрушения по реальным зонам поражения: ${parts.join(', ')}.`;
++};
+ 
+ export function createNuclearRange({ root, viewer, layers }) {
+   const style = document.createElement('style');
+@@ -227,7 +240,7 @@ export function createNuclearRange({ root, viewer, layers }) {
+         damage: damageToggle.checked,
+       });
+       status.textContent = result?.ok
+-        ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. Игровая зона разрушений: ${result.damage.radiusKm.toFixed(1)} км, объектов: ${result.damage.buildingCount}.` : '. Без разрушений.'}`
++        ? `Испытание выполнено: ${bomb.name} · ${formatYield(bomb.yieldKt)} · ${targetName}${result.damage ? `. ${formatDamage(result.damage)} Разрушено строений: ${result.damage.buildingCount}.` : '. Без разрушений.'}`
+         : 'Не удалось запустить визуализацию.';
+     } catch (error) {
+       status.textContent = `Ошибка испытания: ${String(error?.message || error)}`;
+diff --git a/src/game/client/nuclearDamage.js b/src/game/client/nuclearDamage.js
+index 2189e2b..0ed54eb 100644
+--- a/src/game/client/nuclearDamage.js
++++ b/src/game/client/nuclearDamage.js
+@@ -1,4 +1,9 @@
+ import * as Cesium from 'cesium';
++import {
++  zonesForBomb,
++  damageTierAt,
++  COLLAPSE,
++} from './nuclearBlastModel.js';
+ 
+ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+ const hash = (text) => {
+@@ -6,12 +11,18 @@ const hash = (text) => {
+   for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+   return h >>> 0;
+ };
++const PALETTE = ['#8e877d', '#aaa195', '#6d6963', '#b3a99b', '#77736d', '#938b80'];
+ 
+ /**
+- * Stylized, persistent city-damage layer for the in-game test range.
+- * Google Photorealistic 3D Tiles are streamed meshes and cannot be edited in place;
+- * this layer places destructible-looking building proxies, rubble, fire and smoke
+- * over the selected city. It never changes the remote tiles or game/server state.
++ * Persistent, physically-scaled city-damage layer for the in-game test range.
++ *
++ * Google Photorealistic 3D Tiles are streamed meshes and cannot be edited in
++ * place, so this layer drops destructible building proxies over the selected
++ * city. Unlike a single stylised blast circle, each proxy's fate is decided by
++ * its real distance from ground zero against the weapon's overpressure zones
++ * (cube-root scaled), and the fireball, crater and cloud come from the source
++ * repository's researched weapon table. It never changes remote tiles or
++ * game/server state.
+  */
+ export function createNuclearDamageLayer(viewer) {
+   const source = new Cesium.CustomDataSource('nuclear-city-damage');
+@@ -32,138 +43,259 @@ export function createNuclearDamageLayer(viewer) {
+     return Number.isFinite(terrain) ? terrain : 0;
+   }
+ 
+-  async function apply(at, yieldMt, cityName = 'Выбранный город') {
++  // Convert a metre offset to a lat/lon delta at the given latitude.
++  const offset = (at, eastM, northM) => {
++    const lat = at.lat + northM / 111_320;
++    const lon = at.lon + eastM / (111_320 * Math.max(0.15, Math.cos((at.lat * Math.PI) / 180)));
++    return { lat, lon };
++  };
++
++  async function apply(at, yieldMt, cityName = 'Выбранный город', bomb = null) {
+     if (!Number.isFinite(at?.lon) || !Number.isFinite(at?.lat)) return null;
+-    const seed = hash(`${cityName}:${at.lat.toFixed(3)}:${at.lon.toFixed(3)}:${yieldMt}`);
++    const seed = hash(`${cityName}:${at.lat.toFixed(3)}:${at.lon.toFixed(3)}:${yieldMt}:${bomb?.id ?? '-'}`);
+     let state = seed || 1;
+     const random = () => {
+       state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+       return state / 4294967296;
+     };
+-    const radiusKm = clamp(1.4 + Math.pow(Math.max(0.01, yieldMt), 0.27) * 2.3, 1.8, 24);
+-    const radiusM = radiusKm * 1000;
++
++    const model = zonesForBomb(bomb, Math.max(0, yieldMt) * 1000);
++    const R = model.radiiM;
++    // Buildings are only fabricated across the collapse front; intact outskirts
++    // stay as the real satellite/tile city, so the overlay blends with reality.
++    const collapseRadius = Math.max(R.heavy, R.fireball * 1.25, 120);
++    const damageRadius = Math.max(R.light, collapseRadius * 1.15);
+     const activeGeneration = generation;
+     const baseHeight = await groundHeight(at.lon, at.lat);
+     if (activeGeneration !== generation) return null;
++
+     const start = performance.now();
+-    const zone = { cityName, at: { ...at }, yieldMt, radiusKm, ids: [] };
++    const zone = { cityName, at: { ...at }, yieldMt, bombId: bomb?.id ?? null, model, radiusKm: R.heavy / 1000, ids: [] };
+     const add = (definition) => {
+       const entity = entities.add(definition);
+       zone.ids.push(entity);
+       return entity;
+     };
+-    const fade = (from, duration, delay = 0) => new Cesium.CallbackProperty(() => {
+-      const t = Math.max(0, (performance.now() - start) / 1000 - delay);
+-      return from * clamp(1 - t / duration, 0, 1);
+-    }, false);
+-    const scorchFade = fade(0.55, 16, 1.5);
+-
+-    // Charred ground footprint; intentionally an illustrative game effect, not a physical damage contour.
+-    add({
+-      position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat, baseHeight + 8),
+-      ellipse: {
+-        semiMajorAxis: radiusM,
+-        semiMinorAxis: radiusM * 0.82,
+-        material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(
+-          () => Cesium.Color.fromCssColorString('#171514').withAlpha(0.48 * clamp((performance.now() - start) / 1800, 0, 1)),
+-          false,
+-        )),
+-        outline: true,
+-        outlineColor: new Cesium.CallbackProperty(() => Cesium.Color.fromCssColorString('#ff7b36').withAlpha(scorchFade.getValue()), false),
+-        outlineWidth: 2,
+-        height: baseHeight + 8,
+-      },
+-    });
+-
+-    // Procedural urban blocks. They collapse into persistent low rubble after the flash.
+-    const count = 190;
+-    for (let i = 0; i < count; i += 1) {
+-      const angle = random() * Math.PI * 2;
+-      const distance = Math.sqrt(random()) * radiusM;
++    const seconds = () => (performance.now() - start) / 1000;
++    const fade = (from, duration, delay = 0) => new Cesium.CallbackProperty(
++      () => from * clamp(1 - (seconds() - delay) / duration, 0, 1),
++      false,
++    );
++
++    // --- Scorch: concentric damage contours, darkest toward ground zero. ------
++    const scorchRings = [
++      { radius: R.severe, css: '#0d0b0a', alpha: 0.5, duration: 22 },
++      { radius: R.heavy, css: '#201a15', alpha: 0.34, duration: 18 },
++      { radius: R.light, css: '#3a2f22', alpha: 0.2, duration: 14 },
++    ];
++    for (const ring of scorchRings) {
++      if (ring.radius < 20) continue;
++      const glow = fade(1, ring.duration, 1.4);
++      add({
++        position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat, baseHeight + 6),
++        ellipse: {
++          semiMajorAxis: ring.radius,
++          semiMinorAxis: ring.radius * 0.9,
++          height: baseHeight + 6,
++          material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(
++            () => Cesium.Color.fromCssColorString(ring.css)
++              .withAlpha(ring.alpha * clamp(seconds() / 1.2, 0, 1)),
++            false,
++          )),
++          outline: true,
++          outlineColor: new Cesium.CallbackProperty(
++            () => Cesium.Color.fromCssColorString('#ff7b36').withAlpha(0.5 * glow.getValue()),
++            false,
++          ),
++          outlineWidth: 2,
++        },
++      });
++    }
++
++    // --- Crater: only for bursts the source table records as making one. -------
++    if (model.hasCrater) {
++      const cr = model.craterDiameterM / 2;
++      add({
++        position: Cesium.Cartesian3.fromDegrees(at.lon, at.lat, baseHeight + 4),
++        ellipse: {
++          semiMajorAxis: cr,
++          semiMinorAxis: cr * 0.92,
++          height: baseHeight + 4,
++          material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(
++            () => Cesium.Color.fromCssColorString('#0a0908')
++              .withAlpha(0.85 * clamp(seconds() / 3, 0, 1)),
++            false,
++          )),
++          outline: true,
++          outlineColor: Cesium.Color.fromCssColorString('#5a4632').withAlpha(0.7),
++          outlineWidth: 3,
++        },
++      });
++    }
++
++    // --- Buildings: density set by the collapse-front area; skyline by range. ---
++    const areaM2 = Math.PI * collapseRadius * collapseRadius;
++    // Only the core (severe→heavy) is animated as it collapses; the outer
++    // damaged band is placed as static blocks so per-frame cost stays bounded.
++    const count = Math.round(clamp(areaM2 / 12_000, 0, 460));
++    const farCount = count > 0 ? Math.round(clamp((areaM2 / 12_000) * 0.5, 40, 220)) : 0;
++
++    const makeCoreBuilding = (distance, angle) => {
++      const tier = damageTierAt(model, distance);
++      if (tier === 'vaporized') return; // removed by fireball; scorch/crater covers it
++      const profile = COLLAPSE[tier];
+       const east = Math.cos(angle) * distance;
+       const north = Math.sin(angle) * distance;
+-      const lat = at.lat + north / 111320;
+-      const lon = at.lon + east / (111320 * Math.max(0.15, Math.cos(at.lat * Math.PI / 180)));
+-      const width = 45 + random() * 115;
+-      const depth = 45 + random() * 115;
+-      const originalHeight = 18 + Math.pow(random(), 0.55) * 145;
+-      const collapseDelay = 0.7 + random() * 1.8;
+-      const collapseDuration = 1.8 + random() * 3.2;
+-      const rubbleHeight = 2 + random() * 8;
++      const { lat, lon } = offset(at, east, north);
++
++      const centralness = 1 - clamp(distance / damageRadius, 0, 1);
++      const footprint = 40 + random() * 95 + centralness * 40;
++      const originalHeight = 14 + Math.pow(random(), 0.6) * 60 + centralness * centralness * 190;
++      // Blast wave arrives later the farther out it travels → expanding front.
++      const arrival = 0.3 + (distance / damageRadius) * 2.4;
++      const collapseDelay = arrival + random() * 0.9;
++      const collapseDuration = 1.4 + random() * 2.6;
++      const targetHeight = Math.max(1.2, originalHeight * profile.heightFraction);
++      const spreadBoost = 1 + (1 - profile.heightFraction) * 0.7;
++
+       const cartographic = Cesium.Cartographic.fromDegrees(lon, lat);
+       const terrain = viewer.scene.globe?.getHeight(cartographic);
+       const ground = Number.isFinite(terrain) ? terrain : baseHeight;
+-      const collapse = () => clamp((performance.now() - start) / 1000 - collapseDelay, 0, collapseDuration) / collapseDuration;
+-      const heightNow = () => originalHeight + (rubbleHeight - originalHeight) * (collapse() ** 0.82);
+-      const material = new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(() => {
+-        const p = collapse();
+-        const color = Cesium.Color.lerp(
+-          Cesium.Color.fromCssColorString(randomColor(i)),
+-          Cesium.Color.fromCssColorString('#242321'),
+-          p,
+-          new Cesium.Color(),
+-        );
+-        return color.withAlpha(0.96);
+-      }, false));
++      const collapse = () => clamp(seconds() - collapseDelay, 0, collapseDuration) / collapseDuration;
++      const heightNow = () => originalHeight + (targetHeight - originalHeight) * (collapse() ** 0.8);
++      const colorIndex = Math.floor(random() * PALETTE.length);
++
+       add({
+-        position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(lon, lat, ground + heightNow() / 2), false),
++        position: new Cesium.CallbackProperty(
++          () => Cesium.Cartesian3.fromDegrees(lon, lat, ground + heightNow() / 2),
++          false,
++        ),
+         box: {
+           dimensions: new Cesium.CallbackProperty(() => {
+             const p = collapse();
+-            const spread = 1 + p * 0.65;
+-            return new Cesium.Cartesian3(width * spread, depth * spread, Math.max(1.5, heightNow()));
++            const spread = 1 + p * (spreadBoost - 1);
++            return new Cesium.Cartesian3(footprint * spread, footprint * spread, Math.max(1.5, heightNow()));
+           }, false),
+-          material,
++          material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(() => {
++            const p = collapse();
++            const intact = Cesium.Color.fromCssColorString(PALETTE[colorIndex]);
++            const charred = Cesium.Color.fromCssColorString(
++              tier === 'severe' ? '#1b1815' : tier === 'heavy' ? '#2a2521' : '#4a4038',
++            );
++            return Cesium.Color.lerp(intact, charred, p, new Cesium.Color()).withAlpha(0.97);
++          }, false)),
+           outline: true,
+-          outlineColor: Cesium.Color.fromCssColorString('#100f0e').withAlpha(0.7),
++          outlineColor: Cesium.Color.fromCssColorString('#100f0e').withAlpha(0.65),
+         },
+       });
+-      if (i % 13 === 0) {
+-        const fireDelay = 1.3 + random() * 2.5;
+-        const fireFade = fade(0.92, 90, fireDelay);
++
++      // Fires ignite from thermal radiation, concentrated near ground zero and
++      // scaled by the tier's ignition probability.
++      if (random() < profile.fireChance * 0.16) {
++        const fireDelay = collapseDelay + 0.8 + random() * 2.2;
++        const fireFade = fade(0.92, 150, fireDelay);
+         add({
+-          position: Cesium.Cartesian3.fromDegrees(lon, lat, ground + 12),
++          position: Cesium.Cartesian3.fromDegrees(lon, lat, ground + 10),
+           point: {
+-            pixelSize: new Cesium.CallbackProperty(() => 4 + 11 * Math.abs(Math.sin((performance.now() - start) / 210 + i)) * fireFade.getValue(),
+-            false),
+-            color: new Cesium.CallbackProperty(() => Cesium.Color.fromCssColorString('#ff6a22').withAlpha(fireFade.getValue()), false),
++            pixelSize: new Cesium.CallbackProperty(
++              () => 4 + 12 * Math.abs(Math.sin(seconds() * 4.7 + distance)) * fireFade.getValue(),
++              false,
++            ),
++            color: new Cesium.CallbackProperty(
++              () => Cesium.Color.fromCssColorString('#ff6a22').withAlpha(fireFade.getValue()),
++              false,
++            ),
+             outlineColor: Cesium.Color.fromCssColorString('#ffd27a'),
+             outlineWidth: 1,
+             disableDepthTestDistance: Number.POSITIVE_INFINITY,
+           },
+         });
+       }
++    };
++
++    for (let i = 0; i < count; i += 1) {
++      const distance = Math.sqrt(random()) * collapseRadius; // uniform over the disc
++      makeCoreBuilding(distance, random() * Math.PI * 2);
++    }
++    // Outer damaged band: cracked-but-standing structures placed static (no
++    // per-frame animation), tapering the destruction toward the light zone while
++    // the real tile city shows beyond it.
++    for (let i = 0; i < farCount; i += 1) {
++      const distance = collapseRadius + random() * (damageRadius - collapseRadius);
++      const tier = damageTierAt(model, distance);
++      if (tier === 'vaporized') continue;
++      const profile = COLLAPSE[tier];
++      const angle = random() * Math.PI * 2;
++      const { lat, lon } = offset(at, Math.cos(angle) * distance, Math.sin(angle) * distance);
++      const centralness = 1 - clamp(distance / damageRadius, 0, 1);
++      const footprint = 40 + random() * 95 + centralness * 40;
++      const originalHeight = 14 + Math.pow(random(), 0.6) * 60 + centralness * centralness * 190;
++      const h = Math.max(2, originalHeight * profile.heightFraction + 1);
++      const spread = 1 + (1 - profile.heightFraction) * 0.7;
++      const cartographic = Cesium.Cartographic.fromDegrees(lon, lat);
++      const terrain = viewer.scene.globe?.getHeight(cartographic);
++      const ground = Number.isFinite(terrain) ? terrain : baseHeight;
++      const intact = Cesium.Color.fromCssColorString(PALETTE[Math.floor(random() * PALETTE.length)]);
++      const charred = Cesium.Color.fromCssColorString(tier === 'light' ? '#4a4038' : '#3a352f');
++      add({
++        position: Cesium.Cartesian3.fromDegrees(lon, lat, ground + h / 2),
++        box: {
++          dimensions: new Cesium.Cartesian3(footprint * spread, footprint * spread, h),
++          material: new Cesium.ColorMaterialProperty(
++            Cesium.Color.lerp(intact, charred, 0.5, new Cesium.Color()).withAlpha(0.96),
++          ),
++          outline: true,
++          outlineColor: Cesium.Color.fromCssColorString('#100f0e').withAlpha(0.5),
++        },
++      });
+     }
+ 
+-    // Rising smoke columns. Their opacity decays; rubble remains until reset.
+-    for (let i = 0; i < 12; i += 1) {
+-      const angle = (i / 12) * Math.PI * 2;
+-      const distance = radiusM * (0.18 + random() * 0.68);
+-      const lon = at.lon + Math.cos(angle) * distance / (111320 * Math.max(0.15, Math.cos(at.lat * Math.PI / 180)));
+-      const lat = at.lat + Math.sin(angle) * distance / 111320;
++    // --- Residual smoke: height and width track the researched cloud. ----------
++    const cloudTopM = (model.cloudTopKm ? model.cloudTopKm * 1000 : 6000) * 0.45;
++    const capM = (model.cloudCapKm ? model.cloudCapKm * 1000 : collapseRadius * 1.6) / 2;
++    const smokeCount = clamp(Math.round(collapseRadius / 900), 8, 16);
++    for (let i = 0; i < smokeCount; i += 1) {
++      const angle = (i / smokeCount) * Math.PI * 2 + random();
++      const distance = collapseRadius * (0.12 + random() * 0.7);
++      const { lat, lon } = offset(at, Math.cos(angle) * distance, Math.sin(angle) * distance);
+       const delay = 2 + random() * 5;
+-      const smokeFade = fade(0.48, 55, delay);
+-      const riseHeight = 900 + random() * 1500;
+-      const rise = new Cesium.CallbackProperty(() => clamp((performance.now() - start) / 1000 - delay, 0, 1) * riseHeight, false);
++      const smokeFade = fade(0.5, 70, delay);
++      const riseHeight = cloudTopM * (0.55 + random() * 0.6);
++      const rise = new Cesium.CallbackProperty(
++        () => clamp(seconds() - delay, 0, 1) * riseHeight,
++        false,
++      );
+       add({
+-        position: new Cesium.CallbackProperty(() => Cesium.Cartesian3.fromDegrees(lon, lat, baseHeight + rise.getValue()), false),
++        position: new Cesium.CallbackProperty(
++          () => Cesium.Cartesian3.fromDegrees(lon, lat, baseHeight + rise.getValue()),
++          false,
++        ),
+         ellipsoid: {
+           radii: new Cesium.CallbackProperty(() => {
+-            const r = 90 + rise.getValue() * 0.14;
+-            return new Cesium.Cartesian3(r, r, r * 1.55);
++            const r = 80 + rise.getValue() * 0.13 + capM * 0.04;
++            return new Cesium.Cartesian3(r, r, r * 1.6);
+           }, false),
+-          material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(() =>
+-            Cesium.Color.fromCssColorString('#514b45').withAlpha(smokeFade.getValue()), false)),
++          material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(
++            () => Cesium.Color.fromCssColorString('#514b45').withAlpha(smokeFade.getValue()),
++            false,
++          )),
+         },
+       });
+     }
+-    zones.push(zone);
+-    return { cityName, radiusKm, buildingCount: count };
+-  }
+ 
+-  function randomColor(index) {
+-    const palette = ['#8e877d', '#aaa195', '#6d6963', '#b3a99b', '#77736d'];
+-    return palette[index % palette.length];
++    zones.push(zone);
++    return {
++      cityName,
++      bombId: bomb?.id ?? null,
++      radiusKm: R.heavy / 1000,
++      fireballKm: R.fireball / 1000,
++      severeKm: R.severe / 1000,
++      heavyKm: R.heavy / 1000,
++      lightKm: R.light / 1000,
++      craterDiameterM: model.craterDiameterM,
++      cloudTopKm: model.cloudTopKm,
++      buildingCount: count + farCount,
++    };
+   }
+ 
+   function reset() {
+@@ -175,7 +307,7 @@ export function createNuclearDamageLayer(viewer) {
+   return {
+     apply,
+     reset,
+-    getZones: () => zones.map(({ cityName, yieldMt, radiusKm }) => ({ cityName, yieldMt, radiusKm })),
++    getZones: () => zones.map(({ cityName, yieldMt, radiusKm, bombId }) => ({ cityName, yieldMt, radiusKm, bombId })),
+     destroy() { reset(); viewer.dataSources.remove(source, true); },
+   };
+ }
