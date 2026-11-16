@@ -21,7 +21,14 @@ const dist = path.join(__dirname, 'dist');
 const indexHtml = path.join(dist, 'index.html');
 
 const WS_PATH = '/ws';
-const WS_MAX_PAYLOAD = 64 * 1024;
+const WS_MAX_PAYLOAD = 16 * 1024;
+const configuredMaxWsClients = Number(process.env.GEV_MAX_WS_CLIENTS || 128);
+const MAX_WS_CLIENTS = Number.isInteger(configuredMaxWsClients)
+  && configuredMaxWsClients > 0
+  && configuredMaxWsClients <= 5_000
+  ? configuredMaxWsClients
+  : 128;
+const MAX_WS_MESSAGES_PER_SECOND = 60;
 const WS_HEARTBEAT_MS = 30_000;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 const apiProxiesEnabled = process.env.GEV_API_PROXIES !== '0';
@@ -196,6 +203,8 @@ async function handle(req, res) {
       service: 'nuclear-gods-eye',
       apiProxies: Boolean(vite),
       websocket: wss.clients.size,
+      maxWebSocketClients: MAX_WS_CLIENTS,
+      activeGameSessions: gameSessions.size,
       timestamp: new Date().toISOString(),
     });
     return;
@@ -273,6 +282,15 @@ server.on('upgrade', (req, socket, head) => {
     return;
   }
 
+  // Bound total open sockets before completing the WebSocket handshake. This
+  // also bounds active in-memory game sessions; detached sessions are separately
+  // capped by createSessionRegistry(max=200) and expire after their resume TTL.
+  if (wss.clients.size >= MAX_WS_CLIENTS) {
+    socket.write('HTTP/1.1 503 Service Unavailable\\r\\nRetry-After: 15\\r\\nConnection: close\\r\\nContent-Length: 0\\r\\n\\r\\n');
+    socket.destroy();
+    return;
+  }
+
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
@@ -299,7 +317,20 @@ wss.on('connection', (socket) => {
   });
   socket.on('close', () => game.close());
 
+  let messageWindowStart = Date.now();
+  let messageWindowCount = 0;
   socket.on('message', (raw, isBinary) => {
+    const now = Date.now();
+    if (now - messageWindowStart >= 1000) {
+      messageWindowStart = now;
+      messageWindowCount = 0;
+    }
+    messageWindowCount += 1;
+    if (messageWindowCount > MAX_WS_MESSAGES_PER_SECOND) {
+      send(socket, { type: 'error', code: 'RATE_LIMIT' });
+      if (messageWindowCount > MAX_WS_MESSAGES_PER_SECOND * 2) socket.close(1008, 'rate limit');
+      return;
+    }
     if (isBinary) {
       send(socket, { type: 'error', code: 'BINARY_NOT_SUPPORTED' });
       return;
