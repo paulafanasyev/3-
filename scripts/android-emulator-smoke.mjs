@@ -43,7 +43,7 @@ async function waitFor(fn, label, timeoutMs = 60_000, intervalMs = 300) {
   throw new Error(`Timed out waiting for ${label}${lastError ? `: ${lastError.message}` : ''}`);
 }
 
-async function chromeUiNodes() {
+function chromeUiNodes() {
   adb(['shell', 'uiautomator', 'dump', '/sdcard/kupol-chrome-ui.xml']);
   const xml = adb(['shell', 'cat', '/sdcard/kupol-chrome-ui.xml']);
   return [...xml.matchAll(/<node\b[^>]*>/g)].map((match) => match[0]);
