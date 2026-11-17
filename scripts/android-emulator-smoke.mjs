@@ -46,25 +46,25 @@ async function waitFor(fn, label, timeoutMs = 60_000, intervalMs = 300) {
 async function chromeUiNodes() {
   adb(['shell', 'uiautomator', 'dump', '/sdcard/kupol-chrome-ui.xml']);
   const xml = adb(['shell', 'cat', '/sdcard/kupol-chrome-ui.xml']);
-  return [...xml.matchAll(/<node\\b[^>]*>/g)].map((match) => match[0]);
+  return [...xml.matchAll(/<node\b[^>]*>/g)].map((match) => match[0]);
 }
 
 async function tapChromeFirstRunButton(pattern, label, timeoutMs = 12_000) {
   return waitFor(() => {
     const node = chromeUiNodes().find((entry) => {
-      const text = entry.match(/\\btext="([^"]*)"/)?.[1] || '';
-      const description = entry.match(/\\bcontent-desc="([^"]*)"/)?.[1] || '';
-      const resourceId = entry.match(/\\bresource-id="([^"]*)"/)?.[1] || '';
-      const visible = !/\\bvisible-to-user="false"/.test(entry);
-      return visible && pattern.test(`${text} ${description} ${resourceId}`);
+      const text = entry.match(/\btext="([^"]*)"/)?.[1] || '';
+      const description = entry.match(/\bcontent-desc="([^"]*)"/)?.[1] || '';
+      const resourceId = entry.match(/\bresource-id="([^"]*)"/)?.[1] || '';
+      const visible = !/\bvisible-to-user="false"/.test(entry);
+      return visible && pattern.test(text + ' ' + description + ' ' + resourceId);
     });
     if (!node) return null;
-    const bounds = node.match(/\\bbounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"/);
+    const bounds = node.match(/\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
     if (!bounds) return null;
     const x = Math.round((Number(bounds[1]) + Number(bounds[3])) / 2);
     const y = Math.round((Number(bounds[2]) + Number(bounds[4])) / 2);
     adb(['shell', 'input', 'tap', String(x), String(y)]);
-    pass(`Chrome first-run: ${label}`);
+    pass('Chrome first-run: ' + label);
     return true;
   }, label, timeoutMs, 500).catch(() => false);
 }
@@ -145,19 +145,20 @@ try {
 
   await waitFor(() => {
     const activity = adb(['shell', 'dumpsys', 'activity', 'activities']);
+    const ps = adb(['shell', 'ps', '-A']);
     const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -i devtools_remote || true"]);
-    if (/com\\.android\\.chrome\\/.*Main/.test(activity) && sockets.includes('devtools_remote')) {
-      console.log(`Chrome activity ready; DevTools socket: ${sockets.replace(/\\s+/g, ' ').slice(0, 500)}`);
+    if (!/FirstRunActivity/.test(activity) && ps.includes('com.android.chrome') && sockets.includes('devtools_remote')) {
+      console.log('Chrome activity ready; DevTools socket: ' + sockets.replace(/\s+/g, ' ').slice(0, 500));
       return sockets;
     }
     return null;
   }, 'Chrome Android DevTools socket after first-run setup', 60_000, 1_000).catch((error) => {
-    const ps = adb(['shell', 'ps', '-A']).split('\\n').filter((line) => /com\\.android\\.chrome|org\\.chromium/i.test(line)).slice(-12).join('\\n');
+    const ps = adb(['shell', 'ps', '-A']).split('\n').filter((line) => /com\.android\.chrome|org\.chromium/i.test(line)).slice(-12).join('\n');
     const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -i devtools_remote || true"]);
     const activity = adb(['shell', 'dumpsys', 'activity', 'activities']).split('Hist #')[0].slice(0, 1_000);
-    const ui = chromeUiNodes().slice(0, 30).join('\\n');
-    const logcat = adb(['logcat', '-d', '-t', '500']).split('\\n').filter((line) => /chrom(e|ium)|devtools|crash|fatal/i.test(line)).slice(-40).join('\\n');
-    throw new Error(`${error.message}\\nChrome processes=\\n${ps || 'none'}\\nDevTools sockets=${sockets || 'none'}\\nActivity snapshot=\\n${activity}\\nChrome UI=\\n${ui}\\nChrome logcat=\\n${logcat}`);
+    const ui = chromeUiNodes().slice(0, 30).join('\n');
+    const logcat = adb(['logcat', '-d', '-t', '500']).split('\n').filter((line) => /chrom(e|ium)|devtools|crash|fatal/i.test(line)).slice(-40).join('\n');
+    throw new Error(error.message + '\nChrome processes=\n' + (ps || 'none') + '\nDevTools sockets=' + (sockets || 'none') + '\nActivity snapshot=\n' + activity + '\nChrome UI=\n' + ui + '\nChrome logcat=\n' + logcat);
   });
 
   try { adb(['forward', '--remove', 'tcp:9222']); } catch { /* no previous forward */ }
