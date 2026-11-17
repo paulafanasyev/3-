@@ -15,7 +15,7 @@ permissions:
 # the same QA branch consuming the runner twice and making the browser smoke flaky.
 concurrency:
   group: kupol-release-gate-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   linux-production-and-browser:
