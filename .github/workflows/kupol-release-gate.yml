@@ -89,6 +89,8 @@ jobs:
         with:
           node-version: 24.14.0
           cache: npm
+      - name: Validate Android smoke script syntax
+        run: node --check scripts/android-emulator-smoke.mjs
       - name: Install locked dependencies
         run: npm ci
         env:
