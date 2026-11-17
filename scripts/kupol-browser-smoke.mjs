@@ -74,8 +74,8 @@ async function cdp(port) {
     const commandId = ++id;
     const timer = setTimeout(() => {
       pending.delete(commandId);
-      reject(new Error(`CDP command timed out after 15s: ${method}`));
-    }, 15000);
+      reject(new Error(`CDP command timed out after 60s: ${method}`));
+    }, 60000);
     pending.set(commandId, { resolve, reject, timer, method });
     try { ws.send(JSON.stringify({ id: commandId, method, params })); }
     catch (error) { clearTimeout(timer); pending.delete(commandId); reject(error); }
