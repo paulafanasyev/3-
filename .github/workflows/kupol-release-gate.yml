@@ -2,7 +2,7 @@ name: Kupol release gate
 
 on:
   push:
-    branches: [main, 'qa/**']
+    branches: [main]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
@@ -11,8 +11,10 @@ on:
 permissions:
   contents: read
 
+# A PR update is tested once. Avoid a parallel push+pull_request duplicate on
+# the same QA branch consuming the runner twice and making the browser smoke flaky.
 concurrency:
-  group: kupol-release-gate-${{ github.ref }}
+  group: kupol-release-gate-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -73,3 +75,65 @@ jobs:
         run: npm test
       - name: Build production bundle on Windows
         run: npm run build
+
+  android-emulator:
+    name: Android Chrome emulator gameplay and touch QA
+    needs: linux-production-and-browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "1"
+      - name: Build QA-instrumented production bundle
+        run: npm run build
+        env:
+          VITE_KUPOL_QA: "1"
+          GEV_API_PROXIES: "0"
+      - name: Start the production server for the emulator
+        run: |
+          HOST=0.0.0.0 PORT=4173 GEV_API_PROXIES=0 node server.js > /tmp/kupol-android-server.log 2>&1 &
+          echo $! > /tmp/kupol-android-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/api/health > /dev/null; then
+              echo "Production server ready for Android emulator"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kupol-android-server.log
+          exit 1
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Android Chrome gameplay and touch smoke on Pixel 7 Pro
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis_playstore
+          arch: x86_64
+          profile: pixel_7_pro
+          cores: 4
+          ram-size: 4096M
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none
+          disable-animations: true
+          script: node scripts/android-emulator-smoke.mjs
+      - name: Upload Android emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kupol-android-emulator-evidence
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
