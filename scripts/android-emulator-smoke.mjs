@@ -5,6 +5,7 @@ import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 
 const BASE = process.env.KUPOL_BASE_URL || 'http://10.0.2.2:4173';
+mkdirSync('artifacts', { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const failures = [];
 const pageErrors = [];
@@ -99,14 +100,39 @@ try {
   adb(['shell', 'wm', 'density', '480']);
   adb(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0']);
   adb(['shell', 'settings', 'put', 'system', 'user_rotation', '0']);
-  adb(['forward', 'tcp:9222', 'localabstract:chrome_devtools_remote']);
+  // Chrome exposes the localabstract DevTools socket only after its process is
+  // started. Enable the emulator's developer settings, launch the target tab,
+  // wait for that socket, and only then create the host-side ADB forward.
+  adb(['shell', 'settings', 'put', 'global', 'development_settings_enabled', '1']);
+  adb(['shell', 'settings', 'put', 'global', 'adb_enabled', '1']);
   adb(['shell', 'am', 'force-stop', 'com.android.chrome']);
-  adb(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', `${BASE}/kupol`, '-p', 'com.android.chrome']);
+  const launch = adb(['shell', 'am', 'start', '-W', '-a', 'android.intent.action.VIEW', '-d', `${BASE}/kupol`, '-p', 'com.android.chrome']);
+  console.log(`Chrome launch result: ${launch.replace(/\\s+/g, ' ').slice(0, 500)}`);
+
+  await waitFor(() => {
+    const pid = adb(['shell', 'sh', '-c', 'pidof com.android.chrome || true']);
+    const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -E 'chrome_devtools_remote|devtools_remote' || true"]);
+    if (pid && sockets.includes('devtools_remote')) {
+      console.log(`Chrome PID: ${pid}; DevTools socket: ${sockets.replace(/\\s+/g, ' ').slice(0, 500)}`);
+      return sockets;
+    }
+    return null;
+  }, 'Chrome Android DevTools socket', 60_000, 1_000).catch((error) => {
+    const pid = adb(['shell', 'sh', '-c', 'pidof com.android.chrome || true']);
+    const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -E 'chrome_devtools_remote|devtools_remote' || true"]);
+    const activity = adb(['shell', 'dumpsys', 'activity', 'activities']).split('Hist #')[0].slice(0, 1_000);
+    const logcat = adb(['logcat', '-d', '-t', '500']).split('\\n').filter((line) => /chrom(e|ium)|devtools|crash|fatal/i.test(line)).slice(-40).join('\\n');
+    throw new Error(`${error.message}\\nChrome PID=${pid || 'none'}\\nDevTools sockets=${sockets || 'none'}\\nActivity snapshot=\\n${activity}\\nChrome logcat=\\n${logcat}`);
+  });
+
+  try { adb(['forward', '--remove', 'tcp:9222']); } catch { /* no previous forward */ }
+  adb(['forward', 'tcp:9222', 'localabstract:chrome_devtools_remote']);
+  console.log(`ADB forwards: ${adb(['forward', '--list'])}`);
 
   await waitFor(async () => {
     const response = await fetch('http://127.0.0.1:9222/json/version');
     return response.ok ? response.json() : null;
-  }, 'Chrome remote debugging endpoint', 90_000);
+  }, 'Chrome remote debugging endpoint', 30_000);
 
   browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9222', defaultViewport: null });
   const pages = await browser.pages();
