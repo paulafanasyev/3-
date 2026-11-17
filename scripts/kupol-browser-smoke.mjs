@@ -45,7 +45,7 @@ export async function startDevServer({ timeoutMs = 60000, scenario = null } = {}
 
 async function cdp(port) {
   let version = null;
-  for (let i = 0; i < 100 && !version; i += 1) {
+  for (let i = 0; i < 200 && !version; i += 1) {
     try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { await sleep(100); }
   }
   if (!version) throw new Error('Chrome не открыл порт отладки');
@@ -90,12 +90,17 @@ async function cdp(port) {
 export async function smokeKupol({ url, chrome = findChrome(), offline = true, timeoutMs = 45000, shot = null, game = false } = {}) {
   if (!chrome) throw new Error('не найден Chrome/Chromium (можно указать CHROME_PATH)');
   const port = 9300 + Math.floor(Math.random() * 600);
-  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--remote-allow-origins=*', '--no-sandbox',
+  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1', '--remote-allow-origins=*', '--no-sandbox',
     '--disable-dev-shm-usage', '--disable-gpu', '--no-first-run', '--no-zygote', '--use-angle=swiftshader',
     '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1280,720', `--user-data-dir=/tmp/kupol-smoke-chrome-${port}`];
   if (offline) args.push('--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>;localhost;127.0.0.1');
   let chromeLog = '';
-  const proc = spawn(chrome, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  // GitHub-hosted Linux runners may expose a malformed inherited DBus address.
+  // Headless Chromium does not need a desktop session; remove it rather than
+  // letting a broken session-bus setting interfere with browser startup.
+  const chromeEnv = { ...process.env };
+  delete chromeEnv.DBUS_SESSION_BUS_ADDRESS;
+  const proc = spawn(chrome, args, { env: chromeEnv, stdio: ['ignore', 'pipe', 'pipe'] });
   proc.stdout.on('data', (d) => { chromeLog += d.toString(); });
   proc.stderr.on('data', (d) => { chromeLog += d.toString(); });
   const report = { offline, url, ws: [], exceptions: [], consoleErrors: [], natural: { ok: 0, fail: 0 }, toasts: [], canvas: false, bootError: null, waitedMs: 0 };
