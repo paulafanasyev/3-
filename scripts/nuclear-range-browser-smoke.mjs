@@ -203,8 +203,10 @@ try {
     return events.some((event) => event.src.endsWith('/trinity-front.ogg') && event.fulfilled)
       && events.some((event) => event.src.endsWith('/trinity-tail.ogg') && event.fulfilled);
   }, { timeout: 15000 });
-  assert([...audioResponses].some((item) => item.startsWith('trinity-front.ogg:200')), 'front sound sample is requested successfully');
-  assert([...audioResponses].some((item) => item.startsWith('trinity-tail.ogg:200')), 'delayed tail sound sample is requested successfully');
+  // Media requests may be served as 206 Partial Content when the browser uses
+  // byte ranges. Both 200 and 206 are successful HTTP responses for this asset.
+  assert([...audioResponses].some((item) => /^trinity-front\.ogg:(200|206)$/.test(item)), 'front sound sample is requested successfully (HTTP 200 or 206)');
+  assert([...audioResponses].some((item) => /^trinity-tail\.ogg:(200|206)$/.test(item)), 'delayed tail sound sample is requested successfully (HTTP 200 or 206)');
   assert(await page.evaluate(() => (window.__KUPOL_AUDIO_EVENTS__ || []).some((event) => event.src.endsWith('/trinity-front.ogg') && event.fulfilled)), 'front audio playback promise resolves');
   assert(await page.evaluate(() => (window.__KUPOL_AUDIO_EVENTS__ || []).some((event) => event.src.endsWith('/trinity-tail.ogg') && event.fulfilled)), 'tail audio playback promise resolves');
 
