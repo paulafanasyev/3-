@@ -43,6 +43,32 @@ async function waitFor(fn, label, timeoutMs = 60_000, intervalMs = 300) {
   throw new Error(`Timed out waiting for ${label}${lastError ? `: ${lastError.message}` : ''}`);
 }
 
+async function chromeUiNodes() {
+  adb(['shell', 'uiautomator', 'dump', '/sdcard/kupol-chrome-ui.xml']);
+  const xml = adb(['shell', 'cat', '/sdcard/kupol-chrome-ui.xml']);
+  return [...xml.matchAll(/<node\\b[^>]*>/g)].map((match) => match[0]);
+}
+
+async function tapChromeFirstRunButton(pattern, label, timeoutMs = 12_000) {
+  return waitFor(() => {
+    const node = chromeUiNodes().find((entry) => {
+      const text = entry.match(/\\btext="([^"]*)"/)?.[1] || '';
+      const description = entry.match(/\\bcontent-desc="([^"]*)"/)?.[1] || '';
+      const resourceId = entry.match(/\\bresource-id="([^"]*)"/)?.[1] || '';
+      const visible = !/\\bvisible-to-user="false"/.test(entry);
+      return visible && pattern.test(`${text} ${description} ${resourceId}`);
+    });
+    if (!node) return null;
+    const bounds = node.match(/\\bbounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"/);
+    if (!bounds) return null;
+    const x = Math.round((Number(bounds[1]) + Number(bounds[3])) / 2);
+    const y = Math.round((Number(bounds[2]) + Number(bounds[4])) / 2);
+    adb(['shell', 'input', 'tap', String(x), String(y)]);
+    pass(`Chrome first-run: ${label}`);
+    return true;
+  }, label, timeoutMs, 500).catch(() => false);
+}
+
 async function checkLayout(page, label) {
   const result = await page.evaluate(() => {
     const selectors = ['.k-top', '.k-left', '.k-right', '.k-chron', '.k-end', '.k-zoom', '.k-nrange-trigger'];
@@ -108,20 +134,30 @@ try {
   const launch = adb(['shell', 'am', 'start', '-W', '-a', 'android.intent.action.VIEW', '-d', `${BASE}/kupol`, '-p', 'com.android.chrome']);
   console.log(`Chrome launch result: ${launch.replace(/\s+/g, ' ').slice(0, 500)}`);
 
+  // Complete the browser's one-time native welcome/sign-in flow. On a fresh
+  // Google Play emulator image it blocks the deep-link URL and DevTools socket.
+  // Continue without adding a Google account.
+  const accepted = await tapChromeFirstRunButton(/terms_accept|accept.*continue/i, 'Accept & continue');
+  if (accepted) {
+    const skipped = await tapChromeFirstRunButton(/negative_button|no thanks|use without an account/i, 'No thanks / use without an account');
+    if (!skipped) throw new Error('Chrome first-run welcome accepted but sign-in screen could not be dismissed');
+  }
+
   await waitFor(() => {
-    const pid = adb(['shell', 'sh', '-c', 'pidof com.android.chrome || true']);
-    const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -E 'chrome_devtools_remote|devtools_remote' || true"]);
-    if (pid && sockets.includes('devtools_remote')) {
-      console.log(`Chrome PID: ${pid}; DevTools socket: ${sockets.replace(/\s+/g, ' ').slice(0, 500)}`);
+    const activity = adb(['shell', 'dumpsys', 'activity', 'activities']);
+    const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -i devtools_remote || true"]);
+    if (/com\\.android\\.chrome\\/.*Main/.test(activity) && sockets.includes('devtools_remote')) {
+      console.log(`Chrome activity ready; DevTools socket: ${sockets.replace(/\\s+/g, ' ').slice(0, 500)}`);
       return sockets;
     }
     return null;
-  }, 'Chrome Android DevTools socket', 60_000, 1_000).catch((error) => {
-    const pid = adb(['shell', 'sh', '-c', 'pidof com.android.chrome || true']);
-    const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -E 'chrome_devtools_remote|devtools_remote' || true"]);
+  }, 'Chrome Android DevTools socket after first-run setup', 60_000, 1_000).catch((error) => {
+    const ps = adb(['shell', 'ps', '-A']).split('\\n').filter((line) => /com\\.android\\.chrome|org\\.chromium/i.test(line)).slice(-12).join('\\n');
+    const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -i devtools_remote || true"]);
     const activity = adb(['shell', 'dumpsys', 'activity', 'activities']).split('Hist #')[0].slice(0, 1_000);
-    const logcat = adb(['logcat', '-d', '-t', '500']).split('\n').filter((line) => /chrom(e|ium)|devtools|crash|fatal/i.test(line)).slice(-40).join('\n');
-    throw new Error(`${error.message}\nChrome PID=${pid || 'none'}\nDevTools sockets=${sockets || 'none'}\nActivity snapshot=\n${activity}\nChrome logcat=\n${logcat}`);
+    const ui = chromeUiNodes().slice(0, 30).join('\\n');
+    const logcat = adb(['logcat', '-d', '-t', '500']).split('\\n').filter((line) => /chrom(e|ium)|devtools|crash|fatal/i.test(line)).slice(-40).join('\\n');
+    throw new Error(`${error.message}\\nChrome processes=\\n${ps || 'none'}\\nDevTools sockets=${sockets || 'none'}\\nActivity snapshot=\\n${activity}\\nChrome UI=\\n${ui}\\nChrome logcat=\\n${logcat}`);
   });
 
   try { adb(['forward', '--remove', 'tcp:9222']); } catch { /* no previous forward */ }
