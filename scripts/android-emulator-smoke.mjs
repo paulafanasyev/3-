@@ -137,10 +137,35 @@ try {
   // Complete the browser's one-time native welcome/sign-in flow. On a fresh
   // Google Play emulator image it blocks the deep-link URL and DevTools socket.
   // Continue without adding a Google account.
-  const accepted = await tapChromeFirstRunButton(/terms_accept|accept.*continue/i, 'Accept & continue');
-  if (accepted) {
-    const skipped = await tapChromeFirstRunButton(/negative_button|no thanks|use without an account/i, 'No thanks / use without an account');
-    if (!skipped) throw new Error('Chrome first-run welcome accepted but sign-in screen could not be dismissed');
+  // Chrome Play Store images may land directly on the welcome page where
+  // "Use without an account" is the primary dismissal action (there is no
+  // "Accept & continue" button on that screen). Handle both variants and any
+  // subsequent sync prompt before waiting for the DevTools socket.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const activity = adb(['shell', 'dumpsys', 'activity', 'activities']);
+    if (!/FirstRunActivity/.test(activity)) break;
+
+    const skipped = await tapChromeFirstRunButton(
+      /use without an account|no thanks|negative_button|skip|not now|signin_fre_dismiss_button/i,
+      'Use without an account / skip sign-in',
+      4_000,
+    );
+    if (skipped) {
+      await sleep(750);
+      continue;
+    }
+
+    const accepted = await tapChromeFirstRunButton(
+      /terms_accept|accept.*continue|accept.*terms/i,
+      'Accept & continue',
+      4_000,
+    );
+    if (accepted) {
+      await sleep(750);
+      continue;
+    }
+
+    break;
   }
 
   await waitFor(() => {
