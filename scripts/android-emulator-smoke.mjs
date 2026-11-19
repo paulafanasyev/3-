@@ -115,9 +115,9 @@ async function findChromeSettingsNode(pattern, label, timeoutMs = 20_000) {
 async function enableChromeUsbWebDebugging() {
   const launch = adb([
     'shell', 'am', 'start', '-W',
+    '-n', 'com.android.chrome/org.chromium.chrome.browser.ChromeTabbedActivity',
     '-a', 'android.intent.action.VIEW',
     '-d', 'chrome://settings',
-    '-p', 'com.android.chrome',
   ]);
   console.log('Chrome settings launch: ' + launch.replace(/\s+/g, ' ').slice(0, 400));
 
