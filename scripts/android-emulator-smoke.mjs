@@ -69,6 +69,67 @@ function chromeUiNodes() {
   return [...xml.matchAll(/<node\b[^>]*>/g)].map((match) => match[0]);
 }
 
+function findChromeUiNode(pattern) {
+  return chromeUiNodes().find((entry) => {
+    const text = entry.match(/\btext="([^"]*)"/)?.[1] || '';
+    const description = entry.match(/\bcontent-desc="([^"]*)"/)?.[1] || '';
+    const resourceId = entry.match(/\bresource-id="([^"]*)"/)?.[1] || '';
+    const visible = !/\bvisible-to-user="false"/.test(entry);
+    return visible && pattern.test(text + ' ' + description + ' ' + resourceId);
+  }) || null;
+}
+
+function tapChromeUiNode(node, label) {
+  const bounds = node?.match(/\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+  if (!bounds) throw new Error('Chrome UI node has no parsable bounds (' + label + '): ' + (node || 'not found'));
+  const x = Math.round((Number(bounds[1]) + Number(bounds[3])) / 2);
+  const y = Math.round((Number(bounds[2]) + Number(bounds[4])) / 2);
+  console.log('Chrome UI tap "' + label + '" at ' + x + ',' + y + ': ' + node);
+  adb(['shell', 'input', 'tap', String(x), String(y)]);
+}
+
+async function enableChromeUsbWebDebugging() {
+  const launch = adb([
+    'shell', 'am', 'start', '-W',
+    '-a', 'android.intent.action.VIEW',
+    '-d', 'chrome://settings',
+    '-p', 'com.android.chrome',
+  ]);
+  console.log('Chrome settings launch: ' + launch.replace(/\s+/g, ' ').slice(0, 400));
+
+  const developerTools = await waitFor(
+    () => findChromeUiNode(/developer tools/i),
+    'Chrome Settings > Developer tools',
+    20_000,
+    500,
+  );
+  tapChromeUiNode(developerTools, 'Developer tools');
+
+  const usbDebugging = await waitFor(
+    () => findChromeUiNode(/enable usb web debugging/i),
+    'Chrome Developer tools > Enable USB Web debugging',
+    20_000,
+    500,
+  );
+  const checked = usbDebugging.match(/\bchecked="(true|false)"/)?.[1];
+  if (checked !== 'true') {
+    tapChromeUiNode(usbDebugging, 'Enable USB Web debugging');
+    await waitFor(() => {
+      const node = findChromeUiNode(/enable usb web debugging/i);
+      return node && /\bchecked="true"/.test(node) ? node : null;
+    }, 'USB Web debugging enabled state', 10_000, 500);
+  }
+  pass('Chrome USB Web debugging setting is enabled');
+  adb(['shell', 'am', 'force-stop', 'com.android.chrome']);
+  const target = adb([
+    'shell', 'am', 'start', '-W',
+    '-a', 'android.intent.action.VIEW',
+    '-d', BASE + '/kupol',
+    '-p', 'com.android.chrome',
+  ]);
+  console.log('Chrome gameplay relaunch: ' + target.replace(/\s+/g, ' ').slice(0, 400));
+}
+
 async function tapChromeFirstRunButton(pattern, label, timeoutMs = 12_000) {
   let lastUi = '';
   let attempts = 0;
@@ -207,6 +268,10 @@ try {
 
     break;
   }
+
+  // Android system USB debugging does not enable Chrome CDP on production Play Store builds.
+  // Enable Chrome's own USB Web debugging setting, restart Chrome, then attach Puppeteer.
+  await enableChromeUsbWebDebugging();
 
   await waitFor(() => {
     const activity = adb(['shell', 'dumpsys', 'activity', 'activities']);
