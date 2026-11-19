@@ -52,7 +52,7 @@ function dismissPixelLauncherAnr() {
   const close = nodes.find((entry) => /resource-id="android:id/aerr_close"/.test(entry));
   const wait = nodes.find((entry) => /resource-id="android:id/aerr_wait"/.test(entry));
   const action = close || wait;
-  const bounds = action?.match(/\\bbounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"/);
+  const bounds = action?.match(/\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
   if (bounds) {
     const x = Math.round((Number(bounds[1]) + Number(bounds[3])) / 2);
     const y = Math.round((Number(bounds[2]) + Number(bounds[4])) / 2);
