@@ -50,25 +50,40 @@ function chromeUiNodes() {
 }
 
 async function tapChromeFirstRunButton(pattern, label, timeoutMs = 12_000) {
-  return waitFor(() => {
-    const node = chromeUiNodes().find((entry) => {
-      const text = entry.match(/\btext="([^"]*)"/)?.[1] || '';
-      const description = entry.match(/\bcontent-desc="([^"]*)"/)?.[1] || '';
-      const resourceId = entry.match(/\bresource-id="([^"]*)"/)?.[1] || '';
-      const visible = !/\bvisible-to-user="false"/.test(entry);
-      return visible && pattern.test(text + ' ' + description + ' ' + resourceId);
-    });
-    if (!node) return null;
-    const bounds = node.match(/\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
-    if (!bounds) return null;
-    const x = Math.round((Number(bounds[1]) + Number(bounds[3])) / 2);
-    const y = Math.round((Number(bounds[2]) + Number(bounds[4])) / 2);
-    adb(['shell', 'input', 'tap', String(x), String(y)]);
-    pass('Chrome first-run: ' + label);
-    return true;
-  }, label, timeoutMs, 500).catch(() => false);
+  let lastUi = '';
+  let attempts = 0;
+  try {
+    return await waitFor(() => {
+      attempts += 1;
+      const nodes = chromeUiNodes();
+      lastUi = nodes.join('\n');
+      const node = nodes.find((entry) => {
+        const text = entry.match(/\btext="([^"]*)"/)?.[1] || '';
+        const description = entry.match(/\bcontent-desc="([^"]*)"/)?.[1] || '';
+        const resourceId = entry.match(/\bresource-id="([^"]*)"/)?.[1] || '';
+        const visible = !/\bvisible-to-user="false"/.test(entry);
+        return visible && pattern.test(text + ' ' + description + ' ' + resourceId);
+      });
+      if (!node) return null;
+      const bounds = node.match(/\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+      if (!bounds) {
+        console.log('Chrome first-run matched node has no parsable bounds: ' + node);
+        return null;
+      }
+      const x = Math.round((Number(bounds[1]) + Number(bounds[3])) / 2);
+      const y = Math.round((Number(bounds[2]) + Number(bounds[4])) / 2);
+      console.log('Chrome first-run button matched: ' + node);
+      console.log('Chrome first-run tap coordinates: ' + x + ',' + y);
+      adb(['shell', 'input', 'tap', String(x), String(y)]);
+      pass('Chrome first-run: ' + label);
+      return true;
+    }, label, timeoutMs, 500);
+  } catch (error) {
+    console.log('Chrome first-run diagnostic for "' + label + '": attempts=' + attempts + '; wait=' + error.message);
+    console.log('Chrome first-run UI nodes at timeout:\n' + (lastUi || 'UI hierarchy empty/unavailable'));
+    return false;
+  }
 }
-
 async function checkLayout(page, label) {
   const result = await page.evaluate(() => {
     const selectors = ['.k-top', '.k-left', '.k-right', '.k-chron', '.k-end', '.k-zoom', '.k-nrange-trigger'];
