@@ -115,9 +115,9 @@ async function findChromeSettingsNode(pattern, label, timeoutMs = 20_000) {
 async function enableChromeUsbWebDebugging() {
   // Navigate through Chrome's visible menu. Sending chrome:// URLs as Android
   // VIEW intents can leave the current page unchanged on Play Store builds.
-  const menu = await findChromeSettingsNode(/com\\.android\\.chrome:id\\/menu_button/, 'Chrome toolbar menu', 10_000);
+  const menu = await findChromeSettingsNode(/com\.android\.chrome:id\/menu_button/, 'Chrome toolbar menu', 10_000);
   tapChromeUiNode(menu, 'Chrome menu');
-  const settings = await findChromeSettingsNode(/\\bSettings\\b/i, 'Chrome menu > Settings', 10_000);
+  const settings = await findChromeSettingsNode(/\bSettings\b/i, 'Chrome menu > Settings', 10_000);
   tapChromeUiNode(settings, 'Settings');
 
   const developerTools = await findChromeSettingsNode(/developer tools/i, 'Chrome Settings > Developer tools');
