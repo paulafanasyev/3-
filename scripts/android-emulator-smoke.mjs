@@ -43,6 +43,26 @@ async function waitFor(fn, label, timeoutMs = 60_000, intervalMs = 300) {
   throw new Error(`Timed out waiting for ${label}${lastError ? `: ${lastError.message}` : ''}`);
 }
 
+function dismissPixelLauncherAnr() {
+  const nodes = chromeUiNodes();
+  const dialog = nodes.find((entry) => /Pixel Launcher isn't responding/i.test(entry));
+  if (!dialog) return false;
+
+  console.log('Android emulator recovery: Pixel Launcher ANR detected');
+  const close = nodes.find((entry) => /resource-id="android:id/aerr_close"/.test(entry));
+  const wait = nodes.find((entry) => /resource-id="android:id/aerr_wait"/.test(entry));
+  const action = close || wait;
+  const bounds = action?.match(/\\bbounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"/);
+  if (bounds) {
+    const x = Math.round((Number(bounds[1]) + Number(bounds[3])) / 2);
+    const y = Math.round((Number(bounds[2]) + Number(bounds[4])) / 2);
+    adb(['shell', 'input', 'tap', String(x), String(y)]);
+    console.log('Android emulator recovery: dismissed launcher ANR with ' + (close ? 'Close app' : 'Wait'));
+  }
+  adb(['shell', 'am', 'force-stop', 'com.google.android.apps.nexuslauncher']);
+  return true;
+}
+
 function chromeUiNodes() {
   adb(['shell', 'uiautomator', 'dump', '/sdcard/kupol-chrome-ui.xml']);
   const xml = adb(['shell', 'cat', '/sdcard/kupol-chrome-ui.xml']);
@@ -148,6 +168,11 @@ try {
   adb(['shell', 'am', 'force-stop', 'com.android.chrome']);
   const launch = adb(['shell', 'am', 'start', '-W', '-a', 'android.intent.action.VIEW', '-d', `${BASE}/kupol`, '-p', 'com.android.chrome']);
   console.log(`Chrome launch result: ${launch.replace(/\s+/g, ' ').slice(0, 500)}`);
+
+  // Pixel Launcher can ANR on a cold Google Play AVD while Chrome starts.
+  // The launcher is not needed for browser QA; dismiss its system ANR dialog
+  // and stop the launcher process so it cannot block Chrome's first-run UI.
+  dismissPixelLauncherAnr();
 
   // Complete the browser's one-time native welcome/sign-in flow. On a fresh
   // Google Play emulator image it blocks the deep-link URL and DevTools socket.
