@@ -112,7 +112,19 @@ async function findChromeSettingsNode(pattern, label, timeoutMs = 20_000) {
   }
 }
 
+async function dismissChromeOptionalPrompts() {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const noThanks = findChromeUiNode(/no thanks|not now|maybe later/i);
+    if (!noThanks) break;
+    tapChromeUiNode(noThanks, 'Dismiss optional Chrome prompt');
+    pass('Dismissed optional Chrome prompt with No thanks');
+    await sleep(800);
+  }
+}
+
 async function enableChromeUsbWebDebugging() {
+  await dismissChromeOptionalPrompts();
+
   // Navigate through Chrome's visible menu. Sending chrome:// URLs as Android
   // VIEW intents can leave the current page unchanged on Play Store builds.
   const menu = await findChromeSettingsNode(/com\.android\.chrome:id\/menu_button/, 'Chrome toolbar menu', 10_000);
