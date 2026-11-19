@@ -49,8 +49,8 @@ function dismissPixelLauncherAnr() {
   if (!dialog) return false;
 
   console.log('Android emulator recovery: Pixel Launcher ANR detected');
-  const close = nodes.find((entry) => /resource-id="android:id/aerr_close"/.test(entry));
-  const wait = nodes.find((entry) => /resource-id="android:id/aerr_wait"/.test(entry));
+  const close = nodes.find((entry) => entry.includes('resource-id="android:id/aerr_close"'));
+  const wait = nodes.find((entry) => entry.includes('resource-id="android:id/aerr_wait"'));
   const action = close || wait;
   const bounds = action?.match(/\bbounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
   if (bounds) {
