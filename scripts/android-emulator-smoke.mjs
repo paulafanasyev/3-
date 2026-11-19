@@ -88,6 +88,30 @@ function tapChromeUiNode(node, label) {
   adb(['shell', 'input', 'tap', String(x), String(y)]);
 }
 
+async function findChromeSettingsNode(pattern, label, timeoutMs = 20_000) {
+  let attempts = 0;
+  let lastNodes = [];
+  try {
+    return await waitFor(() => {
+      lastNodes = chromeUiNodes();
+      const node = lastNodes.find((entry) => {
+        const text = entry.match(/\btext="([^"]*)"/)?.[1] || '';
+        const description = entry.match(/\bcontent-desc="([^"]*)"/)?.[1] || '';
+        const resourceId = entry.match(/\bresource-id="([^"]*)"/)?.[1] || '';
+        const visible = !/\bvisible-to-user="false"/.test(entry);
+        return visible && pattern.test(text + ' ' + description + ' ' + resourceId);
+      });
+      attempts += 1;
+      if (!node && attempts % 2 === 0) {
+        adb(['shell', 'input', 'swipe', '540', '2050', '540', '700', '450']);
+      }
+      return node || null;
+    }, label, timeoutMs, 400);
+  } catch (error) {
+    throw new Error(error.message + '\nChrome Settings UI while searching for "' + label + '":\n' + lastNodes.join('\n'));
+  }
+}
+
 async function enableChromeUsbWebDebugging() {
   const launch = adb([
     'shell', 'am', 'start', '-W',
@@ -97,29 +121,20 @@ async function enableChromeUsbWebDebugging() {
   ]);
   console.log('Chrome settings launch: ' + launch.replace(/\s+/g, ' ').slice(0, 400));
 
-  const developerTools = await waitFor(
-    () => findChromeUiNode(/developer tools/i),
-    'Chrome Settings > Developer tools',
-    20_000,
-    500,
-  );
+  const developerTools = await findChromeSettingsNode(/developer tools/i, 'Chrome Settings > Developer tools');
   tapChromeUiNode(developerTools, 'Developer tools');
 
-  const usbDebugging = await waitFor(
-    () => findChromeUiNode(/enable usb web debugging/i),
-    'Chrome Developer tools > Enable USB Web debugging',
-    20_000,
-    500,
-  );
+  const usbDebugging = await findChromeSettingsNode(/enable usb web debugging/i, 'Chrome Developer tools > Enable USB Web debugging');
   const checked = usbDebugging.match(/\bchecked="(true|false)"/)?.[1];
   if (checked !== 'true') {
     tapChromeUiNode(usbDebugging, 'Enable USB Web debugging');
-    await waitFor(() => {
-      const node = findChromeUiNode(/enable usb web debugging/i);
-      return node && /\bchecked="true"/.test(node) ? node : null;
-    }, 'USB Web debugging enabled state', 10_000, 500);
+    await sleep(1_000);
+  } else {
+    console.log('Chrome USB Web debugging was already enabled');
   }
-  pass('Chrome USB Web debugging setting is enabled');
+
+  const related = chromeUiNodes().filter((entry) => /usb web debugging|checkable="true"|class="android\.widget\.Switch"/i.test(entry));
+  console.log('Chrome USB debugging controls after tap:\n' + related.join('\n'));
   adb(['shell', 'am', 'force-stop', 'com.android.chrome']);
   const target = adb([
     'shell', 'am', 'start', '-W',
@@ -129,7 +144,6 @@ async function enableChromeUsbWebDebugging() {
   ]);
   console.log('Chrome gameplay relaunch: ' + target.replace(/\s+/g, ' ').slice(0, 400));
 }
-
 async function tapChromeFirstRunButton(pattern, label, timeoutMs = 12_000) {
   let lastUi = '';
   let attempts = 0;
@@ -278,6 +292,7 @@ try {
     const ps = adb(['shell', 'ps', '-A']);
     const sockets = adb(['shell', 'sh', '-c', "cat /proc/net/unix | grep -i devtools_remote || true"]);
     if (!/FirstRunActivity/.test(activity) && ps.includes('com.android.chrome') && sockets.includes('devtools_remote')) {
+      pass('Chrome USB Web debugging enabled; DevTools socket available');
       console.log('Chrome activity ready; DevTools socket: ' + sockets.replace(/\s+/g, ' ').slice(0, 500));
       return sockets;
     }
