@@ -45,7 +45,7 @@ export async function startDevServer({ timeoutMs = 60000, scenario = null } = {}
 
 async function cdp(port) {
   let version = null;
-  for (let i = 0; i < 100 && !version; i += 1) {
+  for (let i = 0; i < 200 && !version; i += 1) {
     try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { await sleep(100); }
   }
   if (!version) throw new Error('Chrome не открыл порт отладки');
@@ -55,9 +55,31 @@ async function cdp(port) {
   let id = 0; const pending = new Map(); const handlers = [];
   ws.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
-    if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } else handlers.forEach((h) => h(m));
+    if (m.id && pending.has(m.id)) {
+      const item = pending.get(m.id);
+      clearTimeout(item.timer);
+      pending.delete(m.id);
+      if (m.error) item.reject(new Error(`CDP ${item.method}: ${m.error.message || JSON.stringify(m.error)}`));
+      else item.resolve(m);
+    } else handlers.forEach((h) => h(m));
   };
-  const send = (method, params = {}) => new Promise((res) => { id += 1; pending.set(id, res); ws.send(JSON.stringify({ id, method, params })); });
+  ws.onclose = () => {
+    for (const item of pending.values()) {
+      clearTimeout(item.timer);
+      item.reject(new Error(`CDP connection closed while waiting for ${item.method}`));
+    }
+    pending.clear();
+  };
+  const send = (method, params = {}) => new Promise((resolve, reject) => {
+    const commandId = ++id;
+    const timer = setTimeout(() => {
+      pending.delete(commandId);
+      reject(new Error(`CDP command timed out after 60s: ${method}`));
+    }, 60000);
+    pending.set(commandId, { resolve, reject, timer, method });
+    try { ws.send(JSON.stringify({ id: commandId, method, params })); }
+    catch (error) { clearTimeout(timer); pending.delete(commandId); reject(error); }
+  });
   return { send, on: (h) => handlers.push(h), close: () => ws.close() };
 }
 
@@ -68,13 +90,29 @@ async function cdp(port) {
 export async function smokeKupol({ url, chrome = findChrome(), offline = true, timeoutMs = 45000, shot = null, game = false } = {}) {
   if (!chrome) throw new Error('не найден Chrome/Chromium (можно указать CHROME_PATH)');
   const port = 9300 + Math.floor(Math.random() * 600);
-  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--no-sandbox', '--no-first-run', '--use-angle=swiftshader',
+  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1', '--remote-allow-origins=*', '--no-sandbox',
+    '--disable-dev-shm-usage', '--disable-gpu', '--no-first-run', '--no-zygote', '--use-angle=swiftshader',
     '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1280,720', `--user-data-dir=/tmp/kupol-smoke-chrome-${port}`];
   if (offline) args.push('--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>;localhost;127.0.0.1');
-  const proc = spawn(chrome, args, { stdio: 'ignore' });
+  let chromeLog = '';
+  // GitHub-hosted Linux runners may expose a malformed inherited DBus address.
+  // Headless Chromium does not need a desktop session; remove it rather than
+  // letting a broken session-bus setting interfere with browser startup.
+  const chromeEnv = { ...process.env };
+  delete chromeEnv.DBUS_SESSION_BUS_ADDRESS;
+  const proc = spawn(chrome, args, { env: chromeEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+  proc.stdout.on('data', (d) => { chromeLog += d.toString(); });
+  proc.stderr.on('data', (d) => { chromeLog += d.toString(); });
   const report = { offline, url, ws: [], exceptions: [], consoleErrors: [], natural: { ok: 0, fail: 0 }, toasts: [], canvas: false, bootError: null, waitedMs: 0 };
+  proc.on('error', (error) => { chromeLog += `\\nspawn error: ${error.stack || error}`; });
   try {
-    const s = await cdp(port);
+    let s;
+    try {
+      s = await cdp(port);
+    } catch (error) {
+      await sleep(250);
+      throw new Error(`${error.message}; chrome exit=${proc.exitCode ?? 'running'}; stderr/stdout:\\n${chromeLog.slice(-5000)}`);
+    }
     s.on((m) => {
       if (m.method === 'Runtime.exceptionThrown') report.exceptions.push(String(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 500));
       if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') report.consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 500));

@@ -1,5 +1,7 @@
+import { mkdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer';
+import sharp from 'sharp';
 
 const port = Number(process.env.NUCLEAR_BROWSER_PORT || 4188);
 const base = `http://127.0.0.1:${port}`;
@@ -15,6 +17,57 @@ let browser;
 function assert(condition, message) {
   if (!condition) throw new Error(message);
   console.log(`PASS: ${message}`);
+}
+ 
+async function captureGlobe(page) {
+  const rect = await page.$eval('#kupol-globe canvas', (canvas) => {
+    const box = canvas.getBoundingClientRect();
+    return { x: box.x, y: box.y, width: box.width, height: box.height };
+  });
+  if (rect.width < 100 || rect.height < 100) throw new Error(`Cesium canvas is too small: ${JSON.stringify(rect)}`);
+  return page.screenshot({
+    clip: {
+      x: Math.max(0, Math.floor(rect.x)),
+      y: Math.max(0, Math.floor(rect.y)),
+      width: Math.ceil(rect.width),
+      height: Math.ceil(rect.height),
+    },
+  });
+}
+
+async function changedPixelCount(before, after) {
+  const options = { width: 320, height: 240, fit: 'fill' };
+  const a = await sharp(before).resize(options).removeAlpha().raw().toBuffer();
+  const b = await sharp(after).resize(options).removeAlpha().raw().toBuffer();
+  let changed = 0;
+  for (let i = 0; i < a.length; i += 3) {
+    if (Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2])) > 24) changed += 1;
+  }
+  return changed;
+}
+
+async function assertMobileLayout(page, width, height) {
+  await page.setViewport({ width, height });
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  const report = await page.evaluate(() => {
+    const selectors = ['.k-top', '.k-left', '.k-right', '.k-chron', '.k-end', '.k-zoom', '.k-nrange-trigger'];
+    const elements = selectors.flatMap((selector) => [...document.querySelectorAll(selector)]);
+    const visible = elements.filter((element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    });
+    return {
+      viewportWidth: innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      outside: visible.map((element) => {
+        const r = element.getBoundingClientRect();
+        return { selector: element.className?.baseVal ?? element.className ?? element.tagName, left: r.left, right: r.right };
+      }).filter((r) => r.left < -1 || r.right > innerWidth + 1),
+    };
+  });
+  assert(report.documentWidth <= width + 1, `no page-wide horizontal overflow at ${width}x${height}`);
+  assert(report.outside.length === 0, `visible HUD elements stay inside ${width}x${height}: ${JSON.stringify(report.outside)}`);
 }
 
 async function waitForServer() {
@@ -48,6 +101,29 @@ try {
     ],
   });
   const page = await browser.newPage();
+  await page.evaluateOnNewDocument(() => {
+    const NativeAudio = window.Audio;
+    Object.defineProperty(window, '__KUPOL_AUDIO_EVENTS__', { value: [], configurable: true });
+    function TrackedAudio(source) {
+      const audio = new NativeAudio(source);
+      const nativePlay = audio.play.bind(audio);
+      audio.play = (...args) => {
+        const event = { src: audio.src, fulfilled: false, error: null };
+        window.__KUPOL_AUDIO_EVENTS__.push(event);
+        const result = nativePlay(...args);
+        if (result && typeof result.then === 'function') {
+          result.then(() => { event.fulfilled = true; }, (error) => { event.error = String(error?.message || error); });
+        } else {
+          event.fulfilled = true;
+        }
+        return result;
+      };
+      return audio;
+    }
+    TrackedAudio.prototype = NativeAudio.prototype;
+    Object.setPrototypeOf(TrackedAudio, NativeAudio);
+    window.Audio = TrackedAudio;
+  });
   await page.setViewport({ width: 1440, height: 960 });
   const pageErrors = [];
   const consoleErrors = [];
@@ -95,7 +171,15 @@ try {
   assert(hanoiValue !== null, 'offline city catalogue finds Hanoi');
   await page.select('#k-nrange-city-results', hanoiValue);
   await page.waitForFunction(() => document.querySelector('[data-status]')?.textContent.includes('Выбран город: Hanoi'));
-  assert(true, 'selecting Hanoi updates the selected target and triggers camera navigation');
+  await page.waitForFunction(() => {
+    const probe = window.__KUPOL_QA__?.snapshot();
+    return probe?.target?.name === 'Hanoi' && probe?.camera?.aimDot > 0.97
+      && probe?.camera?.height > 0 && probe.camera.height < 1_000_000;
+  }, { timeout: 20000 });
+  const cameraProbe = await page.evaluate(() => window.__KUPOL_QA__.snapshot());
+  assert(cameraProbe.camera.aimDot > 0.97, `Cesium camera actually aims at Hanoi (dot=${cameraProbe.camera.aimDot.toFixed(4)})`);
+  assert(cameraProbe.camera.height > 0 && cameraProbe.camera.height < 1_000_000, 'camera reached city-scale altitude rather than remaining at the global start view');
+  const beforeBlast = await captureGlobe(page);
 
   await page.click('[data-test]');
   await page.waitForFunction(() => document.querySelector('[data-status]')?.textContent.includes('Испытание выполнено'), { timeout: 45000 });
@@ -103,13 +187,40 @@ try {
   assert(/Снесено застройки: [1-9]/.test(status), 'strike reports the levelled built-up area');
   assert(/строений в сцене: [1-9]/.test(status), 'strike renders the city-damage proxy set');
   assert(/полное разрушение/.test(status), 'status reports real per-zone overpressure distances');
+  await page.waitForFunction(() => {
+    const probe = window.__KUPOL_QA__?.snapshot();
+    return probe?.lastTestResult?.ok === true && probe.damageEntities > 0 && probe.nuclearLive === true;
+  }, { timeout: 15000 });
+  const liveProbe = await page.evaluate(() => window.__KUPOL_QA__.snapshot());
+  assert(liveProbe.damageEntities > 0, `Cesium damage data source contains ${liveProbe.damageEntities} generated entities`);
+  assert(liveProbe.nuclearLive === true, 'volumetric nuclear effect is live in the Cesium scene');
   await new Promise((resolve) => setTimeout(resolve, 2300));
-  assert([...audioResponses].some((item) => item.startsWith('trinity-front.ogg:200')), 'front sound sample is requested successfully');
-  assert([...audioResponses].some((item) => item.startsWith('trinity-tail.ogg:200')), 'delayed tail sound sample is requested successfully');
+  const afterBlast = await captureGlobe(page);
+  const changedPixels = await changedPixelCount(beforeBlast, afterBlast);
+  assert(changedPixels >= 80, `rendered globe pixels changed during the nuclear effect (${changedPixels} changed samples)`);
+  await page.waitForFunction(() => {
+    const events = window.__KUPOL_AUDIO_EVENTS__ || [];
+    return events.some((event) => event.src.endsWith('/trinity-front.ogg') && event.fulfilled)
+      && events.some((event) => event.src.endsWith('/trinity-tail.ogg') && event.fulfilled);
+  }, { timeout: 15000 });
+  // Media requests may be served as 206 Partial Content when the browser uses
+  // byte ranges. Both 200 and 206 are successful HTTP responses for this asset.
+  assert([...audioResponses].some((item) => /^trinity-front\.ogg:(200|206)$/.test(item)), 'front sound sample is requested successfully (HTTP 200 or 206)');
+  assert([...audioResponses].some((item) => /^trinity-tail\.ogg:(200|206)$/.test(item)), 'delayed tail sound sample is requested successfully (HTTP 200 or 206)');
+  assert(await page.evaluate(() => (window.__KUPOL_AUDIO_EVENTS__ || []).some((event) => event.src.endsWith('/trinity-front.ogg') && event.fulfilled)), 'front audio playback promise resolves');
+  assert(await page.evaluate(() => (window.__KUPOL_AUDIO_EVENTS__ || []).some((event) => event.src.endsWith('/trinity-tail.ogg') && event.fulfilled)), 'tail audio playback promise resolves');
+
+  mkdirSync('artifacts', { recursive: true });
+  await page.screenshot({ path: 'artifacts/nuclear-range-smoke.png', fullPage: true });
 
   await page.click('[data-reset]');
   await page.waitForFunction(() => document.querySelector('[data-status]')?.textContent.includes('очищены'));
   assert(true, 'reset action completes and reports cleared effects');
+  await page.click('.k-nrange-close');
+
+  await assertMobileLayout(page, 390, 844);
+  await assertMobileLayout(page, 360, 740);
+  await assertMobileLayout(page, 768, 1024);
 
   assert(pageErrors.length === 0, `browser runtime has no uncaught page errors (${pageErrors.length})`);
   console.log('NUCLEAR BROWSER SMOKE PASS');

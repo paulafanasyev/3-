@@ -8,7 +8,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const WS_URL = `ws://127.0.0.1:${PORT}/ws`;
 
 const child = spawn(process.execPath, ['server.js'], {
-  env: { ...process.env, PORT, HOST: '127.0.0.1' },
+  env: { ...process.env, PORT, HOST: '127.0.0.1', GEV_MAX_WS_CLIENTS: '2' },
   stdio: ['ignore', 'inherit', 'inherit'],
 });
 let exitCode = null;
@@ -44,7 +44,8 @@ async function waitForHealth() {
 
 const health = await waitForHealth();
 if (health.ok !== true) fail(`/api/health returned ${JSON.stringify(health)}`);
-pass(`/api/health ok (apiProxies=${health.apiProxies})`);
+if (health.maxWebSocketClients !== 2) fail(`configured websocket limit missing from health: ${JSON.stringify(health)}`);
+pass(`/api/health ok (apiProxies=${health.apiProxies}, max websocket clients=${health.maxWebSocketClients})`);
 
 for (const route of ['/', '/some/deep/route']) {
   const res = await fetch(`${BASE}${route}`);
@@ -159,6 +160,63 @@ await new Promise((resolve) => {
   ws.on('error', () => resolve());
 });
 pass('/ws rejects foreign Origin');
+
+// The service refuses the third concurrent socket at the handshake boundary.
+// The test server is intentionally configured with a limit of two above.
+await sleep(150);
+async function openIdleSocket() {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(WS_URL);
+    const timer = setTimeout(() => reject(new Error('idle websocket did not become ready')), 10_000);
+    ws.on('message', (data) => {
+      const message = JSON.parse(data.toString());
+      if (message.type === 'runtime:ready') {
+        clearTimeout(timer);
+        resolve(ws);
+      }
+    });
+    ws.on('error', (error) => { clearTimeout(timer); reject(error); });
+  });
+}
+const heldSockets = await Promise.all([openIdleSocket(), openIdleSocket()]);
+await new Promise((resolve, reject) => {
+  let settled = false;
+  const ws = new WebSocket(WS_URL);
+  const timer = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    ws.terminate();
+    reject(new Error('connection-cap handshake did not resolve'));
+  }, 10_000);
+  ws.on('open', () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    ws.terminate();
+    reject(new Error('server accepted a third socket above GEV_MAX_WS_CLIENTS=2'));
+  });
+  ws.on('unexpected-response', (request, response) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    const status = response.statusCode;
+    response.resume();
+    if (status !== 503) reject(new Error(`third socket got HTTP ${status}, expected 503`));
+    else resolve();
+  });
+  ws.on('error', (error) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    reject(error);
+  });
+});
+pass('/ws rejects connections above the configured concurrent-client limit');
+await Promise.all(heldSockets.map((ws) => new Promise((resolve) => {
+  if (ws.readyState === WebSocket.CLOSED) { resolve(); return; }
+  ws.once('close', resolve);
+  ws.close();
+})));
 
 child.kill('SIGTERM');
 for (let i = 0; i < 20 && exitCode === null; i += 1) await sleep(250);
