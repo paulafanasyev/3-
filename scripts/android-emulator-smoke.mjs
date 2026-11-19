@@ -255,14 +255,18 @@ try {
   // "Use without an account" is the primary dismissal action (there is no
   // "Accept & continue" button on that screen). Handle both variants and any
   // subsequent sync prompt before waiting for the DevTools socket.
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  let chromeFirstRunComplete = false;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
     const activity = adb(['shell', 'dumpsys', 'activity', 'activities']);
-    if (!/FirstRunActivity/.test(activity)) break;
+    if (!/FirstRunActivity/.test(activity)) {
+      chromeFirstRunComplete = true;
+      break;
+    }
 
     const skipped = await tapChromeFirstRunButton(
       /use without an account|no thanks|negative_button|skip|not now|signin_fre_dismiss_button/i,
       'Use without an account / skip sign-in',
-      4_000,
+      3_000,
     );
     if (skipped) {
       await sleep(750);
@@ -272,14 +276,27 @@ try {
     const accepted = await tapChromeFirstRunButton(
       /terms_accept|accept.*continue|accept.*terms/i,
       'Accept & continue',
-      4_000,
+      3_000,
     );
     if (accepted) {
       await sleep(750);
       continue;
     }
 
-    break;
+    // Chrome may still be rendering the first-run page (logo/progress spinner).
+    // Do not abandon onboarding just because the action buttons are not ready yet.
+    console.log('Chrome first-run UI is still loading; retry ' + (attempt + 1) + '/12');
+    await sleep(1_000);
+  }
+  if (!chromeFirstRunComplete) {
+    const activity = adb(['shell', 'dumpsys', 'activity', 'activities']);
+    chromeFirstRunComplete = !/FirstRunActivity/.test(activity);
+  }
+  if (!chromeFirstRunComplete) {
+    throw new Error(
+      'Chrome first-run onboarding did not finish after 12 retries. UI nodes:\\n'
+      + chromeUiNodes().join('\\n'),
+    );
   }
 
   // Android system USB debugging does not enable Chrome CDP on production Play Store builds.
