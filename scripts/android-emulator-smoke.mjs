@@ -113,13 +113,12 @@ async function findChromeSettingsNode(pattern, label, timeoutMs = 20_000) {
 }
 
 async function enableChromeUsbWebDebugging() {
-  const launch = adb([
-    'shell', 'am', 'start', '-W',
-    '-n', 'com.android.chrome/org.chromium.chrome.browser.ChromeTabbedActivity',
-    '-a', 'android.intent.action.VIEW',
-    '-d', 'chrome://settings',
-  ]);
-  console.log('Chrome settings launch: ' + launch.replace(/\s+/g, ' ').slice(0, 400));
+  // Navigate through Chrome's visible menu. Sending chrome:// URLs as Android
+  // VIEW intents can leave the current page unchanged on Play Store builds.
+  const menu = await findChromeSettingsNode(/com\\.android\\.chrome:id\\/menu_button/, 'Chrome toolbar menu', 10_000);
+  tapChromeUiNode(menu, 'Chrome menu');
+  const settings = await findChromeSettingsNode(/\\bSettings\\b/i, 'Chrome menu > Settings', 10_000);
+  tapChromeUiNode(settings, 'Settings');
 
   const developerTools = await findChromeSettingsNode(/developer tools/i, 'Chrome Settings > Developer tools');
   tapChromeUiNode(developerTools, 'Developer tools');
