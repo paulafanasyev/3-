@@ -50,25 +50,19 @@ export async function startDevServer({ timeoutMs = 60000, scenario = null } = {}
   return { url, stop: () => proc.kill('SIGKILL'), get log() { return log; } };
 }
 
-async function cdp(port, proc, getChromeLog) {
-  let version = null;
-  for (let i = 0; i < 100 && !version; i += 1) {
-    if (proc.exitCode !== null || proc.signalCode !== null) {
-      throw new Error(`Chrome завершился до открытия CDP (code=${proc.exitCode}, signal=${proc.signalCode}): ${getChromeLog() || 'stderr пустой'}`);
-    }
-    try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { await sleep(100); }
+async function cdp(browser) {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1280, height: 720 });
+  const session = await page.createCDPSession();
+  const handlers = [];
+  for (const method of ['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Network.responseReceived', 'Network.webSocketFrameReceived', 'Network.webSocketFrameSent']) {
+    session.on(method, (params) => handlers.forEach((handler) => handler({ method, params })));
   }
-  if (!version) throw new Error(`Chrome не открыл порт отладки за 10 секунд: ${getChromeLog() || 'stderr пустой'}`);
-  const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
-  const ws = new WebSocket(target.webSocketDebuggerUrl);
-  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(new Error('CDP: нет соединения')); });
-  let id = 0; const pending = new Map(); const handlers = [];
-  ws.onmessage = (ev) => {
-    const m = JSON.parse(ev.data);
-    if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } else handlers.forEach((h) => h(m));
+  return {
+    send: (method, params = {}) => session.send(method, params),
+    on: (handler) => handlers.push(handler),
+    close: async () => { try { await session.detach(); } catch { /* browser may already be closed */ } }
   };
-  const send = (method, params = {}) => new Promise((res) => { id += 1; pending.set(id, res); ws.send(JSON.stringify({ id, method, params })); });
-  return { send, on: (h) => handlers.push(h), close: () => ws.close() };
 }
 
 /**
@@ -77,17 +71,14 @@ async function cdp(port, proc, getChromeLog) {
  */
 export async function smokeKupol({ url, chrome = findChrome(), offline = true, timeoutMs = 45000, shot = null, game = false } = {}) {
   if (!chrome) throw new Error('не найден Chrome/Chromium (можно указать CHROME_PATH)');
-  const port = 9300 + Math.floor(Math.random() * 600);
-  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1', '--no-sandbox', '--no-zygote', '--disable-dev-shm-usage', '--disable-background-networking', '--disable-extensions', '--no-first-run', '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1280,720', `--user-data-dir=/tmp/kupol-smoke-chrome-${port}`];
+  const args = ['--no-sandbox', '--no-zygote', '--disable-dev-shm-usage', '--disable-background-networking', '--disable-extensions', '--no-first-run', '--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
   if (offline) args.push('--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>;localhost;127.0.0.1');
-  const proc = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-  let chromeLog = '';
-  proc.stderr.on('data', (chunk) => { chromeLog = (chromeLog + chunk.toString()).slice(-5000); });
-  const getChromeLog = () => chromeLog.trim();
+  // Puppeteer управляет каналом CDP напрямую; ручной TCP-порт отладки нестабилен на GitHub runners.
+  const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args });
   const report = { offline, url, ws: [], exceptions: [], consoleErrors: [], natural: { ok: 0, fail: 0 }, toasts: [], canvas: false, bootError: null, waitedMs: 0 };
   try {
-    const s = await cdp(port, proc, getChromeLog);
+    const s = await cdp(browser);
     s.on((m) => {
       if (m.method === 'Runtime.exceptionThrown') report.exceptions.push(String(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 500));
       if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') report.consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 500));
@@ -120,7 +111,7 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
       if (png.result?.data) writeFileSync(shot, Buffer.from(png.result.data, 'base64'));
     }
     s.close();
-  } finally { proc.kill('SIGKILL'); }
+  } finally { await browser.close(); }
   report.problems = [];
   if (report.bootError) report.problems.push(`игра не запустилась: ${report.bootError}`);
   if (report.exceptions.length) report.problems.push(`исключения на странице: ${report.exceptions[0]}`);
