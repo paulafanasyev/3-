@@ -7,7 +7,8 @@
 //   node scripts/kupol-browser-smoke.mjs [--game] [--shot out.png] [--online]
 // Код выхода 1 — если игра не запустилась или глобус не загрузился.
 import { spawn, execSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
+import puppeteer from 'puppeteer';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -17,10 +18,16 @@ const OFFLINE_TOAST = 'Офлайн-глобус';
 
 /** Путь к Chrome/Chromium или null. */
 export function findChrome() {
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+  const configured = process.env.CHROME_PATH;
+  if (configured && existsSync(configured)) return configured;
   try {
-    return execSync('command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser', { shell: '/bin/sh' })
-      .toString().trim().split('\n')[0] || null;
+    const systemChrome = execSync('command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser', { shell: '/bin/sh', stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim().split('\n')[0];
+    if (systemChrome && existsSync(systemChrome)) return systemChrome;
+  } catch { /* use the browser installed by Puppeteer */ }
+  try {
+    const bundledChrome = puppeteer.executablePath();
+    return existsSync(bundledChrome) ? bundledChrome : null;
   } catch { return null; }
 }
 
@@ -43,12 +50,15 @@ export async function startDevServer({ timeoutMs = 60000, scenario = null } = {}
   return { url, stop: () => proc.kill('SIGKILL'), get log() { return log; } };
 }
 
-async function cdp(port) {
+async function cdp(port, proc, getChromeLog) {
   let version = null;
   for (let i = 0; i < 100 && !version; i += 1) {
+    if (proc.exitCode !== null || proc.signalCode !== null) {
+      throw new Error(`Chrome завершился до открытия CDP (code=${proc.exitCode}, signal=${proc.signalCode}): ${getChromeLog() || 'stderr пустой'}`);
+    }
     try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { await sleep(100); }
   }
-  if (!version) throw new Error('Chrome не открыл порт отладки');
+  if (!version) throw new Error(`Chrome не открыл порт отладки за 10 секунд: ${getChromeLog() || 'stderr пустой'}`);
   const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(new Error('CDP: нет соединения')); });
@@ -68,13 +78,16 @@ async function cdp(port) {
 export async function smokeKupol({ url, chrome = findChrome(), offline = true, timeoutMs = 45000, shot = null, game = false } = {}) {
   if (!chrome) throw new Error('не найден Chrome/Chromium (можно указать CHROME_PATH)');
   const port = 9300 + Math.floor(Math.random() * 600);
-  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--no-sandbox', '--no-first-run', '--use-angle=swiftshader',
+  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--remote-debugging-address=127.0.0.1', '--no-sandbox', '--no-zygote', '--disable-dev-shm-usage', '--disable-background-networking', '--disable-extensions', '--no-first-run', '--use-angle=swiftshader',
     '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1280,720', `--user-data-dir=/tmp/kupol-smoke-chrome-${port}`];
   if (offline) args.push('--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>;localhost;127.0.0.1');
-  const proc = spawn(chrome, args, { stdio: 'ignore' });
+  const proc = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+  let chromeLog = '';
+  proc.stderr.on('data', (chunk) => { chromeLog = (chromeLog + chunk.toString()).slice(-5000); });
+  const getChromeLog = () => chromeLog.trim();
   const report = { offline, url, ws: [], exceptions: [], consoleErrors: [], natural: { ok: 0, fail: 0 }, toasts: [], canvas: false, bootError: null, waitedMs: 0 };
   try {
-    const s = await cdp(port);
+    const s = await cdp(port, proc, getChromeLog);
     s.on((m) => {
       if (m.method === 'Runtime.exceptionThrown') report.exceptions.push(String(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 500));
       if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') report.consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 500));
