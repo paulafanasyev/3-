@@ -15,8 +15,10 @@ const gameSessions = createSessionRegistry();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const port = Number(process.env.PORT || 4173);
-// Safe default: loopback only. Public binding must be explicit (HOST=0.0.0.0).
-const host = process.env.HOST || '127.0.0.1';
+const isVercel = process.env.VERCEL === '1';
+// Vercel's Node-server detector selects server.js directly (not server.ts),
+// so apply the platform binding here rather than relying on server.ts side effects.
+const host = isVercel ? '0.0.0.0' : (process.env.HOST || '127.0.0.1');
 const dist = path.join(__dirname, 'dist');
 const indexHtml = path.join(dist, 'index.html');
 
@@ -24,7 +26,9 @@ const WS_PATH = '/ws';
 const WS_MAX_PAYLOAD = 64 * 1024;
 const WS_HEARTBEAT_MS = 30_000;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
-const apiProxiesEnabled = process.env.GEV_API_PROXIES !== '0';
+// Vercel deploys the game without devDependencies; its Node-server entrypoint
+// must not import Vite, which is only the parent app's optional API-proxy host.
+const apiProxiesEnabled = !isVercel && process.env.GEV_API_PROXIES !== '0';
 const allowedOrigins = new Set(
   (process.env.GEV_ALLOWED_ORIGINS || '')
     .split(',')
