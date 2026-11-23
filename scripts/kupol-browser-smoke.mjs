@@ -105,7 +105,7 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
     for (;;) {
       await sleep(1000);
       const r = await s.send('Runtime.evaluate', { returnByValue: true, expression: "JSON.stringify((() => { const c = window.__kupol?.viewer?.scene?.canvas; const domCanvas = document.querySelector('#kupol-globe canvas'); return { toasts: window.__kupolToasts || [], canvas: !!((c && c.isConnected && c.width > 0 && c.height > 0) || (domCanvas && domCanvas.width > 0 && domCanvas.height > 0)), canvasTag: c?.tagName ?? domCanvas?.tagName ?? null, kupolReady: !!window.__kupol, nationDialog: !!document.querySelector('.k-start'), body: document.body ? document.body.innerText.slice(0, 400) : '' }; })())" });
-      const v = JSON.parse(r.result?.result?.value ?? '{}');
+      const v = JSON.parse(r.result?.value ?? '{}');
       report.toasts = v.toasts ?? [];
       report.canvas = !!v.canvas;
       report.diagnostics = { canvasTag: v.canvasTag, kupolReady: v.kupolReady, nationDialog: v.nationDialog, body: v.body };
@@ -119,7 +119,7 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
     if (game && !report.bootError) report.game = await playGame(s);
     if (shot) {
       const png = await s.send('Page.captureScreenshot', { format: 'png' });
-      if (png.result?.data) writeFileSync(shot, Buffer.from(png.result.data, 'base64'));
+      if (png.data) writeFileSync(shot, Buffer.from(png.data, 'base64'));
     }
     s.close();
   } finally { await browser.close(); }
@@ -136,7 +136,7 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
 
 /** Партия в браузере: нация → тактический бой (автобой) → конец хода. Нужен сценарий battle. */
 async function playGame(s) {
-  const ev = async (expression) => (await s.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.result?.value;
+  const ev = async (expression) => (await s.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.value;
   const waitFor = async (expression, ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await ev(expression); if (v) return v; await sleep(250); } return null; };
   const g = { problems: [] };
   g.nation = await waitFor("(() => { const b = document.querySelector('.k-start button[data-id]'); if (!b) return null; b.click(); return b.dataset.id; })()", 15000);
