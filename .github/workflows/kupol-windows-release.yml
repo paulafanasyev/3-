@@ -180,5 +180,6 @@ jobs:
             release/Kupol-win64.zip.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --title "«Купол» 1.0.0-rc.4 для Windows" \
+            --target "$GITHUB_SHA" \
             --notes-file release-notes.md \
             --prerelease
