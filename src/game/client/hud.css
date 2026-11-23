@@ -143,3 +143,81 @@ body.kupol > *:not(#kupol-globe):not(#kupol-root):not(.kb-root):not(.k-shame):no
 #kupol-root.k-cinema .k-chron, #kupol-root.k-cinema .k-live, #kupol-root.k-cinema .k-hint,
 #kupol-root.k-cinema .k-end, #kupol-root.k-cinema .k-help, #kupol-root.k-cinema .k-offer,
 #kupol-root.k-cinema .k-combat { visibility: hidden; }
+
+
+/* Mobile HUD: keep the globe visible and prevent the fixed desktop-width
+   panels from overlapping outside a phone viewport. */
+@media (max-width: 760px) {
+  body.kupol { min-height: 100dvh; }
+  #kupol-root { font-size: 12px; }
+  .k-top {
+    left: 8px; right: 8px; top: 8px; height: auto; min-height: 44px;
+    gap: 7px; padding: 6px 9px; flex-wrap: wrap;
+  }
+  .k-logo { font-size: 15px; letter-spacing: .22em; }
+  .k-turn { font-size: 10px; }
+  .k-turn b { font-size: 13px; }
+  .k-chips { gap: 4px; flex-wrap: wrap; }
+  .k-chip { gap: 4px; padding: 4px 6px; font-size: 10px; }
+  .k-chip i { font-size: 8px; }
+  .k-left {
+    left: 8px; right: 8px; top: 62px; width: auto;
+    max-height: 24dvh; gap: 6px; overscroll-behavior: contain;
+  }
+  .k-right {
+    left: 8px; right: 8px; top: auto; bottom: 72px; width: auto;
+    max-height: 24dvh; gap: 6px; overscroll-behavior: contain;
+  }
+  .k-card { padding: 9px; }
+  .k-head { gap: 8px; }
+  .k-por { width: 42px; height: 48px; font-size: 15px; }
+  .k-nm { font-size: 14px; }
+  .k-ld { font-size: 11px; }
+  .k-list { max-height: 18dvh; }
+  .k-btn { padding: 7px 8px; font-size: 11px; }
+  .k-chron, .k-live, .k-hint { display: none !important; }
+  .k-end {
+    right: 8px; bottom: max(8px, env(safe-area-inset-bottom));
+    padding: 9px 13px; border-radius: 10px; font-size: 13px;
+  }
+  .k-end small { font-size: 9px; }
+  .k-fin { left: 8px; right: 8px; bottom: 8px; width: auto; transform: none; }
+  .k-start { padding: 12px; overflow: auto; }
+  .k-start .glass {
+    width: 100%; max-width: 560px; max-height: calc(100dvh - 24px);
+    padding: 16px; overflow: auto;
+  }
+  .k-start h1 { font-size: clamp(18px, 5vw, 24px); letter-spacing: .16em; }
+  .k-nations { grid-template-columns: 1fr; gap: 7px; }
+  .k-nations button { padding: 9px; gap: 8px; }
+  .k-offer { left: 8px; right: 8px; top: 58px; width: auto; transform: none; padding: 10px; }
+  .k-toast { top: 58px; width: calc(100vw - 24px); max-width: 440px; text-align: center; }
+  .k-help { right: 8px; top: 58px; }
+  .k-zoom { left: 8px; bottom: 76px; gap: 4px; }
+  .k-zoom button { width: 36px; height: 36px; border-radius: 9px; }
+  #kupol-root .k-combat {
+    left: 8px; right: 8px; bottom: 66px; width: auto;
+    transform: none; padding: 12px; max-height: 42dvh; overflow: auto;
+  }
+  #kupol-root .k-cb-row { grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr); gap: 6px; }
+  #kupol-root .k-cb-side img { width: 52px; height: 52px; }
+  #kupol-root .k-cb-str { font-size: 19px; }
+  #kupol-root .k-cb-mid { padding-top: 10px; }
+  #kupol-root .k-cb-odds { font-size: 28px; }
+  #kupol-root .k-alarm b { font-size: 18px; }
+  #kupol-root .k-alarm > div { max-width: calc(100vw - 28px); padding: 14px; }
+  #kupol-root .k-help-box { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); padding: 18px; }
+  #kupol-root .k-gameover-card { width: calc(100vw - 24px); padding: 18px; }
+  #kupol-root .k-gameover-card h1 { font-size: 22px; }
+  #kupol-root .k-gameover-stats { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 420px) {
+  .k-top { gap: 5px; padding: 5px 7px; }
+  .k-logo { font-size: 13px; letter-spacing: .16em; }
+  .k-chip { padding: 3px 5px; }
+  .k-left { max-height: 22dvh; }
+  .k-right { max-height: 22dvh; }
+  .k-end { padding: 8px 10px; font-size: 12px; }
+  #kupol-root .k-combat { bottom: 58px; }
+}
