@@ -97,7 +97,7 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
       "try { sessionStorage.removeItem('kupol.session'); } catch {}",
       ...(offline ? ["try { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); } catch {}"] : []),
       "window.__kupolToasts=[];new MutationObserver(()=>{const t=document.querySelector('.k-toast');const a=window.__kupolToasts;if(t&&t.textContent&&a[a.length-1]!==t.textContent)a.push(t.textContent);}).observe(document,{subtree:true,childList:true,characterData:true});",
-    ].join('\\n');
+    ].join('\n');
     await s.send('Page.addScriptToEvaluateOnNewDocument', { source: preflight });
     await s.send('Page.navigate', { url: `${url}/kupol` });
     const t0 = Date.now();
