@@ -94,7 +94,7 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
     // Force a true offline signal so the app selects its bundled Natural Earth layer.
     // Clear the per-tab game token so every smoke run exercises first-launch nation selection.
     const preflight = [
-      "try { sessionStorage.removeItem('kupol.session'); } catch {}",
+      "try { const key = '__kupolSmokeFreshSession'; if (!sessionStorage.getItem(key)) { sessionStorage.removeItem('kupol.session'); sessionStorage.setItem(key, '1'); } } catch {}",
       ...(offline ? ["try { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); } catch {}"] : []),
       "window.__kupolToasts=[];new MutationObserver(()=>{const t=document.querySelector('.k-toast');const a=window.__kupolToasts;if(t&&t.textContent&&a[a.length-1]!==t.textContent)a.push(t.textContent);}).observe(document,{subtree:true,childList:true,characterData:true});",
     ].join('\n');
@@ -104,11 +104,11 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
     const expectToast = offline ? OFFLINE_TOAST : '';
     for (;;) {
       await sleep(1000);
-      const r = await s.send('Runtime.evaluate', { returnByValue: true, expression: "JSON.stringify((() => { const c = window.__kupol?.viewer?.scene?.canvas; const domCanvas = document.querySelector('#kupol-globe canvas'); return { toasts: window.__kupolToasts || [], canvas: !!((c && c.isConnected && c.width > 0 && c.height > 0) || (domCanvas && domCanvas.width > 0 && domCanvas.height > 0)), canvasTag: c?.tagName ?? domCanvas?.tagName ?? null, kupolReady: !!window.__kupol, nationDialog: !!document.querySelector('.k-start'), body: document.body ? document.body.innerText.slice(0, 400) : '' }; })())" });
+      const r = await s.send('Runtime.evaluate', { returnByValue: true, expression: "JSON.stringify((() => { const c = window.__kupol?.viewer?.scene?.canvas; const domCanvas = document.querySelector('#kupol-globe canvas'); return { toasts: window.__kupolToasts || [], toastText: document.querySelector('.k-toast')?.textContent ?? '', canvas: !!((c && c.isConnected && c.width > 0 && c.height > 0) || (domCanvas && domCanvas.width > 0 && domCanvas.height > 0)), canvasTag: c?.tagName ?? domCanvas?.tagName ?? null, kupolReady: !!window.__kupol, nationDialog: !!document.querySelector('.k-start'), navigatorOnline: navigator.onLine, sessionReset: (() => { try { return sessionStorage.getItem('__kupolSmokeFreshSession') === '1'; } catch { return false; } })(), sessionTokenPresent: (() => { try { return !!sessionStorage.getItem('kupol.session'); } catch { return false; } })(), body: document.body ? document.body.innerText.slice(0, 400) : '' }; })())" });
       const v = JSON.parse(r.result?.value ?? '{}');
-      report.toasts = v.toasts ?? [];
+      for (const toast of [...(v.toasts ?? []), v.toastText]) if (toast && !report.toasts.includes(toast)) report.toasts.push(toast);
       report.canvas = !!v.canvas;
-      report.diagnostics = { canvasTag: v.canvasTag, kupolReady: v.kupolReady, nationDialog: v.nationDialog, body: v.body };
+      report.diagnostics = { canvasTag: v.canvasTag, kupolReady: v.kupolReady, nationDialog: v.nationDialog, navigatorOnline: v.navigatorOnline, sessionReset: v.sessionReset, sessionTokenPresent: v.sessionTokenPresent, body: v.body };
       report.waitedMs = Date.now() - t0;
       const boot = /ошибка запуска[^\n]*/.exec(v.body ?? '');
       if (boot) { report.bootError = boot[0]; break; }
