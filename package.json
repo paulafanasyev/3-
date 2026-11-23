@@ -13,7 +13,9 @@
     "type": "git",
     "url": "https://github.com/paulafanasyev/3-.git"
   },
-  "engines": { "node": ">=24.14.0 <25 || >=26 <27" },
+  "engines": {
+    "node": ">=24.14.0 <25"
+  },
   "scripts": {
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
