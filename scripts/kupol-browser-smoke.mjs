@@ -90,15 +90,26 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
       }
     });
     await s.send('Runtime.enable'); await s.send('Network.enable'); await s.send('Page.enable');
-    await s.send('Page.addScriptToEvaluateOnNewDocument', { source: "window.__kupolToasts=[];new MutationObserver(()=>{const t=document.querySelector('.k-toast');const a=window.__kupolToasts;if(t&&t.textContent&&a[a.length-1]!==t.textContent)a.push(t.textContent);}).observe(document,{subtree:true,childList:true,characterData:true});" });
+    // The proxy below blocks external requests but does not change navigator.onLine.
+    // Force a true offline signal so the app selects its bundled Natural Earth layer.
+    // Clear the per-tab game token so every smoke run exercises first-launch nation selection.
+    const preflight = [
+      "try { sessionStorage.removeItem('kupol.session'); } catch {}",
+      ...(offline ? ["try { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); } catch {}"] : []),
+      "window.__kupolToasts=[];new MutationObserver(()=>{const t=document.querySelector('.k-toast');const a=window.__kupolToasts;if(t&&t.textContent&&a[a.length-1]!==t.textContent)a.push(t.textContent);}).observe(document,{subtree:true,childList:true,characterData:true});",
+    ].join('\\n');
+    await s.send('Page.addScriptToEvaluateOnNewDocument', { source: preflight });
     await s.send('Page.navigate', { url: `${url}/kupol` });
     const t0 = Date.now();
     const expectToast = offline ? OFFLINE_TOAST : '';
     for (;;) {
       await sleep(1000);
-      const r = await s.send('Runtime.evaluate', { returnByValue: true, expression: "JSON.stringify({toasts: window.__kupolToasts || [], canvas: !!document.querySelector('.cesium-widget canvas'), body: document.body ? document.body.innerText.slice(0, 400) : ''})" });
+      const r = await s.send('Runtime.evaluate', { returnByValue: true, expression: "JSON.stringify((() => { const c = window.__kupol?.viewer?.scene?.canvas; const domCanvas = document.querySelector('#kupol-globe canvas'); return { toasts: window.__kupolToasts || [], canvas: !!((c && c.isConnected && c.width > 0 && c.height > 0) || (domCanvas && domCanvas.width > 0 && domCanvas.height > 0)), canvasTag: c?.tagName ?? domCanvas?.tagName ?? null, kupolReady: !!window.__kupol, nationDialog: !!document.querySelector('.k-start'), body: document.body ? document.body.innerText.slice(0, 400) : '' }; })())" });
       const v = JSON.parse(r.result?.result?.value ?? '{}');
-      report.toasts = v.toasts ?? []; report.canvas = !!v.canvas; report.waitedMs = Date.now() - t0;
+      report.toasts = v.toasts ?? [];
+      report.canvas = !!v.canvas;
+      report.diagnostics = { canvasTag: v.canvasTag, kupolReady: v.kupolReady, nationDialog: v.nationDialog, body: v.body };
+      report.waitedMs = Date.now() - t0;
       const boot = /ошибка запуска[^\n]*/.exec(v.body ?? '');
       if (boot) { report.bootError = boot[0]; break; }
       const toastOk = report.toasts.some((x) => x.includes(expectToast));
