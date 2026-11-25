@@ -285,7 +285,7 @@ jobs:
           if gh release view kupol-v1.0.0-rc.5-win --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Existing verified Windows prerelease found; preserving its published assets."
           else
-            gh release create kupol-v1.0.0-rc.4-win \
+            gh release create kupol-v1.0.0-rc.5-win \
               release/Kupol-win64.zip \
               release/Kupol-win64.zip.sha256 \
               --repo "$GITHUB_REPOSITORY" \
