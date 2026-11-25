@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - release/kupol-win-vercel-2026-11
+      - feat/kupol-multiplatform-release-gate-2026-11
   pull_request:
     branches:
       - release/kupol-win-vercel-2026-11
@@ -258,7 +259,7 @@ jobs:
   publish-release:
     name: Publish Windows release candidate
     needs: [test-windows, browser-qa, android-emulator]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref_name == 'release/kupol-win-vercel-2026-11'
     runs-on: ubuntu-24.04
     steps:
       - name: Download tested Windows package
