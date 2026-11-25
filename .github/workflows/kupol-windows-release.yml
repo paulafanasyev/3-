@@ -277,7 +277,8 @@ jobs:
           - Portable ZIP with Kupol.exe; Node.js is not required.
           - The packaged executable starts the local game server and opens /kupol in the browser.
           - Includes a standalone Windows-native smoke test: HTTP health, /kupol route and a real game:new WebSocket session.
-          - Browser gameplay, Cesium camera, damage effects, audio and responsive layouts are gated by Chromium smoke tests.\n- Android Chrome gameplay and touch behavior are gated by Pixel 7 Pro emulator tests; this does not claim a signed native Android APK.
+          - Browser gameplay, Cesium camera, damage effects, audio and responsive layouts are gated by Chromium smoke tests.
+          - Android Chrome gameplay and touch behavior are gated by Pixel 7 Pro emulator tests; this does not claim a signed native Android APK.
 
           Extract the ZIP completely and run Kupol/Kupol.exe. If Windows SmartScreen warns about an unsigned executable, use “More info” → “Run anyway”.
           The application listens only on 127.0.0.1; it is not exposed to the network.
