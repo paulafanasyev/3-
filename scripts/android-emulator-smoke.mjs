@@ -63,12 +63,34 @@ function dismissPixelLauncherAnr() {
   return true;
 }
 
-function chromeUiNodes() {
-  adb(['shell', 'uiautomator', 'dump', '/sdcard/kupol-chrome-ui.xml']);
-  const xml = adb(['shell', 'cat', '/sdcard/kupol-chrome-ui.xml']);
-  return [...xml.matchAll(/<node\b[^>]*>/g)].map((match) => match[0]);
-}
+let lastChromeUiDumpError = null;
 
+function chromeUiNodes() {
+  const dumpPath = '/sdcard/kupol-chrome-ui.xml';
+  let lastError = null;
+
+  // ADB can briefly report the emulator as online before uiautomator is ready.
+  // Never let a missing dump file abort the entire smoke test on the first read.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      adb(['shell', 'rm', '-f', dumpPath]);
+      const dumpOutput = adb(['shell', 'uiautomator', 'dump', dumpPath]);
+      const xml = adb(['shell', 'cat', dumpPath]);
+      const nodes = [...xml.matchAll(/<node\\b[^>]*>/g)].map((match) => match[0]);
+      if (nodes.length > 0) {
+        lastChromeUiDumpError = null;
+        return nodes;
+      }
+      lastError = `uiautomator dump produced no UI nodes (attempt ${attempt}/3): ${dumpOutput || 'empty dump output'}`;
+    } catch (error) {
+      lastError = `uiautomator UI dump attempt ${attempt}/3 failed: ${error.message}`;
+    }
+  }
+
+  lastChromeUiDumpError = lastError || 'uiautomator UI dump unavailable';
+  console.warn('Android UI hierarchy unavailable: ' + lastChromeUiDumpError);
+  return [];
+}
 function findChromeUiNode(pattern) {
   return chromeUiNodes().find((entry) => {
     const text = entry.match(/\btext="([^"]*)"/)?.[1] || '';
@@ -108,7 +130,7 @@ async function findChromeSettingsNode(pattern, label, timeoutMs = 20_000) {
       return node || null;
     }, label, timeoutMs, 400);
   } catch (error) {
-    throw new Error(error.message + '\nChrome Settings UI while searching for "' + label + '":\n' + lastNodes.join('\n'));
+    throw new Error(error.message + '\nChrome Settings UI while searching for "' + label + '":\n' + lastNodes.join('\n') + '\nLast UI dump error: ' + (lastChromeUiDumpError || 'none'));
   }
 }
 
@@ -186,6 +208,7 @@ async function tapChromeFirstRunButton(pattern, label, timeoutMs = 12_000) {
     }, label, timeoutMs, 500);
   } catch (error) {
     console.log('Chrome first-run diagnostic for "' + label + '": attempts=' + attempts + '; wait=' + error.message);
+    if (lastChromeUiDumpError) console.log('Chrome first-run UI dump diagnostic: ' + lastChromeUiDumpError);
     console.log('Chrome first-run UI nodes at timeout:\n' + (lastUi || 'UI hierarchy empty/unavailable'));
     return false;
   }
@@ -307,7 +330,8 @@ try {
   if (!chromeFirstRunComplete) {
     throw new Error(
       'Chrome first-run onboarding did not finish after 12 retries. UI nodes:\\n'
-      + chromeUiNodes().join('\\n'),
+      + chromeUiNodes().join('\\n')
+      + '\\nLast UI dump error: ' + (lastChromeUiDumpError || 'none'),
     );
   }
 
