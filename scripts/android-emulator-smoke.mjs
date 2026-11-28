@@ -76,7 +76,7 @@ function chromeUiNodes() {
       adb(['shell', 'rm', '-f', dumpPath]);
       const dumpOutput = adb(['shell', 'uiautomator', 'dump', dumpPath]);
       const xml = adb(['shell', 'cat', dumpPath]);
-      const nodes = [...xml.matchAll(/<node\\b[^>]*>/g)].map((match) => match[0]);
+      const nodes = [...xml.matchAll(/<node\b[^>]*>/g)].map((match) => match[0]);
       if (nodes.length > 0) {
         lastChromeUiDumpError = null;
         return nodes;
