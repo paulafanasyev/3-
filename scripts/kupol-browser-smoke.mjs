@@ -7,7 +7,8 @@
 //   node scripts/kupol-browser-smoke.mjs [--game] [--shot out.png] [--online]
 // Код выхода 1 — если игра не запустилась или глобус не загрузился.
 import { spawn, execSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
+import puppeteer from 'puppeteer';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -17,10 +18,16 @@ const OFFLINE_TOAST = 'Офлайн-глобус';
 
 /** Путь к Chrome/Chromium или null. */
 export function findChrome() {
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
+  const configured = process.env.CHROME_PATH;
+  if (configured && existsSync(configured)) return configured;
   try {
-    return execSync('command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser', { shell: '/bin/sh' })
-      .toString().trim().split('\n')[0] || null;
+    const systemChrome = execSync('command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser', { shell: '/bin/sh', stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim().split('\n')[0];
+    if (systemChrome && existsSync(systemChrome)) return systemChrome;
+  } catch { /* use the browser installed by Puppeteer */ }
+  try {
+    const bundledChrome = puppeteer.executablePath();
+    return existsSync(bundledChrome) ? bundledChrome : null;
   } catch { return null; }
 }
 
@@ -43,22 +50,19 @@ export async function startDevServer({ timeoutMs = 60000, scenario = null } = {}
   return { url, stop: () => proc.kill('SIGKILL'), get log() { return log; } };
 }
 
-async function cdp(port) {
-  let version = null;
-  for (let i = 0; i < 100 && !version; i += 1) {
-    try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { await sleep(100); }
+async function cdp(browser) {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1280, height: 720 });
+  const session = await page.createCDPSession();
+  const handlers = [];
+  for (const method of ['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Network.responseReceived', 'Network.webSocketFrameReceived', 'Network.webSocketFrameSent']) {
+    session.on(method, (params) => handlers.forEach((handler) => handler({ method, params })));
   }
-  if (!version) throw new Error('Chrome не открыл порт отладки');
-  const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
-  const ws = new WebSocket(target.webSocketDebuggerUrl);
-  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(new Error('CDP: нет соединения')); });
-  let id = 0; const pending = new Map(); const handlers = [];
-  ws.onmessage = (ev) => {
-    const m = JSON.parse(ev.data);
-    if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } else handlers.forEach((h) => h(m));
+  return {
+    send: (method, params = {}) => session.send(method, params),
+    on: (handler) => handlers.push(handler),
+    close: async () => { try { await session.detach(); } catch { /* browser may already be closed */ } }
   };
-  const send = (method, params = {}) => new Promise((res) => { id += 1; pending.set(id, res); ws.send(JSON.stringify({ id, method, params })); });
-  return { send, on: (h) => handlers.push(h), close: () => ws.close() };
 }
 
 /**
@@ -67,14 +71,14 @@ async function cdp(port) {
  */
 export async function smokeKupol({ url, chrome = findChrome(), offline = true, timeoutMs = 45000, shot = null, game = false } = {}) {
   if (!chrome) throw new Error('не найден Chrome/Chromium (можно указать CHROME_PATH)');
-  const port = 9300 + Math.floor(Math.random() * 600);
-  const args = ['--headless=new', `--remote-debugging-port=${port}`, '--no-sandbox', '--no-first-run', '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--window-size=1280,720', `--user-data-dir=/tmp/kupol-smoke-chrome-${port}`];
+  const args = ['--no-sandbox', '--no-zygote', '--disable-dev-shm-usage', '--disable-background-networking', '--disable-extensions', '--no-first-run', '--use-angle=swiftshader',
+    '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
   if (offline) args.push('--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>;localhost;127.0.0.1');
-  const proc = spawn(chrome, args, { stdio: 'ignore' });
+  // Puppeteer управляет каналом CDP напрямую; ручной TCP-порт отладки нестабилен на GitHub runners.
+  const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args });
   const report = { offline, url, ws: [], exceptions: [], consoleErrors: [], natural: { ok: 0, fail: 0 }, toasts: [], canvas: false, bootError: null, waitedMs: 0 };
   try {
-    const s = await cdp(port);
+    const s = await cdp(browser);
     s.on((m) => {
       if (m.method === 'Runtime.exceptionThrown') report.exceptions.push(String(m.params.exceptionDetails.exception?.description ?? m.params.exceptionDetails.text).slice(0, 500));
       if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') report.consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? '').join(' ').slice(0, 500));
@@ -86,15 +90,26 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
       }
     });
     await s.send('Runtime.enable'); await s.send('Network.enable'); await s.send('Page.enable');
-    await s.send('Page.addScriptToEvaluateOnNewDocument', { source: "window.__kupolToasts=[];new MutationObserver(()=>{const t=document.querySelector('.k-toast');const a=window.__kupolToasts;if(t&&t.textContent&&a[a.length-1]!==t.textContent)a.push(t.textContent);}).observe(document,{subtree:true,childList:true,characterData:true});" });
+    // The proxy below blocks external requests but does not change navigator.onLine.
+    // Force a true offline signal so the app selects its bundled Natural Earth layer.
+    // Clear the per-tab game token so every smoke run exercises first-launch nation selection.
+    const preflight = [
+      "try { const key = '__kupolSmokeFreshSession'; if (!sessionStorage.getItem(key)) { sessionStorage.removeItem('kupol.session'); sessionStorage.setItem(key, '1'); } } catch {}",
+      ...(offline ? ["try { Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }); } catch {}"] : []),
+      "window.__kupolToasts=[];new MutationObserver(()=>{const t=document.querySelector('.k-toast');const a=window.__kupolToasts;if(t&&t.textContent&&a[a.length-1]!==t.textContent)a.push(t.textContent);}).observe(document,{subtree:true,childList:true,characterData:true});",
+    ].join('\n');
+    await s.send('Page.addScriptToEvaluateOnNewDocument', { source: preflight });
     await s.send('Page.navigate', { url: `${url}/kupol` });
     const t0 = Date.now();
     const expectToast = offline ? OFFLINE_TOAST : '';
     for (;;) {
       await sleep(1000);
-      const r = await s.send('Runtime.evaluate', { returnByValue: true, expression: "JSON.stringify({toasts: window.__kupolToasts || [], canvas: !!document.querySelector('.cesium-widget canvas'), body: document.body ? document.body.innerText.slice(0, 400) : ''})" });
-      const v = JSON.parse(r.result?.result?.value ?? '{}');
-      report.toasts = v.toasts ?? []; report.canvas = !!v.canvas; report.waitedMs = Date.now() - t0;
+      const r = await s.send('Runtime.evaluate', { returnByValue: true, expression: "JSON.stringify((() => { const c = window.__kupol?.viewer?.scene?.canvas; const domCanvas = document.querySelector('#kupol-globe canvas'); return { toasts: window.__kupolToasts || [], toastText: document.querySelector('.k-toast')?.textContent ?? '', canvas: !!((c && c.isConnected && c.width > 0 && c.height > 0) || (domCanvas && domCanvas.width > 0 && domCanvas.height > 0)), canvasTag: c?.tagName ?? domCanvas?.tagName ?? null, kupolReady: !!window.__kupol, nationDialog: !!document.querySelector('.k-start'), navigatorOnline: navigator.onLine, sessionReset: (() => { try { return sessionStorage.getItem('__kupolSmokeFreshSession') === '1'; } catch { return false; } })(), sessionTokenPresent: (() => { try { return !!sessionStorage.getItem('kupol.session'); } catch { return false; } })(), body: document.body ? document.body.innerText.slice(0, 400) : '' }; })())" });
+      const v = JSON.parse(r.result?.value ?? '{}');
+      for (const toast of [...(v.toasts ?? []), v.toastText]) if (toast && !report.toasts.includes(toast)) report.toasts.push(toast);
+      report.canvas = !!v.canvas;
+      report.diagnostics = { canvasTag: v.canvasTag, kupolReady: v.kupolReady, nationDialog: v.nationDialog, navigatorOnline: v.navigatorOnline, sessionReset: v.sessionReset, sessionTokenPresent: v.sessionTokenPresent, body: v.body };
+      report.waitedMs = Date.now() - t0;
       const boot = /ошибка запуска[^\n]*/.exec(v.body ?? '');
       if (boot) { report.bootError = boot[0]; break; }
       const toastOk = report.toasts.some((x) => x.includes(expectToast));
@@ -104,10 +119,10 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
     if (game && !report.bootError) report.game = await playGame(s);
     if (shot) {
       const png = await s.send('Page.captureScreenshot', { format: 'png' });
-      if (png.result?.data) writeFileSync(shot, Buffer.from(png.result.data, 'base64'));
+      if (png.data) writeFileSync(shot, Buffer.from(png.data, 'base64'));
     }
     s.close();
-  } finally { proc.kill('SIGKILL'); }
+  } finally { await browser.close(); }
   report.problems = [];
   if (report.bootError) report.problems.push(`игра не запустилась: ${report.bootError}`);
   if (report.exceptions.length) report.problems.push(`исключения на странице: ${report.exceptions[0]}`);
@@ -121,7 +136,7 @@ export async function smokeKupol({ url, chrome = findChrome(), offline = true, t
 
 /** Партия в браузере: нация → тактический бой (автобой) → конец хода. Нужен сценарий battle. */
 async function playGame(s) {
-  const ev = async (expression) => (await s.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.result?.value;
+  const ev = async (expression) => (await s.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.value;
   const waitFor = async (expression, ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await ev(expression); if (v) return v; await sleep(250); } return null; };
   const g = { problems: [] };
   g.nation = await waitFor("(() => { const b = document.querySelector('.k-start button[data-id]'); if (!b) return null; b.click(); return b.dataset.id; })()", 15000);

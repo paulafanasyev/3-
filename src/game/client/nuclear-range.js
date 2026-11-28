@@ -152,6 +152,39 @@ export function createNuclearRange({ root, viewer, layers, onOpen = () => {} }) 
   let targetName = '';
   let selecting = false;
   let matches = [];
+  let lastTestResult = null;
+
+  // Test-only probe: enabled only in the dedicated CI build. It exposes the
+  // actual Cesium target and camera state; production builds do not publish it.
+  if (import.meta.env.VITE_KUPOL_QA === '1' && typeof window !== 'undefined') {
+    window.__KUPOL_QA__ = Object.freeze({
+      snapshot() {
+        const cameraPosition = viewer.camera.positionCartographic;
+        let aimDot = null;
+        if (target) {
+          const worldTarget = Cesium.Cartesian3.fromDegrees(target.lon, target.lat, 0);
+          const towardTarget = Cesium.Cartesian3.normalize(
+            Cesium.Cartesian3.subtract(worldTarget, viewer.camera.position, new Cesium.Cartesian3()),
+            new Cesium.Cartesian3(),
+          );
+          aimDot = Cesium.Cartesian3.dot(viewer.camera.direction, towardTarget);
+        }
+        const damageSource = viewer.dataSources.getByName('nuclear-city-damage')[0];
+        return {
+          target: target ? { ...target, name: targetName } : null,
+          camera: {
+            longitude: Cesium.Math.toDegrees(cameraPosition.longitude),
+            latitude: Cesium.Math.toDegrees(cameraPosition.latitude),
+            height: cameraPosition.height,
+            aimDot,
+          },
+          damageEntities: damageSource?.entities?.values?.length ?? 0,
+          lastTestResult,
+          nuclearLive: layers.nuclearLive(),
+        };
+      },
+    });
+  }
 
   // Отказ полигона поднимает экран позора; бан держит именно он, поэтому здесь
   // только текст пищалки, строка состояния и вызов triggerShame. Порядок важен:
@@ -366,6 +399,7 @@ export function createNuclearRange({ root, viewer, layers, onOpen = () => {} }) 
         cityName: targetName,
         damage: damageToggle.checked,
       });
+      lastTestResult = result;
       // Слои сами отказали по маске (например, цель успела смениться под курсором) —
       // пищалка и позор должны быть и здесь, иначе остались бы только слова без
       // наказания.

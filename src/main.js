@@ -84,14 +84,16 @@ async function init() {
     }
 
     // Set Google Maps API key for 3D Tiles
-    const googleApiKey = import.meta.env.GOOGLE_MAPS_API_KEY;
-    if (!googleApiKey) {
-      throw new Error('GOOGLE_MAPS_API_KEY not found. Set it as an environment variable.');
+    const googleApiKey = String(import.meta.env.GOOGLE_MAPS_API_KEY || '').trim();
+    if (googleApiKey) {
+      Cesium.GoogleMaps.defaultApiKey = googleApiKey;
+      // Geocoding and premium Google layers may use this optional key.
+      window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
+    } else {
+      // A Google key unlocks Photorealistic 3D Tiles, but is NOT required to
+      // start the app. The free OSM/Cesium globe is initialized below.
+      delete window.__GOOGLE_MAPS_API_KEY__;
     }
-    Cesium.GoogleMaps.defaultApiKey = googleApiKey;
-
-    // Expose API key globally for geocoding in locations.js
-    window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
 
     // Create the Cesium viewer with minimal chrome
     const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -157,22 +159,26 @@ async function init() {
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
     viewer.scene.skyAtmosphere.brightnessShift = -0.08;
 
-    loaderStatus.textContent = 'Загрузка Google 3D Tiles...';
     let tileset = null;
-    try {
-      // Load Google Photorealistic 3D Tiles
-      tileset = await Cesium.createGooglePhotorealistic3DTileset({
-        onlyUsingWithGoogleGeocoder: true,
-      });
-      viewer.scene.primitives.add(tileset);
-      // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
-      // Google Photorealistic 3D Tiles provide their own terrain/elevation.
-      viewer.scene.globe.show = false;
-    } catch (tileError) {
-      console.warn('[Init] Google 3D Tiles unavailable, falling back to Cesium globe:', tileError);
-      const tileErrorDetail = describeError(tileError);
-      loaderStatus.textContent = `Google 3D Tiles недоступны (${tileErrorDetail}). Продолжение в резервном режиме...`;
-      // Keep Cesium globe visible as fallback instead of aborting the app.
+    if (googleApiKey) {
+      loaderStatus.textContent = 'Загрузка Google Photorealistic 3D Tiles...';
+      try {
+        tileset = await Cesium.createGooglePhotorealistic3DTileset({
+          onlyUsingWithGoogleGeocoder: true,
+        });
+        viewer.scene.primitives.add(tileset);
+        // Google Photorealistic 3D Tiles provide their own terrain/elevation.
+        viewer.scene.globe.show = false;
+      } catch (tileError) {
+        console.warn('[Init] Google 3D Tiles unavailable, falling back to Cesium globe:', tileError);
+        const tileErrorDetail = describeError(tileError);
+        loaderStatus.textContent = `Google 3D Tiles недоступны (${tileErrorDetail}). Продолжение на бесплатном глобусе...`;
+        viewer.scene.globe.show = true;
+      }
+    } else {
+      // Keyless startup: MapStackController below installs the free OSM
+      // imagery stack and keyless terrain. Never block the globe on a secret.
+      loaderStatus.textContent = 'Запуск бесплатного глобуса Cesium...';
       viewer.scene.globe.show = true;
     }
 

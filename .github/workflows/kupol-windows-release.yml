@@ -1,0 +1,298 @@
+name: Kupol Windows release
+
+on:
+  push:
+    branches:
+      - release/kupol-win-vercel-2026-11
+      - feat/kupol-multiplatform-release-gate-2026-11
+  pull_request:
+    branches:
+      - release/kupol-win-vercel-2026-11
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/kupol-windows-release.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kupol-windows-release
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    name: Build Windows x64 package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run complete unit suite
+        run: npm test
+
+      - name: Run game-core tests
+        run: npm run test:game
+
+      - name: Build production browser bundle
+        run: npm run build
+
+      - name: Smoke-test production HTTP and WebSocket server
+        run: npm run smoke
+
+      - name: Build Windows executable and smoke-test game session
+        run: node scripts/build-kupol-windows.mjs --smoke
+
+      - name: Create SHA-256 checksum
+        run: sha256sum output/windows/Kupol-win64.zip | tee output/windows/Kupol-win64.zip.sha256
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kupol-windows-x64
+          path: |
+            output/windows/Kupol-win64.zip
+            output/windows/Kupol-win64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  test-windows:
+    name: Run packaged executable on Windows
+    needs: build-windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Set up Node.js for WebSocket smoke test
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.14.0
+
+      - name: Download Windows package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kupol-windows-x64
+          path: artifacts
+
+      - name: Launch executable and verify a real game session
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $PWD 'kupol-windows-smoke'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Expand-Archive -Path (Join-Path $PWD 'artifacts/Kupol-win64.zip') -DestinationPath $root -Force
+          $app = Join-Path $root 'Kupol'
+          $env:PORT = '43717'
+          $env:KUPOL_NO_BROWSER = '1'
+          $process = Start-Process -FilePath (Join-Path $app 'Kupol.exe') -WorkingDirectory $app -PassThru -WindowStyle Hidden
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+              if ($process.HasExited) {
+                $log = if (Test-Path (Join-Path $app 'kupol.log')) { Get-Content (Join-Path $app 'kupol.log') -Raw } else { 'kupol.log not created' }
+                throw "Kupol.exe exited before HTTP health check: $log"
+              }
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:43717/api/health' -TimeoutSec 2
+                if ($health.ok -eq $true) { $ready = $true; break }
+              } catch { }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $ready) {
+              $log = if (Test-Path (Join-Path $app 'kupol.log')) { Get-Content (Join-Path $app 'kupol.log') -Raw } else { 'kupol.log not created' }
+              throw "Kupol.exe did not start HTTP server: $log"
+            }
+
+            $page = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:43717/kupol' -TimeoutSec 10
+            if ($page.StatusCode -ne 200 -or $page.Content -notmatch '<html') { throw 'The /kupol route did not return the game page' }
+            
+            @'
+          const ws = new WebSocket('ws://127.0.0.1:43717/ws');
+          const timer = setTimeout(() => {
+            try { ws.close(); } catch {}
+            console.error('FAIL: no game:state within 20 seconds');
+            process.exit(1);
+          }, 20_000);
+          ws.addEventListener('open', () => {
+            ws.send(JSON.stringify({ type: 'game:new', setup: { player: 'borea' } }));
+          });
+          ws.addEventListener('message', (event) => {
+            let message;
+            try { message = JSON.parse(String(event.data)); }
+            catch (error) { clearTimeout(timer); console.error(error); process.exit(1); }
+            if (message.type === 'game:state') {
+              clearTimeout(timer);
+              console.log('PASS: Windows executable served /kupol and created a game session');
+              ws.close();
+              process.exit(0);
+            }
+            if (message.type === 'error') {
+              clearTimeout(timer);
+              console.error('Game session error:', message);
+              process.exit(1);
+            }
+          });
+          ws.addEventListener('error', () => {
+            clearTimeout(timer);
+            console.error('WebSocket connection failed');
+            process.exit(1);
+          });
+          '@ | Set-Content -Encoding utf8 (Join-Path $PWD 'windows-game-smoke.mjs')
+
+            node (Join-Path $PWD 'windows-game-smoke.mjs')
+            Write-Host 'PASS: Kupol.exe ran natively on windows-latest'
+          }
+          finally {
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+  browser-qa:
+    name: Linux Chromium gameplay, Cesium, damage, audio and responsive QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.14.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build QA-instrumented production bundle
+        run: npm run build
+        env:
+          VITE_KUPOL_QA: "1"
+      - name: Verify nuclear range, camera aim, damage, audio and responsive layout
+        run: node scripts/nuclear-range-browser-smoke.mjs
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kupol-browser-qa
+          path: artifacts/nuclear-range-smoke.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  android-emulator:
+    name: Android Chrome gameplay and touch QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.14.0
+          cache: npm
+      - name: Validate Android smoke script syntax
+        run: node --check scripts/android-emulator-smoke.mjs
+      - name: Install locked dependencies
+        run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "1"
+      - name: Build QA-instrumented production bundle
+        run: npm run build
+        env:
+          VITE_KUPOL_QA: "1"
+          GEV_API_PROXIES: "0"
+      - name: Start production server for emulator
+        run: |
+          HOST=0.0.0.0 PORT=4173 GEV_API_PROXIES=0 node server.js > /tmp/kupol-android-server.log 2>&1 &
+          echo $! > /tmp/kupol-android-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4173/api/health > /dev/null; then
+              echo "Production server ready for Android emulator"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/kupol-android-server.log
+          exit 1
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Android Chrome gameplay and touch smoke on Pixel 7 Pro
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis_playstore
+          arch: x86_64
+          profile: pixel_7_pro
+          cores: 4
+          ram-size: 4096M
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim -camera-back none
+          disable-animations: true
+          script: node scripts/android-emulator-smoke.mjs
+      - name: Upload Android emulator evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kupol-android-emulator-evidence
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish-release:
+    name: Publish Windows release candidate
+    needs: [test-windows, browser-qa, android-emulator]
+    if: github.event_name == 'push' && github.ref_name == 'release/kupol-win-vercel-2026-11'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download tested Windows package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: kupol-windows-x64
+          path: release
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > release-notes.md <<'EOF'
+          «Купол» 1.0.0-rc.5 — Windows x64, Browser and Android Chrome QA.
+
+          - Portable ZIP with Kupol.exe; Node.js is not required.
+          - The packaged executable starts the local game server and opens /kupol in the browser.
+          - Includes a standalone Windows-native smoke test: HTTP health, /kupol route and a real game:new WebSocket session.
+          - Browser gameplay, Cesium camera, damage effects, audio and responsive layouts are gated by Chromium smoke tests.
+          - Android Chrome gameplay and touch behavior are gated by Pixel 7 Pro emulator tests; this does not claim a signed native Android APK.
+
+          Extract the ZIP completely and run Kupol/Kupol.exe. If Windows SmartScreen warns about an unsigned executable, use “More info” → “Run anyway”.
+          The application listens only on 127.0.0.1; it is not exposed to the network.
+          EOF
+          if gh release view kupol-v1.0.0-rc.5-win --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Existing verified Windows prerelease found; preserving its published assets."
+          else
+            gh release create kupol-v1.0.0-rc.5-win \
+              release/Kupol-win64.zip \
+              release/Kupol-win64.zip.sha256 \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "«Купол» 1.0.0-rc.5 — Windows + Browser + Android QA" \
+              --target "$GITHUB_SHA" \
+              --notes-file release-notes.md \
+              --prerelease
+          fi

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build && npm prune --omit=dev",
+  "installCommand": "npm ci",
+  "functions": {
+    "server.ts": {
+      "maxDuration": 300
+    }
+  }
+}
